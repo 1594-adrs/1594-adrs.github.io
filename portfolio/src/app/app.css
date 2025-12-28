@@ -1,0 +1,46 @@
+/*--------------------Botón flotante base--------------------*/
+.boton-flotante {
+    padding: 15px 25px;
+    z-index: 1000;
+    transition: .5s, color .10s;
+    -webkit-transition: .5s, color .10s;
+    -moz-transition: .5s, color .10s;
+}
+        
+.boton-flotante:hover {
+    box-shadow: 0 8px 8px 0 #000000, 0 8px 8px 0 #000000;
+    transform: translate(0px, 5px);
+    -webkit-transform: translate(0px, 5px);
+    -moz-transform: translate(0px, 5px);
+}
+
+/*--------------------Stack de botones (contenedor)--------------------*/
+.stack-container-flex {
+    position: fixed;
+    bottom: 80px;
+    right: 100px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 1000;
+}
+
+/* Los botones DENTRO del stack NO necesitan position: fixed */
+.stack-container-flex .boton-flotante {
+    position: relative; /* o simplemente no especificar position */
+}
+
+/*--------------------Botones individuales (fuera del stack)--------------------*/
+.boton-individual {
+    position: fixed;
+}
+
+.boton-inferior-derecha {
+    bottom: 20px;
+    right: 20px;
+}
+        
+.boton-inferior-izquierda {
+    bottom: 20px;
+    left: 20px;
+}

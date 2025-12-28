@@ -1,1 +1,52 @@
-/* You can add global styles to this file, and also import other style files */
+body {
+  background: linear-gradient(-45deg, #000000, #830404, #011c25, #23d5ab);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+  min-height: 100vh;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/*-Estilo para botones-*/
+button {
+  color: rgb(18, 150, 143);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/*--------------------Eliminar lista de estilos--------------------*/
+ul {
+  display: flex;
+  list-style: none;
+}
+
+/*-----------------------scrollbar oculto--------------------------*/
+/* Webkit */
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: none;
+}
+
+/* Mantener funcionalidad de scroll */
+body {
+  -ms-overflow-style: none;
+  overflow: -moz-scrollbars-none;
+}
