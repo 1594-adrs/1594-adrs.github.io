@@ -1,9 +1,10 @@
 import { Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { BarraDeProgreso } from './components/barra-de-progreso/barra-de-progreso';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, BarraDeProgreso],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

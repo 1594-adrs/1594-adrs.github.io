@@ -1,13 +1,12 @@
-/*--------------------Botón flotante base--------------------*/
-.boton-flotante {
-    padding: 15px 25px;
-    z-index: 1000;
+/*--------------------Animacion para flotar--------------------*/
+.flotar {
+    padding: 15px 15px;
     transition: .5s, color .10s;
     -webkit-transition: .5s, color .10s;
     -moz-transition: .5s, color .10s;
 }
         
-.boton-flotante:hover {
+.flotar:hover {
     box-shadow: 0 8px 8px 0 #000000, 0 8px 8px 0 #000000;
     transform: translate(0px, 5px);
     -webkit-transform: translate(0px, 5px);
@@ -15,10 +14,10 @@
 }
 
 /*--------------------Stack de botones (contenedor)--------------------*/
-.stack-container-flex {
+.Contenedor-botones-redes {
     position: fixed;
-    bottom: 80px;
-    right: 100px;
+    bottom: 15px;
+    left: 15px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -26,21 +25,137 @@
 }
 
 /* Los botones DENTRO del stack NO necesitan position: fixed */
-.stack-container-flex .boton-flotante {
+.Contenedor-botones-redes .flotar {
     position: relative; /* o simplemente no especificar position */
+    background-color: rgba(0, 0, 0, 0.7);
 }
 
-/*--------------------Botones individuales (fuera del stack)--------------------*/
-.boton-individual {
-    position: fixed;
+
+/*Navbar fijo*/
+/*--------------------Header Navigation--------------------*/
+.barra-superior {
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.7);
+  border-bottom: 2px solid rgba(2, 211, 200, 0.3);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  border-radius: 20px;
 }
 
-.boton-inferior-derecha {
-    bottom: 20px;
-    right: 20px;
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
 }
-        
-.boton-inferior-izquierda {
-    bottom: 20px;
-    left: 20px;
+
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-text {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #02d3c8;
+  text-decoration: none;
+  letter-spacing: 2px;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 10px rgba(2, 211, 200, 0.5);
+}
+
+.logo-text:hover {
+  color: #23d5ab;
+  text-shadow: 0 0 20px rgba(35, 213, 171, 0.8);
+}
+
+.navbar-menu {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.nav-link {
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+  padding-bottom: 5px;
+}
+
+.nav-link:hover {
+  color: #02d3c8;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #02d3c8, #23d5ab);
+  transition: width 0.3s ease;
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+.nav-btn {
+  padding: 10px 15px;
+  background: linear-gradient(135deg, #02d3c8, #23d5ab);
+  color: #000000;
+  border: none;
+  border-radius: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(2, 211, 200, 0.3);
+}
+
+.nav-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(2, 211, 200, 0.6);
+}
+
+.nav-link-btn {
+  color: #000000;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.nav-link-btn:hover::after {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .navbar-menu {
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .logo-text {
+    font-size: 1.4rem;
+  }
+
+  .nav-link {
+    font-size: 0.9rem;
+  }
 }
