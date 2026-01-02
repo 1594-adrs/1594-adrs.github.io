@@ -159,3 +159,33 @@
     font-size: 0.9rem;
   }
 }
+
+/*footer fixo*/
+.footer-clean {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(2, 50, 50, 0.3));
+  border-top: 1px solid rgba(2, 211, 200, 0.2);
+  padding: 2rem;
+  margin-top: 4rem;
+  text-align: center;
+}
+
+.footer-bottom {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2rem;
+  font-size: 0.9rem;
+  color: #999999;
+}
+
+.footer-updated {
+  display: flex;
+  gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .footer-clean {
+    padding: 1.5rem;
+  }
+}
