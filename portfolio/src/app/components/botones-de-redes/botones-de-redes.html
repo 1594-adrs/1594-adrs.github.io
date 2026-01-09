@@ -1,0 +1,13 @@
+<div class="redes-container">
+  @for (social of socialNetworks; track social.label) {
+    <a 
+      [href]="social.url" 
+      [title]="social.label" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      class="social-button">
+      <i [class]="social.icon"></i>
+      <span class="tooltip">{{ social.label }}</span>
+    </a>
+  }
+</div>

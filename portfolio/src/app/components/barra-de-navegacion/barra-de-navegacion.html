@@ -1,0 +1,42 @@
+<nav class="navbar">
+  <div class="navbar-container">
+    <!-- Logo -->
+    <div class="logo">
+      <span class="logo-text">.A.D.R.S.</span>
+    </div>
+
+    <!-- Toggle button para mobile -->
+    <button 
+      class="menu-toggle" 
+      [class.active]="isMenuOpen()"
+      (click)="toggleMenu()"
+      [attr.aria-label]="isMenuOpen() ? 'Close menu' : 'Open menu'">
+      <span class="hamburger"></span>
+    </button>
+
+    <!-- Navigation Links -->
+    <ul class="nav-links" [class.active]="isMenuOpen()">
+      @for (link of navLinks; track link.id) {
+        @if (link.isButton) {
+          <li class="nav-item">
+            <button 
+              class="nav-link-btn"
+              (click)="downloadCV()">
+              {{ link.label }}
+            </button>
+          </li>
+        } @else {
+          <li class="nav-item">
+            <a 
+              [href]="link.href"
+              class="nav-link"
+              [class.active]="activeLink() === link.id"
+              (click)="setActiveLink(link.id)">
+              {{ link.label }}
+            </a>
+          </li>
+        }
+      }
+    </ul>
+  </div>
+</nav>

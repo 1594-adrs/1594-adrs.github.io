@@ -1,0 +1,59 @@
+<section class="hero-container" id="inicio">
+  <!-- Ojo que sigue el cursor -->
+  <app-eye></app-eye>
+
+  <!-- Contenido principal -->
+  <div class="hero-content">
+    <!-- Texto con animación escalonada -->
+    <div class="staggered-text">
+      <div class="greeting">
+        @for (char of greetingChars; track $index) {
+          <span 
+            class="char" 
+            [style.animation-delay]="($index * 0.05) + 's'"
+            [class.space]="char === ' '">
+            {{ char === ' ' ? '&nbsp;' : char }}
+          </span>
+        }
+      </div>
+      <h1 class="name">
+        @for (char of nameChars; track $index) {
+          <span 
+            class="char name-char" 
+            [style.animation-delay]="(0.5 + $index * 0.08) + 's'">
+            {{ char === ' ' ? '&nbsp;' : char }}
+          </span>
+        }
+      </h1>
+      <div class="role">
+        @for (char of roleChars; track $index) {
+          <span 
+            class="char role-char" 
+            [style.animation-delay]="(1.2 + $index * 0.04) + 's'"
+            [class.space]="char === ' '">
+            {{ char === ' ' ? '&nbsp;' : char }}
+          </span>
+        }
+      </div>
+    </div>
+
+    <!-- Espacio para imagen de perfil -->
+    <div class="profile-image-container">
+      <div class="image-frame">
+        <div class="image-placeholder">
+          <!-- Aquí irá tu imagen -->
+          <img src="LOGO.png" alt="Andrés David Rincón" class="profile-img" />
+          <div class="image-overlay"></div>
+        </div>
+        <div class="frame-border"></div>
+        <div class="frame-glow"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indicador de scroll -->
+  <div class="scroll-indicator">
+    <div class="scroll-arrow"></div>
+    <span>Scroll</span>
+  </div>
+</section>

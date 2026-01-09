@@ -1,0 +1,55 @@
+<section class="projects-section" id="proyectos" #projectsSection>
+  <div class="reveal-container" [class.revealed]="projectsRevealed()">
+    <h2 class="section-title">My Projects</h2>
+    <p class="section-subtitle">Discover the projects that shaped my journey as a developer</p>
+    
+    <div class="projects-grid">
+      @for (project of projects; track project.id) {
+        <div class="project-card" [class.featured]="project.featured">
+          <!-- Imagen del proyecto -->
+          @if (project.imageUrl) {
+            <div class="project-image">
+              <img [src]="project.imageUrl" [alt]="project.title" />
+              <div class="image-overlay"></div>
+            </div>
+          }
+
+          <!-- Contenido de la tarjeta -->
+          <div class="project-content">
+            <h3 class="project-title">{{ project.title }}</h3>
+            <p class="project-description">{{ project.description }}</p>
+
+            <!-- Tecnologías -->
+            <div class="technologies">
+              @for (tech of project.technologies; track tech) {
+                <span class="tech-badge">{{ tech }}</span>
+              }
+            </div>
+
+            <!-- Links -->
+            <div class="project-links">
+              <button 
+                class="btn btn-github" 
+                (click)="openGithub(project.githubUrl)"
+                [title]="'Ver en GitHub: ' + project.title">
+                <i class="fab fa-github"></i>
+                GitHub
+              </button>
+              @if (project.liveUrl) {
+                <a 
+                  [href]="project.liveUrl" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="btn btn-live"
+                  [title]="'Ver demo en vivo: ' + project.title">
+                  <i class="fas fa-external-link-alt"></i>
+                  Live Demo
+                </a>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</section>
