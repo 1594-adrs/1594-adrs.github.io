@@ -164,14 +164,16 @@
   bottom: -10px;
   border-radius: 30px;
   background: transparent;
-  box-shadow: 0 0 30px rgba(2, 211, 200, 0.3),
-              0 0 60px rgba(35, 213, 171, 0.2);
+  box-shadow:
+    0 0 30px rgba(2, 211, 200, 0.3),
+    0 0 60px rgba(35, 213, 171, 0.2);
   z-index: -2;
   animation: glowPulse 2s ease-in-out infinite;
 }
 
 @keyframes glowPulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.5;
   }
   50% {
@@ -200,7 +202,11 @@
 }
 
 @keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
     transform: translateY(0);
   }
   40% {

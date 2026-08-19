@@ -2,7 +2,7 @@
   <div class="reveal-container" [class.revealed]="projectsRevealed()">
     <h2 class="section-title">My Projects</h2>
     <p class="section-subtitle">Discover the projects that shaped my journey as a developer</p>
-    
+
     <div class="projects-grid">
       @for (project of projects; track project.id) {
         <div class="project-card" [class.featured]="project.featured">
@@ -28,20 +28,22 @@
 
             <!-- Links -->
             <div class="project-links">
-              <button 
-                class="btn btn-github" 
+              <button
+                class="btn btn-github"
                 (click)="openGithub(project.githubUrl)"
-                [title]="'Ver en GitHub: ' + project.title">
+                [title]="'Ver en GitHub: ' + project.title"
+              >
                 <i class="fab fa-github"></i>
                 GitHub
               </button>
               @if (project.liveUrl) {
-                <a 
-                  [href]="project.liveUrl" 
-                  target="_blank" 
+                <a
+                  [href]="project.liveUrl"
+                  target="_blank"
                   rel="noopener noreferrer"
                   class="btn btn-live"
-                  [title]="'Ver demo en vivo: ' + project.title">
+                  [title]="'Ver demo en vivo: ' + project.title"
+                >
                   <i class="fas fa-external-link-alt"></i>
                   Live Demo
                 </a>

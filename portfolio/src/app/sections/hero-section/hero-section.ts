@@ -7,11 +7,11 @@ import { EyeComponent } from '../../components/eye/eye';
   standalone: true,
   imports: [CommonModule, EyeComponent],
   templateUrl: './hero-section.html',
-  styleUrls: ['./hero-section.css']
+  styleUrls: ['./hero-section.css'],
 })
 export class HeroSection implements AfterViewInit {
   private isBrowser: boolean;
-  
+
   // Texto para animación escalonada
   greetingChars = 'Hello, I am'.split('');
   nameChars = 'Andrés Rincón'.split('');

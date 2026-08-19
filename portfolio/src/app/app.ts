@@ -8,9 +8,16 @@ import { ProjectsSection } from './sections/projects-section/projects';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, BarraDeProgreso, HeroSection, BarraDeNavegacionComponent, BotonesDeRedesComponent, ProjectsSection],
+  imports: [
+    RouterOutlet,
+    BarraDeProgreso,
+    HeroSection,
+    BarraDeNavegacionComponent,
+    BotonesDeRedesComponent,
+    ProjectsSection,
+  ],
   templateUrl: './app.html',
-  styleUrl: './app.css'
+  styleUrl: './app.css',
 })
 export class App {
   protected readonly title = signal('portfolio');
