@@ -1,11 +1,20 @@
-import { Component, signal, HostListener, PLATFORM_ID, Inject, AfterViewInit, ElementRef, ViewChild } from '@angular/core';
+import {
+  Component,
+  signal,
+  HostListener,
+  PLATFORM_ID,
+  Inject,
+  AfterViewInit,
+  ElementRef,
+  ViewChild,
+} from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
 @Component({
   selector: 'app-eye',
   standalone: true,
   templateUrl: './eye.html',
-  styleUrls: ['./eye.css']
+  styleUrls: ['./eye.css'],
 })
 export class EyeComponent implements AfterViewInit {
   @ViewChild('eye') eyeElement!: ElementRef;
@@ -31,7 +40,10 @@ export class EyeComponent implements AfterViewInit {
     const eyeCenterY = rect.top + rect.height / 2;
 
     const angle = Math.atan2(event.clientY - eyeCenterY, event.clientX - eyeCenterX);
-    const distance = Math.min(15, Math.hypot(event.clientX - eyeCenterX, event.clientY - eyeCenterY) / 20);
+    const distance = Math.min(
+      15,
+      Math.hypot(event.clientX - eyeCenterX, event.clientY - eyeCenterY) / 20,
+    );
 
     const x = Math.cos(angle) * distance;
     const y = Math.sin(angle) * distance;

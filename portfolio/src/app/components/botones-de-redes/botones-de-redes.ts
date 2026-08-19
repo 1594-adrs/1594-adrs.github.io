@@ -12,25 +12,24 @@ interface SocialNetwork {
   standalone: true,
   imports: [CommonModule],
   templateUrl: './botones-de-redes.html',
-  styleUrls: ['./botones-de-redes.css']
+  styleUrls: ['./botones-de-redes.css'],
 })
 export class BotonesDeRedesComponent {
   socialNetworks: SocialNetwork[] = [
     {
       icon: 'fab fa-github',
       url: 'https://github.com/1594-adrs',
-      label: 'GitHub'
+      label: 'GitHub',
     },
     {
       icon: 'fab fa-linkedin',
       url: 'https://www.linkedin.com/in/1594-adrs/',
-      label: 'LinkedIn'
+      label: 'LinkedIn',
     },
     {
       icon: 'fa-regular fa-envelope',
       url: 'mailto:andresdrincons2007@gmail.com',
-      label: 'Email'
-    }
+      label: 'Email',
+    },
   ];
 }
-

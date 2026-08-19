@@ -13,7 +13,7 @@ interface NavLink {
   standalone: true,
   imports: [CommonModule],
   templateUrl: './barra-de-navegacion.html',
-  styleUrls: ['./barra-de-navegacion.css']
+  styleUrls: ['./barra-de-navegacion.css'],
 })
 export class BarraDeNavegacionComponent {
   isMenuOpen = signal(false);
@@ -23,11 +23,11 @@ export class BarraDeNavegacionComponent {
     { label: 'Home', href: '#inicio', id: 'inicio' },
     { label: 'About Me', href: '#sobre-mi', id: 'sobre-mi' },
     { label: 'Projects', href: '#proyectos', id: 'proyectos' },
-    { label: 'Download CV', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true }
+    { label: 'Download CV', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
   ];
 
   toggleMenu() {
-    this.isMenuOpen.update(state => !state);
+    this.isMenuOpen.update((state) => !state);
   }
 
   setActiveLink(linkId: string) {
@@ -39,4 +39,3 @@ export class BarraDeNavegacionComponent {
     window.open('/Andres_Rincon_CV.pdf', '_blank');
   }
 }
-
