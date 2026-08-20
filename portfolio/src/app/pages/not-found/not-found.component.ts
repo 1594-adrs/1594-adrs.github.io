@@ -12,7 +12,7 @@ import { RouterLink } from '@angular/router';
       <p class="not-found__description">
         The page you're looking for doesn't exist or has been moved.
       </p>
-      <a routerLink="/portfolio" class="not-found__link">Back to portfolio</a>
+      <a routerLink="/" class="not-found__link">Back to portfolio</a>
     </section>
   `,
   styles: `
