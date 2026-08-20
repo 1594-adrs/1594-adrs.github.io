@@ -1,5 +1,5 @@
-<section class="projects-section" id="projects" #projectsSection>
-  <div class="reveal-container" [class.revealed]="projectsRevealed()">
+<section class="projects-section" id="projects" appRevealOnScroll #reveal="reveal">
+  <div class="reveal-container" [class.revealed]="reveal.revealed()">
     <h2 class="section-title">My Projects</h2>
     <p class="section-subtitle">Discover the projects that shaped my journey as a developer</p>
 

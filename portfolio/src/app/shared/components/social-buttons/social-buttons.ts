@@ -1,5 +1,6 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { SocialNetwork } from '../../models/portfolio.models';
+import { SOCIAL_NETWORKS } from '../../data/portfolio.data';
 
 @Component({
   selector: 'app-social-buttons',
@@ -8,21 +9,5 @@ import { SocialNetwork } from '../../models/portfolio.models';
   styleUrls: ['./social-buttons.css'],
 })
 export class SocialButtons {
-  socialNetworks: SocialNetwork[] = [
-    {
-      icon: 'fab fa-github',
-      url: 'https://github.com/1594-adrs',
-      label: 'GitHub',
-    },
-    {
-      icon: 'fab fa-linkedin',
-      url: 'https://www.linkedin.com/in/1594-adrs/',
-      label: 'LinkedIn',
-    },
-    {
-      icon: 'fa-regular fa-envelope',
-      url: 'mailto:andresdrincons2007@gmail.com',
-      label: 'Email',
-    },
-  ];
+  socialNetworks: SocialNetwork[] = SOCIAL_NETWORKS;
 }

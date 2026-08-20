@@ -3,14 +3,25 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: var(--spacing-3xl) 2rem;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(2, 50, 50, 0.2));
+  padding: var(--spacing-3xl) 6rem;
+  background: var(--color-accent-dark);
+  position: relative;
+}
+
+.projects-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 80% 30%, rgba(0, 229, 199, 0.03) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .reveal-container {
   opacity: 0;
   transform: translateY(100px);
-  transition: all var(--transition-slow);
+  transition:
+    opacity var(--transition-slow),
+    transform var(--transition-slow);
   text-align: center;
   width: 100%;
   max-width: 1200px;
@@ -23,10 +34,13 @@
 
 .section-title {
   font-size: var(--font-size-4xl);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text);
   margin-bottom: 1rem;
   position: relative;
   display: inline-block;
+  text-wrap: balance;
 }
 
 .section-title::after {
@@ -35,9 +49,9 @@
   bottom: -10px;
   left: 50%;
   transform: translateX(-50%);
-  width: 100px;
-  height: 4px;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  width: 60px;
+  height: 3px;
+  background: var(--color-primary);
   border-radius: 2px;
 }
 
@@ -53,7 +67,7 @@
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 2rem;
   margin-top: 2rem;
-  animation: fadeInUp 0.8s ease-out 0.2s both;
+  text-align: left;
 }
 
 .project-card {
@@ -61,38 +75,36 @@
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
   overflow: hidden;
-  transition: all var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
   position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-card);
 }
 
 .project-card:hover {
   border-color: var(--color-border-hover);
-  transform: translateY(-10px);
-  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-6px);
+  box-shadow: 0 12px 40px rgba(0, 229, 199, 0.15);
 }
 
 .project-card.featured {
-  grid-column: span 1;
-  border: 2px solid rgba(2, 211, 200, 0.4);
-  background: linear-gradient(135deg, rgba(2, 211, 200, 0.05), rgba(35, 213, 171, 0.05));
+  border-color: rgba(0, 229, 199, 0.3);
 }
 
 .project-card.featured:hover {
-  border-color: rgba(2, 211, 200, 0.8);
-  box-shadow: 0 10px 50px rgba(2, 211, 200, 0.4);
+  border-color: rgba(0, 229, 199, 0.6);
+  box-shadow: 0 12px 50px rgba(0, 229, 199, 0.2);
 }
 
 .project-image {
   width: 100%;
-  height: 200px;
+  height: 180px;
   overflow: hidden;
   position: relative;
-  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+  background: var(--color-bg-card);
 }
 
 .project-image img {
@@ -103,7 +115,7 @@
 }
 
 .project-card:hover .project-image img {
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
 .project-image .image-overlay {
@@ -112,12 +124,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(2, 211, 200, 0.1) 0%,
-    transparent 50%,
-    rgba(35, 213, 171, 0.1) 100%
-  );
+  background: linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
   pointer-events: none;
 }
 
@@ -130,6 +137,8 @@
 
 .project-title {
   font-size: var(--font-size-xl);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text);
   margin: 0 0 0.8rem 0;
   transition: color var(--transition-fast);
@@ -155,20 +164,23 @@
 }
 
 .tech-badge {
-  background: rgba(2, 211, 200, 0.15);
+  background: rgba(0, 229, 199, 0.1);
   color: var(--color-primary);
-  padding: 0.4rem 0.8rem;
+  padding: 0.35rem 0.7rem;
   border-radius: var(--border-radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   border: 1px solid var(--color-border);
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .tech-badge:hover {
-  background: rgba(2, 211, 200, 0.25);
+  background: rgba(0, 229, 199, 0.2);
   border-color: var(--color-border-hover);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .project-links {
@@ -178,46 +190,56 @@
 }
 
 .btn {
-  padding: 0.75rem 1rem;
+  padding: 0.7rem 1rem;
   border: none;
   border-radius: var(--border-radius-sm);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
   display: flex;
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
   flex: 1;
   justify-content: center;
 }
 
+.btn:active {
+  transform: translateY(1px);
+}
+
 .btn-github {
-  background: rgba(2, 211, 200, 0.15);
+  background: rgba(0, 229, 199, 0.1);
   color: var(--color-primary);
   border: 1px solid var(--color-border);
 }
 
 .btn-github:hover {
-  background: rgba(2, 211, 200, 0.3);
+  background: rgba(0, 229, 199, 0.2);
   border-color: var(--color-border-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px var(--color-glow);
 }
 
 .btn-live {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  color: #0a0a0a;
+  background: var(--color-primary);
+  color: var(--color-bg-dark);
   border: none;
+  font-weight: var(--font-weight-bold);
 }
 
 .btn-live:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(2, 211, 200, 0.4);
+  box-shadow: 0 4px 15px rgba(0, 229, 199, 0.3);
 }
 
 @media (max-width: 1024px) {
+  .projects-section {
+    padding: var(--spacing-3xl) 3rem;
+  }
+
   .projects-grid {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
@@ -262,7 +284,7 @@
   }
 
   .section-title::after {
-    width: 60px;
+    width: 40px;
   }
 
   .project-content {

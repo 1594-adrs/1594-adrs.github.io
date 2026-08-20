@@ -1,4 +1,4 @@
-<nav class="navbar">
+<nav class="navbar" aria-label="Main navigation">
   <div class="navbar-container">
     <div class="logo">
       <span class="logo-text">.A.D.R.S.</span>
@@ -9,11 +9,13 @@
       [class.active]="isMenuOpen()"
       (click)="toggleMenu()"
       [attr.aria-label]="isMenuOpen() ? 'Close menu' : 'Open menu'"
+      [attr.aria-expanded]="isMenuOpen()"
+      aria-controls="nav-menu"
     >
       <span class="hamburger"></span>
     </button>
 
-    <ul class="nav-links" [class.active]="isMenuOpen()">
+    <ul class="nav-links" [class.active]="isMenuOpen()" id="nav-menu" role="list">
       @for (link of navLinks; track link.id) {
         @if (link.isButton) {
           <li class="nav-item">

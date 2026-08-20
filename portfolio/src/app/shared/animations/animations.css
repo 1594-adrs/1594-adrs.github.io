@@ -33,19 +33,44 @@
 
 @keyframes borderRotate {
   0% {
-    background: linear-gradient(0deg, var(--color-primary), var(--color-secondary), var(--color-primary));
+    background: linear-gradient(
+      0deg,
+      var(--color-primary),
+      var(--color-secondary),
+      var(--color-primary)
+    );
   }
   25% {
-    background: linear-gradient(90deg, var(--color-primary), var(--color-secondary), var(--color-primary));
+    background: linear-gradient(
+      90deg,
+      var(--color-primary),
+      var(--color-secondary),
+      var(--color-primary)
+    );
   }
   50% {
-    background: linear-gradient(180deg, var(--color-primary), var(--color-secondary), var(--color-primary));
+    background: linear-gradient(
+      180deg,
+      var(--color-primary),
+      var(--color-secondary),
+      var(--color-primary)
+    );
   }
   75% {
-    background: linear-gradient(270deg, var(--color-primary), var(--color-secondary), var(--color-primary));
+    background: linear-gradient(
+      270deg,
+      var(--color-primary),
+      var(--color-secondary),
+      var(--color-primary)
+    );
   }
   100% {
-    background: linear-gradient(360deg, var(--color-primary), var(--color-secondary), var(--color-primary));
+    background: linear-gradient(
+      360deg,
+      var(--color-primary),
+      var(--color-secondary),
+      var(--color-primary)
+    );
   }
 }
 
@@ -69,5 +94,15 @@
   }
   100% {
     background-position: 0% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

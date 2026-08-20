@@ -3,8 +3,17 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: var(--spacing-3xl) 2rem;
-  background: linear-gradient(135deg, rgba(10, 10, 10, 0.9), rgba(2, 50, 50, 0.15));
+  padding: var(--spacing-3xl) 6rem;
+  background: var(--color-bg-dark);
+  position: relative;
+}
+
+.about-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(0, 229, 199, 0.04) 0%, transparent 60%);
+  pointer-events: none;
 }
 
 .about-container {
@@ -12,7 +21,9 @@
   width: 100%;
   opacity: 0;
   transform: translateY(60px);
-  transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .about-container.revealed {
@@ -22,12 +33,15 @@
 
 .section-title {
   font-size: var(--font-size-4xl);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text);
   margin-bottom: 0.5rem;
   position: relative;
   display: inline-block;
   text-align: center;
   width: 100%;
+  text-wrap: balance;
 }
 
 .section-title::after {
@@ -36,9 +50,9 @@
   bottom: -10px;
   left: 50%;
   transform: translateX(-50%);
-  width: 100px;
-  height: 4px;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  width: 60px;
+  height: 3px;
+  background: var(--color-primary);
   border-radius: 2px;
 }
 
@@ -52,7 +66,7 @@
 
 .about-content {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr;
   gap: 3rem;
   margin-top: 2rem;
 }
@@ -68,19 +82,14 @@
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
   padding: 2rem;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-card);
 }
 
 .name {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-display);
   color: var(--color-text);
   margin: 0 0 0.5rem 0;
-  background: linear-gradient(135deg, var(--color-text), var(--color-primary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .role-label {
@@ -102,12 +111,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-card);
 }
 
 .subsection-title {
   font-size: var(--font-size-lg);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text);
   margin: 0 0 1rem 0;
   display: flex;
@@ -138,7 +147,7 @@
 }
 
 .soft-skill-item::before {
-  content: '▸';
+  content: '\2022';
   position: absolute;
   left: 0;
   color: var(--color-primary);
@@ -158,8 +167,6 @@
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow-card);
 }
 
 .skills-grid {
@@ -170,9 +177,10 @@
 
 .category-title {
   font-size: var(--font-size-sm);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text);
   margin: 0 0 0.6rem 0;
-  font-weight: var(--font-weight-semibold);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -190,18 +198,21 @@
 }
 
 .skill-tag {
-  background: rgba(2, 211, 200, 0.12);
+  background: rgba(0, 229, 199, 0.08);
   color: var(--color-primary);
   padding: 0.3rem 0.7rem;
   border-radius: var(--border-radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   border: 1px solid var(--color-border);
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .skill-tag:hover {
-  background: rgba(2, 211, 200, 0.25);
+  background: rgba(0, 229, 199, 0.18);
   border-color: var(--color-border-hover);
   transform: translateY(-1px);
 }
@@ -213,15 +224,18 @@
 }
 
 .course-item {
-  background: rgba(2, 211, 200, 0.08);
+  background: rgba(0, 229, 199, 0.06);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-sm);
   padding: 0.5rem 0.8rem;
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .course-item:hover {
-  background: rgba(2, 211, 200, 0.18);
+  background: rgba(0, 229, 199, 0.14);
   border-color: var(--color-border-hover);
   transform: translateY(-1px);
 }
@@ -249,6 +263,7 @@
 
 .edu-degree {
   font-size: var(--font-size-base);
+  font-family: var(--font-family-display);
   color: var(--color-text);
   margin: 0 0 0.3rem 0;
   font-weight: var(--font-weight-semibold);
@@ -274,6 +289,10 @@
 }
 
 @media (max-width: 1024px) {
+  .about-section {
+    padding: var(--spacing-3xl) 3rem;
+  }
+
   .about-content {
     grid-template-columns: 1fr;
     gap: 2rem;
@@ -317,7 +336,7 @@
   }
 
   .section-title::after {
-    width: 60px;
+    width: 40px;
   }
 
   .name {

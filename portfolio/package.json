@@ -7,19 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "format": "prettier --write \"src/**/*.{ts,html,css,scss}\""
-  },
-  "prettier": {
-    "printWidth": 100,
-    "singleQuote": true,
-    "overrides": [
-      {
-        "files": "*.html",
-        "options": {
-          "parser": "angular"
-        }
-      }
-    ]
+    "format": "prettier --write \"src/**/*.{ts,html,css,scss}\"",
+    "typecheck": "npx tsc --noEmit"
   },
   "private": true,
   "packageManager": "npm@11.6.2",
@@ -27,11 +16,9 @@
     "@angular/common": "^21.2.21",
     "@angular/compiler": "^21.2.21",
     "@angular/core": "^21.2.21",
-    "@angular/forms": "^21.2.21",
     "@angular/platform-browser": "^21.2.21",
     "@angular/platform-server": "^21.2.21",
     "@angular/router": "^21.2.21",
-    "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
