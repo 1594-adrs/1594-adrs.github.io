@@ -1,1 +1,12 @@
-/* You can add global styles to this file, and also import other style files */
+@import './app/shared/styles/colors.css';
+@import './app/shared/styles/typography.css';
+@import './app/shared/styles/reset.css';
+@import './app/shared/styles/responsive.css';
+@import './app/shared/animations/animations.css';
+
+body {
+  background: linear-gradient(-45deg, #0a0a0a, #830404, #011c25, #23d5ab);
+  background-size: 400% 400%;
+  animation: gradient 10s linear infinite;
+  min-height: 100vh;
+}
