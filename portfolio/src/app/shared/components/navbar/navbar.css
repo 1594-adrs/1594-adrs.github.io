@@ -99,7 +99,7 @@
 }
 
 .nav-link-btn:hover {
-  transform: translateY(-2px);
+  transform: translateY(-2px) scale(1.05);
   box-shadow: 0 6px 20px var(--color-glow-strong);
 }
 
@@ -187,4 +187,8 @@
     padding: 0.6rem 1.2rem;
     font-size: var(--font-size-sm);
   }
+}
+.nav-link-btn:active {
+  transform: translateY(1px) scale(0.95);
+  box-shadow: 0 2px 10px var(--color-glow);
 }

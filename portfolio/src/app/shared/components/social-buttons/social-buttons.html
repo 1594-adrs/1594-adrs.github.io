@@ -1,11 +1,12 @@
 <div class="social-buttons-container">
-  @for (social of socialNetworks; track social.label) {
+  @for (social of networks; track social.label) {
     <a
       [href]="social.url"
       [title]="social.label"
       target="_blank"
       rel="noopener noreferrer"
       class="social-button"
+      [attr.aria-label]="social.label"
     >
       <i [class]="social.icon"></i>
       <span class="tooltip">{{ social.label }}</span>

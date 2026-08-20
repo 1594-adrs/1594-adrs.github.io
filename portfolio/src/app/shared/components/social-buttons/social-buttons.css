@@ -17,7 +17,10 @@
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
   color: var(--color-text);
-  transition: all var(--transition-fast);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
   position: relative;
   cursor: pointer;
   font-size: 1.5rem;
@@ -27,8 +30,10 @@
 }
 
 .social-button:hover {
-  box-shadow: 0 8px 8px 0 #0a0a0a, 0 8px 8px 0 #0a0a0a;
-  transform: translate(0px, 5px);
+  box-shadow:
+    0 8px 8px 0 #0a0a0a,
+    0 8px 8px 0 #0a0a0a;
+  transform: translateY(-2px) scale(1.05);
 }
 
 .social-button:hover .tooltip {
@@ -49,7 +54,10 @@
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
-  transition: all var(--transition-fast);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
   font-size: var(--font-size-md);
   margin-left: 0.5rem;
 }
@@ -75,4 +83,7 @@
   .tooltip {
     display: none;
   }
+}
+.social-button:active {
+  transform: translateY(1px) scale(0.95);
 }

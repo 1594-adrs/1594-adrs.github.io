@@ -282,3 +282,17 @@
     font-size: var(--font-size-sm);
   }
 }
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-dark);
+  min-height: 200px;
+}
+
+.placeholder-icon {
+  font-size: 4rem;
+  color: var(--color-border);
+  opacity: 0.5;
+}

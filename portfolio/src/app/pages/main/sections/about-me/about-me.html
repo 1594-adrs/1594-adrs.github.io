@@ -1,4 +1,4 @@
-<section #aboutSection id="about" class="about-section">
+<section appRevealOnScroll (revealed)="onReveal()" id="about" class="about-section">
   <div class="about-container" [class.revealed]="sectionRevealed()">
     <h2 class="section-title">About Me</h2>
     <p class="section-subtitle">Get to know me better</p>
@@ -12,9 +12,7 @@
         </div>
 
         <div class="soft-skills">
-          <h4 class="subsection-title">
-            <i class="fas fa-star"></i> Soft Skills
-          </h4>
+          <h4 class="subsection-title"><i class="ph ph-star"></i> Soft Skills</h4>
           <ul class="soft-skills-list">
             @for (skill of softSkills; track skill) {
               <li class="soft-skill-item">{{ skill }}</li>
@@ -25,15 +23,11 @@
 
       <div class="about-details">
         <div class="skills-section">
-          <h4 class="subsection-title">
-            <i class="fas fa-tools"></i> Technical Skills
-          </h4>
+          <h4 class="subsection-title"><i class="ph ph-wrench"></i> Technical Skills</h4>
           <div class="skills-grid">
             @for (category of skills; track category.title) {
               <div class="skill-category">
-                <h5 class="category-title">
-                  <i [class]="category.icon"></i> {{ category.title }}
-                </h5>
+                <h5 class="category-title"><i [class]="category.icon"></i> {{ category.title }}</h5>
                 <div class="skill-tags">
                   @for (skill of category.skills; track skill) {
                     <span class="skill-tag">{{ skill }}</span>
@@ -46,21 +40,22 @@
 
         <div class="courses-section">
           <h4 class="subsection-title">
-            <i class="fas fa-certificate"></i> Courses & Certifications
+            <i class="ph ph-certificate"></i> Courses & Certifications
           </h4>
           <div class="courses-list">
             @for (course of courses; track course.name) {
               <div class="course-item">
-                <span class="course-name">{{ course.name }}</span>
+                <div class="course-info">
+                  <span class="course-name">{{ course.name }}</span
+                  ><span class="course-issuer">{{ course.issuer }} - {{ course.date }}</span>
+                </div>
               </div>
             }
           </div>
         </div>
 
         <div class="education-section">
-          <h4 class="subsection-title">
-            <i class="fas fa-graduation-cap"></i> Education
-          </h4>
+          <h4 class="subsection-title"><i class="ph ph-graduation-cap"></i> Education</h4>
           <div class="education-list">
             @for (edu of education; track edu.degree) {
               <div class="education-item">

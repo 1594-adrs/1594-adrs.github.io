@@ -1,5 +1,15 @@
-import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
-import { NavLink } from '../../models/portfolio.models';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  signal,
+  HostListener,
+  PLATFORM_ID,
+  inject,
+  AfterViewInit,
+} from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
+import { navLinks, socialNetworks } from '../../data/portfolio.data';
+import { NavLink, SocialNetwork } from '../../models/portfolio.models';
 
 @Component({
   selector: 'app-navbar',
@@ -7,27 +17,57 @@ import { NavLink } from '../../models/portfolio.models';
   templateUrl: './navbar.html',
   styleUrls: ['./navbar.css'],
 })
-export class Navbar {
+export class Navbar implements AfterViewInit {
+  private platformId = inject(PLATFORM_ID);
+
   isMenuOpen = signal(false);
-  activeLink = signal('home');
+  activeLink = signal('about');
+  isScrolled = signal(false);
 
-  navLinks: NavLink[] = [
-    { label: 'Home', href: '#home', id: 'home' },
-    { label: 'About Me', href: '#about', id: 'about' },
-    { label: 'Projects', href: '#projects', id: 'projects' },
-    { label: 'Download CV', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
-  ];
+  navLinks: NavLink[] = navLinks;
+  networks: SocialNetwork[] = socialNetworks;
 
-  toggleMenu() {
-    this.isMenuOpen.update((state) => !state);
+  ngAfterViewInit() {
+    if (isPlatformBrowser(this.platformId)) {
+      this.setupScrollSpy();
+    }
   }
 
-  setActiveLink(linkId: string) {
-    this.activeLink.set(linkId);
+  @HostListener('window:scroll', [])
+  onWindowScroll() {
+    this.isScrolled.set(window.scrollY > 50);
+  }
+
+  private setupScrollSpy() {
+    const sections = document.querySelectorAll('section[id]');
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            this.activeLink.set(entry.target.id);
+          }
+        });
+      },
+      { rootMargin: '-40% 0px -60% 0px' },
+    );
+
+    sections.forEach((section) => {
+      observer.observe(section);
+    });
+  }
+
+  toggleMenu() {
+    this.isMenuOpen.update((val) => !val);
+  }
+
+  setActive(id: string) {
+    this.activeLink.set(id);
     this.isMenuOpen.set(false);
   }
 
   downloadCV() {
-    window.open('/Andres_Rincon_CV.pdf', '_blank');
+    // Basic implementation since there's no actual cv path
+    console.log('Downloading CV');
   }
 }

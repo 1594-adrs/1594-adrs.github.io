@@ -1,16 +1,26 @@
 :root {
-  --color-primary: #02d3c8;
-  --color-secondary: #23d5ab;
-  --color-accent: #830404;
-  --color-accent-dark: #011c25;
-  --color-bg-dark: #0a0a0a;
-  --color-bg-card: rgba(20, 20, 20, 0.8);
-  --color-bg-glass: rgba(10, 10, 10, 0.7);
-  --color-text: #ffffff;
-  --color-text-muted: #888888;
-  --color-text-subtle: #999999;
-  --color-border: rgba(2, 211, 200, 0.3);
-  --color-border-hover: rgba(2, 211, 200, 0.5);
-  --color-glow: rgba(2, 211, 200, 0.3);
-  --color-glow-strong: rgba(2, 211, 200, 0.6);
+  /* Shifted to a slightly deeper, more sophisticated primary and secondary to avoid the "acid green" AI look */
+  --color-primary: #10b981; /* Emerald */
+  --color-secondary: #0d9488; /* Teal */
+  --color-accent: #e11d48; /* Rose for stark contrast if needed */
+
+  --color-bg-dark: #0f1115; /* Slightly bluish deep gray instead of pure black */
+  --color-bg-card: rgba(20, 24, 30, 0.6);
+  --color-bg-glass: rgba(15, 17, 21, 0.7);
+  --color-background-elevated: #1a1d24;
+
+  --color-text: #f3f4f6;
+  --color-text-muted: #9ca3af;
+  --color-text-subtle: #6b7280;
+
+  --color-border: rgba(16, 185, 129, 0.2);
+  --color-border-hover: rgba(16, 185, 129, 0.4);
+  --color-glow: rgba(16, 185, 129, 0.2);
+  --color-glow-strong: rgba(16, 185, 129, 0.4);
+
+  /* Tinted shadows */
+  --shadow-sm: 0 1px 2px rgba(16, 185, 129, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(16, 185, 129, 0.1), 0 2px 4px -1px rgba(16, 185, 129, 0.06);
+  --shadow-card: 0 10px 15px -3px rgba(13, 148, 136, 0.1), 0 4px 6px -2px rgba(13, 148, 136, 0.05);
+  --shadow-glow: 0 0 20px var(--color-glow);
 }

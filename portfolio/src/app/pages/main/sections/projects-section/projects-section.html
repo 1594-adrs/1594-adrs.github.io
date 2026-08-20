@@ -1,4 +1,4 @@
-<section class="projects-section" id="projects" #projectsSection>
+<section class="projects-section" id="projects" appRevealOnScroll (revealed)="onReveal()">
   <div class="reveal-container" [class.revealed]="projectsRevealed()">
     <h2 class="section-title">My Projects</h2>
     <p class="section-subtitle">Discover the projects that shaped my journey as a developer</p>
@@ -10,6 +10,10 @@
             <div class="project-image">
               <img [src]="project.imageUrl" [alt]="project.title" />
               <div class="image-overlay"></div>
+            </div>
+          } @else {
+            <div class="project-image empty-state">
+              <i class="ph ph-code placeholder-icon"></i>
             </div>
           }
 
@@ -29,7 +33,7 @@
                 (click)="openGithub(project.githubUrl)"
                 [title]="'View on GitHub: ' + project.title"
               >
-                <i class="fab fa-github"></i>
+                <i class="ph ph-github-logo"></i>
                 GitHub
               </button>
               @if (project.liveUrl) {
@@ -40,7 +44,7 @@
                   class="btn btn-live"
                   [title]="'View live demo: ' + project.title"
                 >
-                  <i class="fas fa-external-link-alt"></i>
+                  <i class="ph ph-arrow-square-out"></i>
                   Live Demo
                 </a>
               }
