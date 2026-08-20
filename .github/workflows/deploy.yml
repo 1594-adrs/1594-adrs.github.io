@@ -3,6 +3,7 @@ name: Deploy Angular to GitHub Pages
 on:
   push:
     branches:
+      - main
       - develop
   workflow_dispatch:
 
