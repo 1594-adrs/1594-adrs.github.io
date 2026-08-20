@@ -1,24 +1,16 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { BarraDeProgreso } from './components/barra-de-progreso/barra-de-progreso';
-import { HeroSection } from './sections/hero-section/hero-section';
-import { BarraDeNavegacionComponent } from './components/barra-de-navegacion/barra-de-navegacion';
-import { BotonesDeRedesComponent } from './components/botones-de-redes/botones-de-redes';
-import { ProjectsSection } from './sections/projects-section/projects';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Navbar } from './shared/components/navbar/navbar';
+import { ProgressBar } from './shared/components/progress-bar/progress-bar';
+import { SocialButtons } from './shared/components/social-buttons/social-buttons';
+import { HeroSection } from './pages/main/sections/hero-section/hero-section';
+import { AboutMe } from './pages/main/sections/about-me/about-me';
+import { ProjectsSection } from './pages/main/sections/projects-section/projects-section';
 
 @Component({
   selector: 'app-root',
-  imports: [
-    RouterOutlet,
-    BarraDeProgreso,
-    HeroSection,
-    BarraDeNavegacionComponent,
-    BotonesDeRedesComponent,
-    ProjectsSection,
-  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [Navbar, ProgressBar, SocialButtons, HeroSection, AboutMe, ProjectsSection],
   templateUrl: './app.html',
-  styleUrl: './app.css',
+  styleUrls: ['./app.css'],
 })
-export class App {
-  protected readonly title = signal('portfolio');
-}
+export class AppComponent {}
