@@ -3,19 +3,18 @@
   right: 15px;
   top: 50%;
   transform: translateY(-50%);
-  width: 8px;
-  height: 200px;
+  width: 6px;
+  height: 180px;
   background-color: rgba(0, 0, 0, 0.3);
   border-radius: 10px;
   z-index: 9999;
   overflow: hidden;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .scroll-progress-bar {
   width: 100%;
-  background: linear-gradient(180deg, var(--color-primary), var(--color-secondary));
+  background: var(--color-primary);
   border-radius: 10px;
   transition: height 0.1s ease-out;
-  box-shadow: 0 0 8px rgba(35, 213, 171, 0.6);
+  box-shadow: 0 0 8px rgba(0, 229, 199, 0.4);
 }

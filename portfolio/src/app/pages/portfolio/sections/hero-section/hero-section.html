@@ -1,5 +1,5 @@
-<section class="hero-container" id="home">
-  <app-eye></app-eye>
+<section class="hero-container" id="home" aria-label="Hero section">
+  <app-eye aria-hidden="true"></app-eye>
 
   <div class="hero-content">
     <div class="staggered-text">
@@ -11,11 +11,17 @@
     <div class="profile-image-container">
       <div class="image-frame">
         <div class="image-placeholder">
-          <img src="LOGO.png" alt="Andrés David Rincón" class="profile-img" />
+          <img
+            src="LOGO.png"
+            alt="Andrés David Rincón"
+            class="profile-img"
+            width="300"
+            height="300"
+            (error)="onImageError($event)"
+          />
           <div class="image-overlay"></div>
         </div>
         <div class="frame-border"></div>
-        <div class="frame-glow"></div>
       </div>
     </div>
   </div>

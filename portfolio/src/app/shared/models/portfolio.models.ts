@@ -11,6 +11,24 @@ export interface SocialNetwork {
   label: string;
 }
 
+export interface SkillCategory {
+  title: string;
+  icon: string;
+  skills: string[];
+}
+
+export interface Course {
+  name: string;
+  issuer: string;
+}
+
+export interface Education {
+  degree: string;
+  institution: string;
+  period: string;
+  detail: string;
+}
+
 export interface Project {
   id: string;
   title: string;

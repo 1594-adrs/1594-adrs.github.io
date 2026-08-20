@@ -1,5 +1,4 @@
-import { Component, ChangeDetectionStrategy, PLATFORM_ID, inject } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { Eye } from '../../../../shared/components/eye/eye';
 
 @Component({
@@ -10,7 +9,8 @@ import { Eye } from '../../../../shared/components/eye/eye';
   imports: [Eye],
 })
 export class HeroSection {
-  constructor() {
-    isPlatformBrowser(inject(PLATFORM_ID));
+  onImageError(event: Event) {
+    const img = event.target as HTMLImageElement;
+    img.style.display = 'none';
   }
 }

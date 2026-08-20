@@ -35,11 +35,11 @@ npm run format        # Prettier (src/**/*.{ts,html,css,scss})
 ## Formatting
 
 - Prettier with `prettier-plugin-angular`
-- Config in both `portfolio/.prettierrc` and `portfolio/package.json`
+- Config in `portfolio/.prettierrc` (source of truth)
 - Angular HTML uses `"parser": "angular"` override
 - Single quotes, 100 char width, 2-space indent
 
-No lint or typecheck scripts are defined. Angular CLI's `ng build` and `ng test` perform TypeScript compilation. If you need a standalone typecheck step, run `npx tsc --noEmit` from `portfolio/`.
+No lint or typecheck scripts are defined. Angular CLI's `ng build` and `ng test` perform TypeScript compilation. If you need a standalone typecheck step, run `npm run typecheck` from `portfolio/`.
 
 ## Build & deploy
 

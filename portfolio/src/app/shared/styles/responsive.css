@@ -2,7 +2,7 @@
   --breakpoint-sm: 480px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
-  --container-max: 1400px;
+  --container-max: 1200px;
   --spacing-xs: 0.5rem;
   --spacing-sm: 0.8rem;
   --spacing-md: 1rem;
@@ -11,14 +11,14 @@
   --spacing-2xl: 3rem;
   --spacing-3xl: 4rem;
   --border-radius-sm: 8px;
-  --border-radius-md: 15px;
-  --border-radius-lg: 20px;
-  --border-radius-xl: 23px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 16px;
+  --border-radius-xl: 20px;
   --border-radius-full: 50px;
   --shadow-glow: 0 0 20px var(--color-glow);
-  --shadow-card: 0 0 20px rgba(2, 211, 200, 0.1);
-  --shadow-card-hover: 0 10px 40px rgba(2, 211, 200, 0.3);
-  --transition-fast: 0.3s ease;
-  --transition-medium: 0.5s ease;
-  --transition-slow: 1s cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-card: 0 4px 20px hsl(var(--shadow-color) / 0.3);
+  --shadow-card-hover: 0 8px 30px hsl(var(--shadow-color) / 0.5);
+  --transition-fast: 0.25s ease;
+  --transition-medium: 0.4s ease;
+  --transition-slow: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }

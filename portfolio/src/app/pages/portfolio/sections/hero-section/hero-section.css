@@ -3,23 +3,26 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   position: relative;
   overflow: hidden;
-  padding: 2rem;
+  padding: 2rem 6rem;
 }
 
 .hero-content {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
   gap: 4rem;
   z-index: 2;
-  flex-wrap: wrap;
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
 }
 
 .staggered-text {
   text-align: left;
+  flex: 1;
 }
 
 .animate-fade-up {
@@ -37,44 +40,47 @@
 }
 
 .greeting {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   color: var(--color-primary);
   margin-bottom: 0.5rem;
-  text-shadow: 0 0 10px rgba(2, 211, 200, 0.5);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 3px;
+  text-transform: uppercase;
 }
 
 .name {
-  font-size: var(--font-size-5xl);
+  font-size: clamp(2.5rem, 6vw, 5rem);
   font-weight: var(--font-weight-bold);
+  font-family: var(--font-family-display);
   margin: 0;
   line-height: var(--line-height-tight);
-  background: linear-gradient(135deg, var(--color-text), var(--color-primary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 20px rgba(2, 211, 200, 0.3));
+  color: var(--color-text);
+  text-wrap: balance;
 }
 
 .role {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
   color: var(--color-text-muted);
   margin-top: 1rem;
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-medium);
   transition: color var(--transition-fast);
 }
 
 .role:hover {
-  color: var(--color-secondary);
-  text-shadow: 0 0 10px rgba(35, 213, 171, 0.8);
+  color: var(--color-primary);
 }
 
 .profile-image-container {
   position: relative;
+  flex-shrink: 0;
 }
 
 .image-frame {
   position: relative;
-  width: 300px;
-  height: 300px;
+  width: 280px;
+  height: 280px;
 }
 
 .image-placeholder {
@@ -83,7 +89,7 @@
   border-radius: var(--border-radius-lg);
   overflow: hidden;
   position: relative;
-  background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+  background: var(--color-bg-card);
 }
 
 .profile-img {
@@ -105,43 +111,30 @@
   bottom: 0;
   background: linear-gradient(
     135deg,
-    rgba(2, 211, 200, 0.1) 0%,
+    rgba(0, 229, 199, 0.08) 0%,
     transparent 50%,
-    rgba(35, 213, 171, 0.1) 100%
+    rgba(0, 229, 199, 0.05) 100%
   );
   pointer-events: none;
 }
 
 .frame-border {
   position: absolute;
-  top: -3px;
-  left: -3px;
-  right: -3px;
-  bottom: -3px;
-  border-radius: var(--border-radius-xl);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary), var(--color-primary));
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: calc(var(--border-radius-lg) + 2px);
+  background: linear-gradient(135deg, var(--color-primary), transparent 60%);
   z-index: -1;
-  animation: borderRotate 3s linear infinite;
-}
-
-.frame-glow {
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  right: -10px;
-  bottom: -10px;
-  border-radius: 30px;
-  background: transparent;
-  box-shadow:
-    0 0 30px rgba(2, 211, 200, 0.3),
-    0 0 60px rgba(35, 213, 171, 0.2);
-  z-index: -2;
-  animation: glowPulse 2s ease-in-out infinite;
+  opacity: 0.6;
 }
 
 .scroll-indicator {
   position: absolute;
   bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -151,10 +144,10 @@
 }
 
 .scroll-arrow {
-  width: 30px;
-  height: 30px;
-  border-right: 3px solid var(--color-primary);
-  border-bottom: 3px solid var(--color-primary);
+  width: 24px;
+  height: 24px;
+  border-right: 2px solid var(--color-primary);
+  border-bottom: 2px solid var(--color-primary);
   transform: rotate(45deg);
 }
 
@@ -170,6 +163,10 @@
 }
 
 @media (max-width: 1024px) {
+  .hero-container {
+    padding: 2rem 3rem;
+  }
+
   .hero-content {
     flex-direction: column;
     text-align: center;
@@ -179,31 +176,26 @@
     text-align: center;
   }
 
-  .name {
-    font-size: var(--font-size-3xl);
-  }
-
-  .role {
-    font-size: 1.3rem;
-  }
-
   .image-frame {
-    width: 250px;
-    height: 250px;
+    width: 220px;
+    height: 220px;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-container {
+    padding: 2rem 1.5rem;
+    align-items: center;
   }
 }
 
 @media (max-width: 480px) {
-  .name {
-    font-size: 2rem;
-  }
-
-  .greeting {
-    font-size: 1.2rem;
+  .hero-container {
+    padding: 2rem 1rem;
   }
 
   .image-frame {
-    width: 200px;
-    height: 200px;
+    width: 180px;
+    height: 180px;
   }
 }

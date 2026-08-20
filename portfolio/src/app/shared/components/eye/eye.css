@@ -3,7 +3,7 @@
   top: 10%;
   right: 10%;
   z-index: 1;
-  filter: drop-shadow(0 0 30px rgba(2, 211, 200, 0.3));
+  filter: drop-shadow(0 0 30px rgba(0, 229, 199, 0.2));
 }
 
 .eye {
@@ -27,7 +27,7 @@
   box-shadow:
     inset 0 0 30px rgba(0, 0, 0, 0.3),
     0 0 20px rgba(0, 0, 0, 0.5),
-    0 0 40px rgba(2, 211, 200, 0.2);
+    0 0 40px rgba(0, 229, 199, 0.15);
 }
 
 .eye-veins {
