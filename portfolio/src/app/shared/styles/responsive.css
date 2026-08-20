@@ -10,15 +10,15 @@
   --spacing-xl: 2rem;
   --spacing-2xl: 3rem;
   --spacing-3xl: 4rem;
-  --border-radius-sm: 8px;
-  --border-radius-md: 12px;
-  --border-radius-lg: 16px;
-  --border-radius-xl: 20px;
-  --border-radius-full: 50px;
+  --border-radius-sm: 0;
+  --border-radius-md: 0;
+  --border-radius-lg: 0;
+  --border-radius-xl: 0;
+  --border-radius-full: 0;
   --shadow-glow: 0 0 20px var(--color-glow);
-  --shadow-card: 0 4px 20px hsl(var(--shadow-color) / 0.3);
-  --shadow-card-hover: 0 8px 30px hsl(var(--shadow-color) / 0.5);
-  --transition-fast: 0.25s ease;
-  --transition-medium: 0.4s ease;
-  --transition-slow: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-card: 4px 4px 0 #1a1a2e;
+  --shadow-card-hover: 6px 6px 0 #00ff8833;
+  --transition-fast: 0.15s ease;
+  --transition-medium: 0.3s ease;
+  --transition-slow: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }

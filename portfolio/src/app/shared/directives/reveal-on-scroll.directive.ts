@@ -22,6 +22,7 @@ export class RevealOnScroll implements OnInit, OnDestroy {
 
   threshold = input(0.15);
   revealed = signal(false);
+  hiding = signal(false);
   visible = output<void>();
 
   ngOnInit() {
@@ -31,8 +32,15 @@ export class RevealOnScroll implements OnInit, OnDestroy {
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
+            this.hiding.set(false);
             this.revealed.set(true);
             this.visible.emit();
+          } else if (this.revealed()) {
+            this.hiding.set(true);
+            setTimeout(() => {
+              this.hiding.set(false);
+              this.revealed.set(false);
+            }, 400);
           }
         });
       },

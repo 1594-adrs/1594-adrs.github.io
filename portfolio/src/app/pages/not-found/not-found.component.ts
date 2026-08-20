@@ -8,11 +8,11 @@ import { RouterLink } from '@angular/router';
   template: `
     <section class="not-found">
       <h1 class="not-found__title">404</h1>
-      <p class="not-found__subtitle">Page not found</p>
+      <p class="not-found__subtitle">&gt; ERROR: PAGE_NOT_FOUND</p>
       <p class="not-found__description">
-        The page you're looking for doesn't exist or has been moved.
+        The memory address requested does not exist in this segment.
       </p>
-      <a routerLink="/" class="not-found__link">Back to portfolio</a>
+      <a routerLink="/" class="not-found__link">&gt; cd /portfolio</a>
     </section>
   `,
   styles: `
@@ -24,40 +24,50 @@ import { RouterLink } from '@angular/router';
       align-items: center;
       text-align: center;
       padding: 2rem;
+      background: #0a0a0f;
     }
 
     .not-found__title {
       font-size: 8rem;
       font-weight: bold;
-      color: var(--color-primary);
+      color: var(--color-corruption);
       line-height: 1;
       margin-bottom: 0.5rem;
+      font-family: var(--font-family-display);
+      letter-spacing: 6px;
     }
 
     .not-found__subtitle {
       font-size: var(--font-size-2xl);
       color: var(--color-text);
       margin-bottom: 1rem;
+      font-family: var(--font-family-display);
+      letter-spacing: 3px;
+      text-transform: uppercase;
     }
 
     .not-found__description {
       color: var(--color-text-muted);
       margin-bottom: 2rem;
       max-width: 400px;
+      font-family: var(--font-family);
+      font-size: var(--font-size-sm);
     }
 
     .not-found__link {
       color: var(--color-primary);
-      border: 1px solid var(--color-border);
+      border: 1px solid var(--color-primary);
       padding: 0.75rem 1.5rem;
-      border-radius: var(--border-radius-full);
-      transition: all var(--transition-fast);
+      transition: background var(--transition-fast), color var(--transition-fast);
       font-weight: var(--font-weight-medium);
+      font-family: var(--font-family-display);
+      letter-spacing: 2px;
+      text-transform: uppercase;
     }
 
     .not-found__link:hover {
-      background: rgba(2, 211, 200, 0.15);
-      border-color: var(--color-border-hover);
+      background: var(--color-primary);
+      color: #0a0a0f;
     }
   `,
 })

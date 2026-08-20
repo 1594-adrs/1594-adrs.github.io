@@ -1,17 +1,16 @@
 <section class="projects-section" id="projects" appRevealOnScroll #reveal="reveal">
-  <div class="reveal-container" [class.revealed]="reveal.revealed()">
-    <h2 class="section-title">My Projects</h2>
-    <p class="section-subtitle">Discover the projects that shaped my journey as a developer</p>
+  <div class="reveal-container" [class.revealed]="reveal.revealed()" [class.hiding]="reveal.hiding()">
+    <h2 class="section-title">// Projects</h2>
 
     <div class="projects-grid">
       @for (project of projects; track project.id) {
         <div class="project-card" [class.featured]="project.featured">
-          @if (project.imageUrl) {
-            <div class="project-image">
-              <img [src]="project.imageUrl" [alt]="project.title" />
-              <div class="image-overlay"></div>
-            </div>
-          }
+          <div class="card-topbar">
+            <span class="card-dot"></span>
+            <span class="card-dot"></span>
+            <span class="card-dot"></span>
+            <span class="card-filename">{{ project.title | lowercase }}.proj</span>
+          </div>
 
           <div class="project-content">
             <h3 class="project-title">{{ project.title }}</h3>
@@ -32,18 +31,6 @@
                 <i class="fab fa-github"></i>
                 GitHub
               </button>
-              @if (project.liveUrl) {
-                <a
-                  [href]="project.liveUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn btn-live"
-                  [title]="'View live demo: ' + project.title"
-                >
-                  <i class="fas fa-external-link-alt"></i>
-                  Live Demo
-                </a>
-              }
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, PLATFORM_ID, inject } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser, LowerCasePipe } from '@angular/common';
 import { Project } from '../../../../shared/models/portfolio.models';
 import { PROJECTS } from '../../../../shared/data/portfolio.data';
 import { RevealOnScroll } from '../../../../shared/directives/reveal-on-scroll.directive';
@@ -9,7 +9,7 @@ import { RevealOnScroll } from '../../../../shared/directives/reveal-on-scroll.d
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './projects-section.html',
   styleUrls: ['./projects-section.css'],
-  imports: [RevealOnScroll],
+  imports: [RevealOnScroll, LowerCasePipe],
 })
 export class ProjectsSection {
   projects: Project[] = PROJECTS;

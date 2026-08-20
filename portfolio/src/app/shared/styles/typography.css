@@ -1,21 +1,23 @@
 :root {
-  --font-family: 'Inter', system-ui, sans-serif;
-  --font-family-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-size-xs: 0.8rem;
-  --font-size-sm: 0.85rem;
-  --font-size-base: 0.95rem;
+  --font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-family-display: 'Share Tech Mono', 'VT323', monospace;
+  --font-family-pixel: 'VT323', monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8rem;
+  --font-size-base: 0.9rem;
   --font-size-md: 1rem;
-  --font-size-lg: 1.2rem;
-  --font-size-xl: 1.5rem;
+  --font-size-lg: 1.15rem;
+  --font-size-xl: 1.4rem;
   --font-size-2xl: 1.8rem;
   --font-size-3xl: 2.5rem;
-  --font-size-4xl: 3rem;
-  --font-size-5xl: 4rem;
+  --font-size-4xl: 3.2rem;
+  --font-size-5xl: 4.5rem;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
   --line-height-tight: 1.1;
   --line-height-normal: 1.6;
-  --letter-spacing-wide: 2px;
+  --letter-spacing-wide: 3px;
+  --letter-spacing-terminal: 2px;
 }
