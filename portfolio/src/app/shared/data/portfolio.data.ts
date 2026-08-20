@@ -11,7 +11,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'Home', href: '#home', id: 'home' },
   { label: 'About Me', href: '#about', id: 'about' },
   { label: 'Projects', href: '#projects', id: 'projects' },
-  { label: 'Download CV', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
+  { label: 'download_cv', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
 ];
 
 export const SOCIAL_NETWORKS: SocialNetwork[] = [

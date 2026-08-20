@@ -3,11 +3,12 @@ import { RouterOutlet } from '@angular/router';
 import { Navbar } from './shared/components/navbar/navbar';
 import { ProgressBar } from './shared/components/progress-bar/progress-bar';
 import { SocialButtons } from './shared/components/social-buttons/social-buttons';
+import { LoadingScreen } from './shared/components/loading-screen/loading-screen';
 
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, Navbar, ProgressBar, SocialButtons],
+  imports: [RouterOutlet, Navbar, ProgressBar, SocialButtons, LoadingScreen],
   templateUrl: './app.html',
   styleUrls: ['./app.css'],
 })

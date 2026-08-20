@@ -1,67 +1,100 @@
 <section id="about" class="about-section" appRevealOnScroll #reveal="reveal">
-  <div class="about-container" [class.revealed]="reveal.revealed()">
-    <h2 class="section-title">About Me</h2>
-    <p class="section-subtitle">Get to know me better</p>
+  <div class="about-container" [class.revealed]="reveal.revealed()" [class.hiding]="reveal.hiding()">
+    <h2 class="section-title">// About Me</h2>
 
     <div class="about-content">
       <div class="about-text">
-        <div class="intro-block">
-          <h3 class="name">{{ name }}</h3>
-          <p class="role-label">{{ title }} · {{ level }}</p>
-          <p class="description">{{ description }}</p>
+        <div class="intro-block terminal-card">
+          <div class="terminal-header">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-title">user.info</span>
+          </div>
+          <div class="terminal-body">
+            <h3 class="name">{{ name }}</h3>
+            <p class="role-label">{{ title }} &middot; {{ level }}</p>
+            <p class="description">{{ description }}</p>
+          </div>
         </div>
 
-        <div class="soft-skills">
-          <h4 class="subsection-title"><i class="fas fa-star"></i> Soft Skills</h4>
-          <ul class="soft-skills-list">
-            @for (skill of softSkills; track skill) {
-              <li class="soft-skill-item">{{ skill }}</li>
-            }
-          </ul>
+        <div class="soft-skills terminal-card">
+          <div class="terminal-header">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-title">soft_skills.log</span>
+          </div>
+          <div class="terminal-body">
+            <ul class="soft-skills-list">
+              @for (skill of softSkills; track skill) {
+                <li class="soft-skill-item">> {{ skill }}</li>
+              }
+            </ul>
+          </div>
         </div>
       </div>
 
       <div class="about-details">
-        <div class="skills-section">
-          <h4 class="subsection-title"><i class="fas fa-tools"></i> Technical Skills</h4>
-          <div class="skills-grid">
-            @for (category of skills; track category.title) {
-              <div class="skill-category">
-                <h5 class="category-title"><i [class]="category.icon"></i> {{ category.title }}</h5>
-                <div class="skill-tags">
-                  @for (skill of category.skills; track skill) {
-                    <span class="skill-tag">{{ skill }}</span>
-                  }
+        <div class="skills-section terminal-card">
+          <div class="terminal-header">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-title">tech_stack.sys</span>
+          </div>
+          <div class="terminal-body">
+            <div class="skills-grid">
+              @for (category of skills; track category.title) {
+                <div class="skill-category">
+                  <h5 class="category-title">[{{ category.title }}]</h5>
+                  <div class="skill-tags">
+                    @for (skill of category.skills; track skill) {
+                      <span class="skill-tag">{{ skill }}</span>
+                    }
+                  </div>
                 </div>
-              </div>
-            }
+              }
+            </div>
           </div>
         </div>
 
-        <div class="courses-section">
-          <h4 class="subsection-title">
-            <i class="fas fa-certificate"></i> Courses & Certifications
-          </h4>
-          <div class="courses-list">
-            @for (course of courses; track course.name) {
-              <div class="course-item">
-                <span class="course-name">{{ course.name }}</span>
-              </div>
-            }
+        <div class="courses-section terminal-card">
+          <div class="terminal-header">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-title">certs.dat</span>
+          </div>
+          <div class="terminal-body">
+            <div class="courses-list">
+              @for (course of courses; track course.name) {
+                <div class="course-item">
+                  <span class="course-name">&gt;&gt; {{ course.name }}</span>
+                </div>
+              }
+            </div>
           </div>
         </div>
 
-        <div class="education-section">
-          <h4 class="subsection-title"><i class="fas fa-graduation-cap"></i> Education</h4>
-          <div class="education-list">
-            @for (edu of education; track edu.degree) {
-              <div class="education-item">
-                <h5 class="edu-degree">{{ edu.degree }}</h5>
-                <p class="edu-institution">{{ edu.institution }}</p>
-                <p class="edu-period">{{ edu.period }}</p>
-                <p class="edu-detail">{{ edu.detail }}</p>
-              </div>
-            }
+        <div class="education-section terminal-card">
+          <div class="terminal-header">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-title">education.dat</span>
+          </div>
+          <div class="terminal-body">
+            <div class="education-list">
+              @for (edu of education; track edu.degree) {
+                <div class="education-item">
+                  <h5 class="edu-degree">{{ edu.degree }}</h5>
+                  <p class="edu-institution">{{ edu.institution }}</p>
+                  <p class="edu-period">{{ edu.period }}</p>
+                  <p class="edu-detail">{{ edu.detail }}</p>
+                </div>
+              }
+            </div>
           </div>
         </div>
       </div>

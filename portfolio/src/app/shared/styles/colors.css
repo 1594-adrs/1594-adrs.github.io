@@ -1,17 +1,18 @@
 :root {
-  --color-primary: #00e5c7;
-  --color-secondary: #00e5c7;
+  --color-primary: #00ff88;
+  --color-secondary: #00ccff;
+  --color-corruption: #ff0040;
   --color-accent: #1a1a2e;
   --color-accent-dark: #0f0f1a;
-  --color-bg-dark: #0a0a12;
-  --color-bg-card: rgba(18, 18, 30, 0.85);
-  --color-bg-glass: rgba(10, 10, 18, 0.75);
-  --color-text: #f0f0f5;
-  --color-text-muted: #a0a0b0;
-  --color-text-subtle: #b0b0c0;
-  --color-border: rgba(0, 229, 199, 0.2);
-  --color-border-hover: rgba(0, 229, 199, 0.45);
-  --color-glow: rgba(0, 229, 199, 0.25);
-  --color-glow-strong: rgba(0, 229, 199, 0.5);
+  --color-bg-dark: #0a0a0f;
+  --color-bg-card: #12121a;
+  --color-bg-glass: rgba(10, 10, 15, 0.92);
+  --color-text: #e0e0e0;
+  --color-text-muted: #666680;
+  --color-text-subtle: #888899;
+  --color-border: #1a1a2e;
+  --color-border-hover: #00ff88;
+  --color-glow: rgba(0, 255, 136, 0.25);
+  --color-glow-strong: rgba(0, 255, 136, 0.5);
   --shadow-color: 220, 40%, 2%;
 }

@@ -5,7 +5,13 @@
 @import './app/shared/animations/animations.css';
 @import './app/shared/styles/accessibility.css';
 
+html,
 body {
-  background: #0a0a12;
+  overflow-x: hidden;
+  background: #0a0a0f;
+  margin: 0;
+}
+
+body {
   min-height: 100vh;
 }

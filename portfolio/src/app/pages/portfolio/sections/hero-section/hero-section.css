@@ -6,7 +6,7 @@
   align-items: flex-start;
   position: relative;
   overflow: hidden;
-  padding: 2rem 6rem;
+  padding: 5rem 6rem 2rem;
 }
 
 .hero-content {
@@ -45,7 +45,7 @@
   margin-bottom: 0.5rem;
   font-family: var(--font-family-display);
   font-weight: var(--font-weight-medium);
-  letter-spacing: 3px;
+  letter-spacing: var(--letter-spacing-wide);
   text-transform: uppercase;
 }
 
@@ -56,7 +56,43 @@
   margin: 0;
   line-height: var(--line-height-tight);
   color: var(--color-text);
-  text-wrap: balance;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  position: relative;
+}
+
+.name::before,
+.name::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.name::before {
+  color: var(--color-corruption);
+  z-index: -1;
+}
+
+.name::after {
+  color: var(--color-secondary);
+  z-index: -1;
+}
+
+.name:hover::before,
+.name:hover::after {
+  opacity: 0.8;
+}
+
+.name:hover::before {
+  animation: glitchText 0.3s infinite;
+}
+
+.name:hover::after {
+  animation: glitchText2 0.3s infinite;
 }
 
 .role {
@@ -66,10 +102,18 @@
   font-family: var(--font-family-display);
   font-weight: var(--font-weight-medium);
   transition: color var(--transition-fast);
+  letter-spacing: var(--letter-spacing-terminal);
+  text-transform: uppercase;
 }
 
 .role:hover {
   color: var(--color-primary);
+}
+
+.cursor {
+  color: var(--color-primary);
+  animation: blink 1s step-end infinite;
+  margin-left: 2px;
 }
 
 .profile-image-container {
@@ -86,10 +130,16 @@
 .image-placeholder {
   width: 100%;
   height: 100%;
-  border-radius: var(--border-radius-lg);
   overflow: hidden;
   position: relative;
   background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  clip-path: polygon(
+    0 4px, 4px 4px, 4px 0,
+    calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%,
+    4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)
+  );
 }
 
 .profile-img {
@@ -111,23 +161,28 @@
   bottom: 0;
   background: linear-gradient(
     135deg,
-    rgba(0, 229, 199, 0.08) 0%,
+    rgba(0, 255, 136, 0.05) 0%,
     transparent 50%,
-    rgba(0, 229, 199, 0.05) 100%
+    rgba(0, 204, 255, 0.03) 100%
   );
   pointer-events: none;
 }
 
 .frame-border {
   position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  border-radius: calc(var(--border-radius-lg) + 2px);
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
   background: linear-gradient(135deg, var(--color-primary), transparent 60%);
   z-index: -1;
-  opacity: 0.6;
+  opacity: 0.4;
+  clip-path: polygon(
+    0 4px, 4px 4px, 4px 0,
+    calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%,
+    4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)
+  );
 }
 
 .scroll-indicator {
@@ -141,11 +196,15 @@
   gap: 10px;
   color: var(--color-primary);
   animation: bounce 2s infinite;
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--letter-spacing-terminal);
+  text-transform: uppercase;
 }
 
 .scroll-arrow {
-  width: 24px;
-  height: 24px;
+  width: 12px;
+  height: 12px;
   border-right: 2px solid var(--color-primary);
   border-bottom: 2px solid var(--color-primary);
   transform: rotate(45deg);
@@ -164,7 +223,7 @@
 
 @media (max-width: 1024px) {
   .hero-container {
-    padding: 2rem 3rem;
+    padding: 5rem 3rem 2rem;
   }
 
   .hero-content {
@@ -184,14 +243,14 @@
 
 @media (max-width: 768px) {
   .hero-container {
-    padding: 2rem 1.5rem;
+    padding: 5rem 1.5rem;
     align-items: center;
   }
 }
 
 @media (max-width: 480px) {
   .hero-container {
-    padding: 2rem 1rem;
+    padding: 5rem 1rem;
   }
 
   .image-frame {

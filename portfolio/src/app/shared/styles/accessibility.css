@@ -2,14 +2,15 @@
   position: absolute;
   top: -100%;
   left: 1rem;
-  z-index: 10000;
+  z-index: 10001;
   padding: 0.75rem 1.5rem;
   background: var(--color-primary);
-  color: #0a0a0a;
+  color: #0a0a0f;
   font-weight: var(--font-weight-semibold);
-  border-radius: var(--border-radius-sm);
+  border: none;
   text-decoration: none;
   transition: top 0.2s ease;
+  font-family: var(--font-family-display);
 }
 
 .skip-link:focus {
@@ -25,5 +26,4 @@ button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-  border-radius: var(--border-radius-sm);
 }
