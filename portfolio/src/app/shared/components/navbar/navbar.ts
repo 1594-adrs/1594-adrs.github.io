@@ -8,6 +8,7 @@ import {
   AfterViewInit,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { NavLink } from '../../models/portfolio.models';
 import { NAV_LINKS } from '../../data/portfolio.data';
 
@@ -16,6 +17,7 @@ import { NAV_LINKS } from '../../data/portfolio.data';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './navbar.html',
   styleUrls: ['./navbar.css'],
+  imports: [RouterLink],
 })
 export class Navbar implements AfterViewInit, OnDestroy {
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
@@ -28,6 +30,16 @@ export class Navbar implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit() {
     if (!this.isBrowser) return;
+
+    this.setupObserver();
+  }
+
+  ngOnDestroy() {
+    this.observer?.disconnect();
+  }
+
+  private setupObserver() {
+    this.observer?.disconnect();
 
     const sectionIds = this.navLinks.filter((l) => !l.isButton).map((l) => l.id);
     const sections = sectionIds
@@ -50,8 +62,8 @@ export class Navbar implements AfterViewInit, OnDestroy {
     sections.forEach((section) => this.observer!.observe(section));
   }
 
-  ngOnDestroy() {
-    this.observer?.disconnect();
+  reobserve() {
+    this.setupObserver();
   }
 
   toggleMenu() {
@@ -61,9 +73,5 @@ export class Navbar implements AfterViewInit, OnDestroy {
   setActiveLink(linkId: string) {
     this.activeLink.set(linkId);
     this.isMenuOpen.set(false);
-  }
-
-  downloadCV() {
-    window.open('/Andres_Rincon_CV.pdf', '_blank');
   }
 }

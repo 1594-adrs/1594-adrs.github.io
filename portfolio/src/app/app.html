@@ -2,15 +2,15 @@
 <div class="crt-overlay" aria-hidden="true"></div>
 <div class="noise-overlay" aria-hidden="true"></div>
 
-<app-navbar></app-navbar>
-<app-social-buttons></app-social-buttons>
-<app-progress-bar></app-progress-bar>
+<app-navbar [class.hidden]="!isAppPage()"></app-navbar>
+<app-social-buttons [class.hidden]="!isAppPage()"></app-social-buttons>
+<app-progress-bar [class.hidden]="!isAppPage()"></app-progress-bar>
 
 <main id="main-content">
   <router-outlet />
 </main>
 
-<footer class="footer">
+<footer class="footer" [class.hidden]="!isAppPage()">
   <div class="footer-content">
     <div class="footer-bottom">
       <p class="footer-copy">&copy; 2026 .A.D.R.S.</p>

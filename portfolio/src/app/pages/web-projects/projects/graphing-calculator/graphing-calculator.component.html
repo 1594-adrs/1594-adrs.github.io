@@ -1,0 +1,157 @@
+<div class="calculator-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a routerLink="/web-projects" class="back-link">&lt; back</a>
+      <img src="LOGO.png" alt="A.D.R.S." class="sidebar-logo" />
+      <span class="header-title">&gt; functions</span>
+    </div>
+
+    <div class="functions-list">
+      @for (fn of functions(); track $index) {
+        <div class="function-row">
+          <span class="color-dot" [style.background]="fn.color"></span>
+          <span class="fn-label">f<sub>{{ $index + 1 }}</sub>(x) =</span>
+          <input
+            class="fn-input"
+            [value]="fn.raw"
+            (input)="updateExpression($index, $any($event.target).value)"
+            placeholder="e.g. sin(x)"
+            spellcheck="false"
+          />
+          <button class="icon-btn" (click)="toggleVisibility($index)" [title]="fn.visible ? 'Hide' : 'Show'">
+            {{ fn.visible ? '◉' : '○' }}
+          </button>
+          <button class="icon-btn danger" (click)="removeFunction($index)" title="Remove">×</button>
+        </div>
+      }
+    </div>
+
+    @if (functions().length < 5) {
+      <button class="t-btn" (click)="addFunction()">+ add_function</button>
+    }
+
+    <div class="mode-section">
+      <span class="mode-label">&gt; tools</span>
+      <div class="mode-buttons">
+        <button class="t-btn" (click)="activateIntegral()" [class.active]="activeIntegral()">
+          ∫ integral
+        </button>
+        <button class="t-btn" (click)="activateSolid()" [class.active]="activeSolid()">
+          ↻ solid_rev
+        </button>
+        <button class="t-btn" (click)="activateBoundedArea()" [class.active]="activeBoundedArea()">
+          ▲ area_between
+        </button>
+      </div>
+    </div>
+
+    @if (activeIntegral()) {
+      <div class="range-section">
+        <span class="range-label">&gt; integral_range</span>
+        <div class="range-inputs">
+          <label class="range-field">
+            a =
+            <input type="number" [value]="activeIntegral()!.a" (change)="updateIntegralA($any($event.target).value)" />
+          </label>
+          <label class="range-field">
+            b =
+            <input type="number" [value]="activeIntegral()!.b" (change)="updateIntegralB($any($event.target).value)" />
+          </label>
+        </div>
+      </div>
+    }
+
+    @if (activeSolid()) {
+      <div class="range-section">
+        <span class="range-label">&gt; solid_revolution</span>
+        <div class="range-inputs">
+          <label class="range-field">
+            a =
+            <input type="number" [value]="activeSolid()!.a" (change)="updateSolidA($any($event.target).value)" />
+          </label>
+          <label class="range-field">
+            b =
+            <input type="number" [value]="activeSolid()!.b" (change)="updateSolidB($any($event.target).value)" />
+          </label>
+        </div>
+        <div class="axis-config">
+          <span class="range-label">&gt; rotation_axis</span>
+          <div class="range-inputs">
+            <select class="axis-select" [value]="activeSolid()!.axis.type" (change)="updateSolidAxisType($any($event.target).value)">
+              <option value="x">y = k (horizontal)</option>
+              <option value="y">x = k (vertical)</option>
+            </select>
+            <label class="range-field">
+              k =
+              <input type="number" [value]="activeSolid()!.axis.value" (change)="updateSolidAxisValue($any($event.target).value)" step="0.5" />
+            </label>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (activeBoundedArea()) {
+      <div class="range-section">
+        <span class="range-label">&gt; area_between_curves</span>
+        <div class="bounded-fn-selects">
+          <label class="range-field">
+            upper =
+            <select class="axis-select" [value]="activeBoundedArea()!.fnIndexUpper" (change)="updateBoundedUpper($any($event.target).value)">
+              @for (fn of functions(); track $index) {
+                <option [value]="$index">f{{ $index + 1 }}</option>
+              }
+            </select>
+          </label>
+          <label class="range-field">
+            lower =
+            <select class="axis-select" [value]="activeBoundedArea()!.fnIndexLower" (change)="updateBoundedLower($any($event.target).value)">
+              @for (fn of functions(); track $index) {
+                <option [value]="$index">f{{ $index + 1 }}</option>
+              }
+            </select>
+          </label>
+        </div>
+        <div class="range-inputs">
+          <label class="range-field">
+            a =
+            <input type="number" [value]="activeBoundedArea()!.a" (change)="updateBoundedA($any($event.target).value)" />
+          </label>
+          <label class="range-field">
+            b =
+            <input type="number" [value]="activeBoundedArea()!.b" (change)="updateBoundedB($any($event.target).value)" />
+          </label>
+        </div>
+      </div>
+    }
+
+    <div class="sidebar-footer">
+      <button class="t-btn" (click)="toggleAngleUnit()">
+        angle: {{ angleUnit() }}
+      </button>
+      <button class="t-btn" (click)="resetView()">reset_view</button>
+    </div>
+  </aside>
+
+  <main class="canvas-container">
+    <canvas
+      #graphCanvas
+      (mousemove)="onCanvasMouseMove($event)"
+      (mouseleave)="onCanvasMouseLeave()"
+      (wheel)="onCanvasWheel($event)"
+      (mousedown)="onCanvasMouseDown($event)"
+      (mouseup)="onCanvasMouseUp()"
+    ></canvas>
+  </main>
+
+  @if (results().length > 0) {
+    <footer class="results-panel">
+      @for (r of results(); track r.label) {
+        <div class="result-row">
+          <span class="result-label">{{ r.label }}</span>
+          <span class="result-eq">=</span>
+          <span class="result-value">{{ r.value }}</span>
+        </div>
+      }
+    </footer>
+  }
+</div>

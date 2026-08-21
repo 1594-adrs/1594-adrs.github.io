@@ -5,6 +5,7 @@ import {
   Course,
   Education,
   Project,
+  WebProject,
 } from '../models/portfolio.models';
 
 export const NAV_LINKS: NavLink[] = [
@@ -113,5 +114,17 @@ export const PROJECTS: Project[] = [
     technologies: ['Python', 'discord.py', 'Async/Await', 'API Integration'],
     githubUrl: 'https://github.com/1594-adrs/discord-bots-automation',
     featured: true,
+  },
+];
+
+export const WEB_PROJECTS: WebProject[] = [
+  {
+    id: 'graphing-calculator',
+    title: 'Graphing Calculator',
+    description:
+      'Plot functions, compute integrals, and visualize solids of revolution in real time.',
+    route: '/web-projects/calculator',
+    technologies: ['Angular', 'Canvas API', 'Custom Parser'],
+    icon: 'fas fa-calculator',
   },
 ];

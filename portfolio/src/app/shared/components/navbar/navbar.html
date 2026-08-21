@@ -19,14 +19,20 @@
       @for (link of navLinks; track link.id) {
         @if (link.isButton) {
           <li class="nav-item">
-            <button class="nav-link-btn" (click)="downloadCV()">
+            <a
+              [href]="'/Andres_Rincon_CV.pdf'"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="nav-link-btn"
+            >
               {{ link.label }}
-            </button>
+            </a>
           </li>
         } @else {
           <li class="nav-item">
             <a
-              [href]="link.href"
+              [routerLink]="'/'"
+              [fragment]="link.id"
               class="nav-link"
               [class.active]="activeLink() === link.id"
               (click)="setActiveLink(link.id)"

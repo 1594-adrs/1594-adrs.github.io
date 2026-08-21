@@ -23,18 +23,50 @@
             </div>
 
             <div class="project-links">
-              <button
+              <a
                 class="btn btn-github"
-                (click)="openGithub(project.githubUrl)"
+                [href]="project.githubUrl"
+                target="_blank"
+                rel="noopener noreferrer"
                 [title]="'View on GitHub: ' + project.title"
               >
                 <i class="fab fa-github"></i>
                 GitHub
-              </button>
+              </a>
             </div>
           </div>
         </div>
       }
+
+      <a class="project-card web-projects-card" routerLink="/web-projects">
+        <div class="card-topbar">
+          <span class="card-dot"></span>
+          <span class="card-dot"></span>
+          <span class="card-dot"></span>
+          <span class="card-filename">web-projects.interactive</span>
+        </div>
+
+        <div class="project-content">
+          <h3 class="project-title">Web Projects</h3>
+          <p class="project-description">
+            Interactive web experiments — graphing calculator, visual tools, and more.
+            Try them live.
+          </p>
+
+          <div class="technologies">
+            <span class="tech-badge">Angular</span>
+            <span class="tech-badge">Canvas</span>
+            <span class="tech-badge">TypeScript</span>
+          </div>
+
+          <div class="project-links">
+            <span class="btn btn-explore">
+              <i class="fas fa-terminal"></i>
+              Launch Projects
+            </span>
+          </div>
+        </div>
+      </a>
     </div>
   </div>
 </section>

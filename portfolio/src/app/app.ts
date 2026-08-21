@@ -1,5 +1,15 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  signal,
+  inject,
+  OnInit,
+  OnDestroy,
+  ViewChild,
+  AfterViewChecked,
+} from '@angular/core';
+import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
+import { filter } from 'rxjs/operators';
 import { Navbar } from './shared/components/navbar/navbar';
 import { ProgressBar } from './shared/components/progress-bar/progress-bar';
 import { SocialButtons } from './shared/components/social-buttons/social-buttons';
@@ -12,4 +22,40 @@ import { LoadingScreen } from './shared/components/loading-screen/loading-screen
   templateUrl: './app.html',
   styleUrls: ['./app.css'],
 })
-export class AppComponent {}
+export class AppComponent implements OnInit, OnDestroy, AfterViewChecked {
+  private router = inject(Router);
+  private sub?: ReturnType<typeof Router.prototype.events.subscribe>;
+
+  isAppPage = signal(true);
+  private needsReobserve = false;
+
+  @ViewChild(Navbar) navbar?: Navbar;
+
+  ngOnInit() {
+    this.updateState(this.router.url);
+    this.sub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe((e) => {
+        const prev = this.isAppPage();
+        this.updateState(e.urlAfterRedirects || e.url);
+        if (!prev && this.isAppPage()) {
+          this.needsReobserve = true;
+        }
+      });
+  }
+
+  ngAfterViewChecked() {
+    if (this.needsReobserve) {
+      this.needsReobserve = false;
+      this.navbar?.reobserve();
+    }
+  }
+
+  ngOnDestroy() {
+    this.sub?.unsubscribe();
+  }
+
+  private updateState(url: string) {
+    this.isAppPage.set(!url.startsWith('/web-projects'));
+  }
+}
