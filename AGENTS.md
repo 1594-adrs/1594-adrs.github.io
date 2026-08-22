@@ -70,6 +70,12 @@ When implementing new pages or features, load these skills at the start of the s
 - `web-design-guidelines` — ARIA landmarks, keyboard access, focus-visible, skip links, `prefers-reduced-motion`
 - `frontend-design` — Consistent pixel-glitch aesthetic, CSS variables, terminal-card style
 
+### Canvas/rendering skills (mandatory for Canvas-heavy projects)
+
+Load these when the feature involves Canvas 2D, WebGL, animation loops, or real-time rendering:
+- `canvas-design` — Canvas 2D patterns, drawing, animation loops
+- `render-performance` — GPU-accelerated rendering, canvas ops, 60fps UI, memory management
+
 ## Component naming
 
 Inconsistent — mixed English naming with and without `Component` suffix:
