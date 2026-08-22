@@ -5,7 +5,7 @@
   z-index: 10001;
   padding: 0.75rem 1.5rem;
   background: var(--color-primary);
-  color: #0a0a0f;
+  color: var(--color-bg-dark);
   font-weight: var(--font-weight-semibold);
   border: none;
   text-decoration: none;
@@ -26,4 +26,16 @@ button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

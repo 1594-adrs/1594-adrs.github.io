@@ -27,17 +27,6 @@
   animation: glitchHide 0.4s ease-in forwards;
 }
 
-.section-title {
-  font-size: var(--font-size-4xl);
-  font-family: var(--font-family-display);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text);
-  margin-bottom: 2rem;
-  position: relative;
-  display: block;
-  letter-spacing: var(--letter-spacing-wide);
-}
-
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -47,9 +36,6 @@
 }
 
 .project-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  overflow: hidden;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
   position: relative;
   display: flex;
@@ -73,43 +59,14 @@
 }
 
 .card-topbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   padding: 10px 14px;
-  background: #0a0a0f;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.card-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--color-border);
-}
-
-.card-dot:first-child {
-  background: var(--color-corruption);
-}
-
-.card-dot:nth-child(2) {
-  background: #ffaa00;
-}
-
-.card-dot:nth-child(3) {
-  background: var(--color-primary);
 }
 
 .card-filename {
-  font-family: var(--font-family-display);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-left: 8px;
-  letter-spacing: var(--letter-spacing-terminal);
   text-transform: lowercase;
 }
 
 .project-content {
-  padding: 1.5rem;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -146,49 +103,10 @@
   margin-bottom: 1.5rem;
 }
 
-.tech-badge {
-  background: transparent;
-  color: var(--color-primary);
-  padding: 0.35rem 0.7rem;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  border: 1px solid var(--color-border);
-  font-family: var(--font-family-display);
-  letter-spacing: var(--letter-spacing-terminal);
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.tech-badge:hover {
-  background: rgba(0, 255, 136, 0.1);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
 .project-links {
   display: flex;
   gap: 1rem;
   margin-top: auto;
-}
-
-.btn {
-  padding: 0.7rem 1rem;
-  border: 1px solid var(--color-border);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
-  font-size: var(--font-size-sm);
-  flex: 1;
-  justify-content: center;
-  font-family: var(--font-family-display);
-  letter-spacing: var(--letter-spacing-terminal);
-}
-
-.btn:active {
-  transform: translateY(1px);
 }
 
 .btn-github {
@@ -199,8 +117,44 @@
 
 .btn-github:hover {
   background: var(--color-primary);
-  color: #0a0a0f;
+  color: var(--color-bg-dark);
   border-color: var(--color-primary);
+}
+
+.web-projects-card {
+  grid-column: 1 / -1;
+  border-color: var(--color-primary);
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--color-bg-card) 0%, rgba(0, 255, 136, 0.03) 100%);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.web-projects-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.1), 4px 4px 0 rgba(0, 255, 136, 0.2);
+}
+
+.web-projects-card .project-title {
+  color: var(--color-primary);
+}
+
+.web-projects-card:hover .project-title {
+  text-shadow: -1px 0 var(--color-corruption), 1px 0 var(--color-secondary);
+}
+
+.btn-explore {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.btn-explore:hover {
+  background: var(--color-primary);
+  color: var(--color-bg-dark);
 }
 
 @media (max-width: 1024px) {
@@ -211,10 +165,6 @@
   .projects-grid {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
-  }
-
-  .section-title {
-    font-size: var(--font-size-3xl);
   }
 }
 
@@ -228,10 +178,6 @@
     gap: 1.5rem;
   }
 
-  .section-title {
-    font-size: 2rem;
-  }
-
   .project-content {
     padding: 1.2rem;
   }
@@ -241,10 +187,6 @@
   .projects-section {
     padding: var(--spacing-xl) 1rem;
     min-height: auto;
-  }
-
-  .section-title {
-    font-size: var(--font-size-xl);
   }
 
   .project-content {

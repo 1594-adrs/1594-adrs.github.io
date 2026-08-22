@@ -1,5 +1,6 @@
 @if (visible()) {
-  <div class="loading-screen" [class.fading-out]="fadingOut()">
+  <div class="loading-screen" [class.fading-out]="fadingOut()" role="status" aria-live="polite">
+    <span class="sr-only">Loading...</span>
     <div class="loading-content">
       <div class="loading-line">
         <span class="loading-bracket">[</span>

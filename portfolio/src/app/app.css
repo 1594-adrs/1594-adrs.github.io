@@ -1,3 +1,7 @@
+.hidden {
+  display: none !important;
+}
+
 .crt-overlay {
   position: fixed;
   top: 0;

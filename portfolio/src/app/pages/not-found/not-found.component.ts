@@ -24,7 +24,7 @@ import { RouterLink } from '@angular/router';
       align-items: center;
       text-align: center;
       padding: 2rem;
-      background: #0a0a0f;
+      background: var(--color-bg-dark);
     }
 
     .not-found__title {
@@ -67,7 +67,7 @@ import { RouterLink } from '@angular/router';
 
     .not-found__link:hover {
       background: var(--color-primary);
-      color: #0a0a0f;
+      color: var(--color-bg-dark);
     }
   `,
 })

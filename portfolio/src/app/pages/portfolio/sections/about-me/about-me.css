@@ -26,18 +26,6 @@
   animation: glitchHide 0.4s ease-in forwards;
 }
 
-.section-title {
-  font-size: var(--font-size-4xl);
-  font-family: var(--font-family-display);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text);
-  margin-bottom: 2rem;
-  position: relative;
-  display: block;
-  text-align: left;
-  letter-spacing: var(--letter-spacing-wide);
-}
-
 .about-content {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
@@ -51,50 +39,12 @@
   gap: 2rem;
 }
 
-.terminal-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  overflow: hidden;
-}
-
 .terminal-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   padding: 8px 12px;
-  background: #0a0a0f;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.terminal-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--color-border);
-}
-
-.terminal-dot:first-child {
-  background: var(--color-corruption);
-}
-
-.terminal-dot:nth-child(2) {
-  background: #ffaa00;
-}
-
-.terminal-dot:nth-child(3) {
-  background: var(--color-primary);
 }
 
 .terminal-title {
-  font-family: var(--font-family-display);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-left: 8px;
-  letter-spacing: var(--letter-spacing-terminal);
   text-transform: uppercase;
-}
-
-.terminal-body {
-  padding: 1.5rem;
 }
 
 .name {
@@ -165,24 +115,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-}
-
-.skill-tag {
-  background: transparent;
-  color: var(--color-primary);
-  padding: 0.3rem 0.7rem;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  border: 1px solid var(--color-border);
-  font-family: var(--font-family-display);
-  letter-spacing: var(--letter-spacing-terminal);
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.skill-tag:hover {
-  background: rgba(0, 255, 136, 0.1);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
 }
 
 .courses-list {
@@ -265,10 +197,6 @@
     grid-template-columns: 1fr;
     gap: 2rem;
   }
-
-  .section-title {
-    font-size: var(--font-size-3xl);
-  }
 }
 
 @media (max-width: 768px) {
@@ -280,10 +208,6 @@
     grid-template-columns: 1fr;
   }
 
-  .section-title {
-    font-size: 2rem;
-  }
-
   .terminal-body {
     padding: 1.2rem;
   }
@@ -293,10 +217,6 @@
   .about-section {
     padding: var(--spacing-xl) 1rem;
     min-height: auto;
-  }
-
-  .section-title {
-    font-size: var(--font-size-xl);
   }
 
   .name {

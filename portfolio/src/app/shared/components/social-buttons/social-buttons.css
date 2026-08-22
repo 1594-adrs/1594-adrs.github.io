@@ -42,7 +42,7 @@
   left: 100%;
   top: 50%;
   transform: translateY(-50%) translateX(0);
-  background: #0a0a0f;
+  background: var(--color-bg-dark);
   color: var(--color-primary);
   padding: 0.4rem 0.8rem;
   white-space: nowrap;

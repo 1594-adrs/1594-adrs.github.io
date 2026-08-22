@@ -29,6 +29,16 @@ export class Navbar implements AfterViewInit, OnDestroy {
   ngAfterViewInit() {
     if (!this.isBrowser) return;
 
+    this.setupObserver();
+  }
+
+  ngOnDestroy() {
+    this.observer?.disconnect();
+  }
+
+  private setupObserver() {
+    this.observer?.disconnect();
+
     const sectionIds = this.navLinks.filter((l) => !l.isButton).map((l) => l.id);
     const sections = sectionIds
       .map((id) => document.getElementById(id))
@@ -50,20 +60,17 @@ export class Navbar implements AfterViewInit, OnDestroy {
     sections.forEach((section) => this.observer!.observe(section));
   }
 
-  ngOnDestroy() {
-    this.observer?.disconnect();
+  reobserve() {
+    this.setupObserver();
   }
 
   toggleMenu() {
     this.isMenuOpen.update((state) => !state);
   }
 
-  setActiveLink(linkId: string) {
+  scrollToSection(linkId: string) {
     this.activeLink.set(linkId);
     this.isMenuOpen.set(false);
-  }
-
-  downloadCV() {
-    window.open('/Andres_Rincon_CV.pdf', '_blank');
+    document.getElementById(linkId)?.scrollIntoView({ behavior: 'smooth' });
   }
 }

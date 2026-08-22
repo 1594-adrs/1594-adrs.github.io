@@ -1,0 +1,41 @@
+<section class="web-projects-section">
+  <div class="container">
+    <h1 class="section-title">// Web Projects</h1>
+    <p class="section-subtitle">&gt; Interactive web-based tools and experiments.</p>
+
+    <div class="projects-grid">
+      @for (project of projects; track project.id) {
+        <div class="project-card">
+          <div class="card-topbar">
+            <span class="card-dot"></span>
+            <span class="card-dot"></span>
+            <span class="card-dot"></span>
+            <span class="card-filename">{{ project.id }}.web</span>
+          </div>
+
+          <div class="project-content">
+            <div class="project-icon">
+              <i [class]="project.icon"></i>
+            </div>
+            <h2 class="project-title">{{ project.title }}</h2>
+            <p class="project-description">{{ project.description }}</p>
+
+            <div class="technologies">
+              @for (tech of project.technologies; track tech) {
+                <span class="tech-badge">{{ tech }}</span>
+              }
+            </div>
+
+            <div class="project-links">
+              <a class="btn btn-open" [routerLink]="project.route">
+                &gt; open
+              </a>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    <a routerLink="/" class="back-home">&lt; cd /portfolio</a>
+  </div>
+</section>

@@ -39,3 +39,12 @@ export interface Project {
   liveUrl?: string;
   featured?: boolean;
 }
+
+export interface WebProject {
+  id: string;
+  title: string;
+  description: string;
+  route: string;
+  technologies: string[];
+  icon: string;
+}

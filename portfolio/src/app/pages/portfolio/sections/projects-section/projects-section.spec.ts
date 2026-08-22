@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { ProjectsSection } from './projects-section';
 import { PROJECTS } from '../../../../shared/data/portfolio.data';
 
@@ -6,6 +7,7 @@ describe('ProjectsSection', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ProjectsSection],
+      providers: [provideRouter([])],
     }).compileComponents();
   });
 
@@ -18,7 +20,7 @@ describe('ProjectsSection', () => {
     const fixture = TestBed.createComponent(ProjectsSection);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelectorAll('.project-card').length).toBe(PROJECTS.length);
+    expect(compiled.querySelectorAll('.project-card').length).toBe(PROJECTS.length + 1);
   });
 
   it('should render project titles', () => {
