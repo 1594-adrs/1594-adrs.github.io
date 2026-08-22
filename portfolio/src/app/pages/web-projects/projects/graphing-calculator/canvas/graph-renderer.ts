@@ -1,18 +1,9 @@
 import { Viewport } from './viewport';
+import { tryEval } from './utils';
 
-const SAFE_CLAMP = 1e8;
-
-function tryEval(fn: (x: number) => number, x: number): number {
-  try {
-    const y = fn(x);
-    if (!isFinite(y)) return NaN;
-    if (y > SAFE_CLAMP) return SAFE_CLAMP;
-    if (y < -SAFE_CLAMP) return -SAFE_CLAMP;
-    return y;
-  } catch {
-    return NaN;
-  }
-}
+// Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
+const COLOR_LABEL_BG = '#0a0a0f';
+const COLOR_LABEL_BORDER = '#333355';
 
 export function drawFunction(
   ctx: CanvasRenderingContext2D,
@@ -202,8 +193,8 @@ export function drawCrosshair(
     } catch { /* ignore */ }
   }
 
-  ctx.fillStyle = '#0a0a0f';
-  ctx.strokeStyle = '#333355';
+  ctx.fillStyle = COLOR_LABEL_BG;
+  ctx.strokeStyle = COLOR_LABEL_BORDER;
   ctx.lineWidth = 1;
   ctx.font = '11px "JetBrains Mono", monospace';
   const metrics = ctx.measureText(label);

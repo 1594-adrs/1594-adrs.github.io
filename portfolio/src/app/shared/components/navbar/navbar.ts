@@ -8,7 +8,6 @@ import {
   AfterViewInit,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { NavLink } from '../../models/portfolio.models';
 import { NAV_LINKS } from '../../data/portfolio.data';
 
@@ -17,7 +16,6 @@ import { NAV_LINKS } from '../../data/portfolio.data';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './navbar.html',
   styleUrls: ['./navbar.css'],
-  imports: [RouterLink],
 })
 export class Navbar implements AfterViewInit, OnDestroy {
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
@@ -70,8 +68,9 @@ export class Navbar implements AfterViewInit, OnDestroy {
     this.isMenuOpen.update((state) => !state);
   }
 
-  setActiveLink(linkId: string) {
+  scrollToSection(linkId: string) {
     this.activeLink.set(linkId);
     this.isMenuOpen.set(false);
+    document.getElementById(linkId)?.scrollIntoView({ behavior: 'smooth' });
   }
 }

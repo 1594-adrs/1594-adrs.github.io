@@ -8,6 +8,7 @@ import {
   OnInit,
   OnDestroy,
   PLATFORM_ID,
+  NgZone,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
@@ -17,6 +18,7 @@ import { isPlatformBrowser } from '@angular/common';
 })
 export class RevealOnScroll implements OnInit, OnDestroy {
   private el = inject(ElementRef);
+  private ngZone = inject(NgZone);
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private observer?: IntersectionObserver;
 
@@ -38,8 +40,10 @@ export class RevealOnScroll implements OnInit, OnDestroy {
           } else if (this.revealed()) {
             this.hiding.set(true);
             setTimeout(() => {
-              this.hiding.set(false);
-              this.revealed.set(false);
+              this.ngZone.run(() => {
+                this.hiding.set(false);
+                this.revealed.set(false);
+              });
             }, 400);
           }
         });

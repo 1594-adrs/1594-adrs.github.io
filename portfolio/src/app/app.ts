@@ -9,6 +9,7 @@ import {
   AfterViewChecked,
 } from '@angular/core';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import { Navbar } from './shared/components/navbar/navbar';
 import { ProgressBar } from './shared/components/progress-bar/progress-bar';
@@ -24,7 +25,7 @@ import { LoadingScreen } from './shared/components/loading-screen/loading-screen
 })
 export class AppComponent implements OnInit, OnDestroy, AfterViewChecked {
   private router = inject(Router);
-  private sub?: ReturnType<typeof Router.prototype.events.subscribe>;
+  private sub?: Subscription;
 
   isAppPage = signal(true);
   private needsReobserve = false;

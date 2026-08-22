@@ -4,11 +4,12 @@
 @import './app/shared/styles/responsive.css';
 @import './app/shared/animations/animations.css';
 @import './app/shared/styles/accessibility.css';
+@import './app/shared/styles/cards.css';
 
 html,
 body {
   overflow-x: hidden;
-  background: #0a0a0f;
+  background: var(--color-bg-dark);
   margin: 0;
 }
 

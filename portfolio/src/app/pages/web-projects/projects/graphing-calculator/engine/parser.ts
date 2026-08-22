@@ -235,7 +235,16 @@ class Parser {
 }
 
 const parser = new Parser();
+const astCache = new Map<string, ExpressionNode>();
 
 export function parse(expression: string): ExpressionNode {
-  return parser.parse(expression);
+  const cached = astCache.get(expression);
+  if (cached) return cached;
+  const ast = parser.parse(expression);
+  astCache.set(expression, ast);
+  return ast;
+}
+
+export function clearAstCache(): void {
+  astCache.clear();
 }

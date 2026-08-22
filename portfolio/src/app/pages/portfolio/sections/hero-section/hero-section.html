@@ -11,14 +11,16 @@
     <div class="profile-image-container">
       <div class="image-frame">
         <div class="image-placeholder">
-          <img
-            src="LOGO.png"
-            alt="Andrés David Rincón"
-            class="profile-img"
-            width="300"
-            height="300"
-            (error)="onImageError($event)"
-          />
+          @if (!imageFailed()) {
+            <img
+              src="LOGO.png"
+              alt="Andrés David Rincón"
+              class="profile-img"
+              width="300"
+              height="300"
+              (error)="onImageError()"
+            />
+          }
           <div class="image-overlay"></div>
         </div>
         <div class="frame-border"></div>

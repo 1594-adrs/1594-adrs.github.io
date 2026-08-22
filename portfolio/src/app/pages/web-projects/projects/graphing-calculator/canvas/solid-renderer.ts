@@ -1,23 +1,6 @@
 import { Viewport } from './viewport';
 import type { RotationAxis } from '../models/calculator.models';
-
-const CLAMP = 1e8;
-
-function safeY(y: number): number {
-  if (!isFinite(y)) return 0;
-  if (y > CLAMP) return CLAMP;
-  if (y < -CLAMP) return -CLAMP;
-  return y;
-}
-
-function tryEval(fn: (x: number) => number, x: number): number {
-  try {
-    const y = fn(x);
-    return safeY(y);
-  } catch {
-    return NaN;
-  }
-}
+import { tryEval, safeY } from './utils';
 
 export function drawSolidCrossSection(
   ctx: CanvasRenderingContext2D,

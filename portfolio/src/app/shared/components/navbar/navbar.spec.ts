@@ -31,12 +31,12 @@ describe('Navbar', () => {
     expect(component.isMenuOpen()).toBeTruthy();
   });
 
-  it('should close menu when setting active link', () => {
+  it('should close menu when scrolling to section', () => {
     const fixture = TestBed.createComponent(Navbar);
     const component = fixture.componentInstance;
     component.toggleMenu();
     expect(component.isMenuOpen()).toBeTruthy();
-    component.setActiveLink('about');
+    component.scrollToSection('about');
     expect(component.isMenuOpen()).toBeFalsy();
     expect(component.activeLink()).toBe('about');
   });

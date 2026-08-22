@@ -63,6 +63,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   lastDrag = signal<{ x: number; y: number } | null>(null);
 
   private resizeObserver: ResizeObserver | null = null;
+  private renderRequested = false;
+
+  private requestRender(): void {
+    if (this.renderRequested) return;
+    this.renderRequested = true;
+    requestAnimationFrame(() => {
+      this.renderRequested = false;
+      this.render();
+    });
+  }
 
   results = computed<IntegralResult[]>(() => {
     const res: IntegralResult[] = [];
@@ -70,7 +80,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
       if (expr?.ast && expr.visible) {
-        const fn = (x: number) => evalExpression(expr.raw, x);
+        const fn = (x: number) => evalExpression(expr.ast!, x);
         const value = integrate(fn, intg.a, intg.b);
         res.push({ label: `∫ ${expr.raw} dx`, value: formatValue(value) });
       }
@@ -79,7 +89,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (sol) {
       const expr = this.functions()[sol.fnIndex];
       if (expr?.ast && expr.visible) {
-        const fn = (x: number) => evalExpression(expr.raw, x);
+        const fn = (x: number) => evalExpression(expr.ast!, x);
         const vol = solidVolume(fn, sol.a, sol.b, sol.axis);
         const sa = solidSurfaceArea(fn, sol.a, sol.b, sol.axis);
         const axisLabel = sol.axis.type === 'x' && sol.axis.value === 0
@@ -98,8 +108,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const exprU = this.functions()[bnd.fnIndexUpper];
       const exprL = this.functions()[bnd.fnIndexLower];
       if (exprU?.ast && exprU.visible && exprL?.ast && exprL.visible) {
-        const fU = (x: number) => evalExpression(exprU.raw, x);
-        const fL = (x: number) => evalExpression(exprL.raw, x);
+        const fU = (x: number) => evalExpression(exprU.ast!, x);
+        const fL = (x: number) => evalExpression(exprL.ast!, x);
         const value = areaBetweenCurves(fU, fL, bnd.a, bnd.b);
         res.push({ label: `A [${exprU.raw} , ${exprL.raw}]`, value: formatValue(value) });
       }
@@ -114,8 +124,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       if (typeof ResizeObserver !== 'undefined') {
-        this.resizeObserver = new ResizeObserver(() => this.render());
-        this.resizeObserver.observe(canvas.parentElement!);
+        this.resizeObserver = new ResizeObserver(() => this.requestRender());
+        if (canvas.parentElement) {
+          this.resizeObserver.observe(canvas.parentElement);
+        }
       }
       this.parseAll();
       this.render();
@@ -137,7 +149,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   removeFunction(index: number): void {
     this.functions.update((fns) => fns.filter((_, i) => i !== index));
-    this.render();
+    this.requestRender();
   }
 
   updateExpression(index: number, raw: string): void {
@@ -152,14 +164,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
       }),
     );
-    this.render();
+    this.requestRender();
   }
 
   toggleVisibility(index: number): void {
     this.functions.update((fns) =>
       fns.map((fn, i) => (i === index ? { ...fn, visible: !fn.visible } : fn)),
     );
-    this.render();
+    this.requestRender();
   }
 
   activateIntegral(): void {
@@ -169,7 +181,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else {
       this.activeIntegral.set({ fnIndex: 0, a: -2, b: 2 });
     }
-    this.render();
+    this.requestRender();
   }
 
   activateSolid(): void {
@@ -179,7 +191,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else {
       this.activeSolid.set({ fnIndex: 0, a: 0, b: 3, axis: { type: 'x', value: 0 } });
     }
-    this.render();
+    this.requestRender();
   }
 
   activateBoundedArea(): void {
@@ -195,14 +207,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         b: 2,
       });
     }
-    this.render();
+    this.requestRender();
   }
 
   updateIntegralA(value: string): void {
     const v = parseFloat(value);
     if (!isNaN(v)) {
       this.activeIntegral.update((i) => (i ? { ...i, a: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -210,7 +222,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const v = parseFloat(value);
     if (!isNaN(v)) {
       this.activeIntegral.update((i) => (i ? { ...i, b: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -218,7 +230,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const v = parseFloat(value);
     if (!isNaN(v)) {
       this.activeSolid.update((s) => (s ? { ...s, a: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -226,7 +238,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const v = parseFloat(value);
     if (!isNaN(v)) {
       this.activeSolid.update((s) => (s ? { ...s, b: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -236,7 +248,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (!s) return null;
       return { ...s, axis: { type, value: s.axis.value } };
     });
-    this.render();
+    this.requestRender();
   }
 
   updateSolidAxisValue(value: string): void {
@@ -246,7 +258,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (!s) return null;
         return { ...s, axis: { ...s.axis, value: v } };
       });
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -254,7 +266,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const v = parseInt(value, 10);
     if (!isNaN(v) && v >= 0 && v < this.functions().length) {
       this.activeBoundedArea.update((b) => (b ? { ...b, fnIndexUpper: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -262,7 +274,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const v = parseInt(value, 10);
     if (!isNaN(v) && v >= 0 && v < this.functions().length) {
       this.activeBoundedArea.update((b) => (b ? { ...b, fnIndexLower: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -270,7 +282,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const v = parseFloat(value);
     if (!isNaN(v)) {
       this.activeBoundedArea.update((b) => (b ? { ...b, a: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -278,7 +290,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const v = parseFloat(value);
     if (!isNaN(v)) {
       this.activeBoundedArea.update((b) => (b ? { ...b, b: v } : null));
-      this.render();
+      this.requestRender();
     }
   }
 
@@ -300,12 +312,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.lastDrag.set({ x, y });
     }
 
-    this.render();
+    this.requestRender();
   }
 
   onCanvasMouseLeave(): void {
     this.mousePos.set(null);
-    this.render();
+    this.requestRender();
   }
 
   onCanvasWheel(event: WheelEvent): void {
@@ -317,7 +329,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const y = event.clientY - rect.top;
     const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
     this.viewport.zoom(factor, x, y, canvas.width, canvas.height);
-    this.render();
+    this.requestRender();
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
@@ -329,6 +341,43 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   onCanvasMouseUp(): void {
     this.isDragging.set(false);
     this.lastDrag.set(null);
+  }
+
+  onCanvasKeyDown(event: KeyboardEvent): void {
+    const canvas = this.canvasRef()?.nativeElement;
+    if (!canvas) return;
+
+    const PAN_STEP = 30;
+    switch (event.key) {
+      case '+':
+      case '=':
+        this.viewport.zoom(1.15, canvas.width / 2, canvas.height / 2, canvas.width, canvas.height);
+        break;
+      case '-':
+      case '_':
+        this.viewport.zoom(1 / 1.15, canvas.width / 2, canvas.height / 2, canvas.width, canvas.height);
+        break;
+      case 'ArrowLeft':
+        this.viewport.pan(PAN_STEP, 0, canvas.width, canvas.height);
+        break;
+      case 'ArrowRight':
+        this.viewport.pan(-PAN_STEP, 0, canvas.width, canvas.height);
+        break;
+      case 'ArrowUp':
+        this.viewport.pan(0, PAN_STEP, canvas.width, canvas.height);
+        break;
+      case 'ArrowDown':
+        this.viewport.pan(0, -PAN_STEP, canvas.width, canvas.height);
+        break;
+      case 'r':
+      case 'R':
+        this.resetView();
+        return;
+      default:
+        return;
+    }
+    event.preventDefault();
+    this.requestRender();
   }
 
   resetView(): void {
@@ -372,7 +421,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     for (const fn of this.functions()) {
       if (!fn.ast || !fn.visible || !fn.raw) continue;
-      const evalFn = (x: number) => evalExpression(fn.raw, x);
+      const evalFn = (x: number) => evalExpression(fn.ast!, x);
       drawFunction(ctx, this.viewport, evalFn, fn.color, w, h);
     }
 
@@ -380,7 +429,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
       if (expr?.ast && expr.visible) {
-        const fn = (x: number) => evalExpression(expr.raw, x);
+        const fn = (x: number) => evalExpression(expr.ast!, x);
         drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, expr.color, w, h);
       }
     }
@@ -390,8 +439,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const exprU = this.functions()[bnd.fnIndexUpper];
       const exprL = this.functions()[bnd.fnIndexLower];
       if (exprU?.ast && exprU.visible && exprL?.ast && exprL.visible) {
-        const fU = (x: number) => evalExpression(exprU.raw, x);
-        const fL = (x: number) => evalExpression(exprL.raw, x);
+        const fU = (x: number) => evalExpression(exprU.ast!, x);
+        const fL = (x: number) => evalExpression(exprL.ast!, x);
         drawAreaBetween(ctx, this.viewport, fU, fL, bnd.a, bnd.b, exprU.color, w, h);
       }
     }
@@ -400,7 +449,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (sol) {
       const expr = this.functions()[sol.fnIndex];
       if (expr?.ast && expr.visible) {
-        const fn = (x: number) => evalExpression(expr.raw, x);
+        const fn = (x: number) => evalExpression(expr.ast!, x);
         drawSolidCrossSection(ctx, this.viewport, fn, sol.a, sol.b, sol.axis, w, h);
       }
     }
@@ -412,7 +461,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (intgFn) {
         const expr = this.functions()[intgFn.fnIndex];
         if (expr?.ast && expr.visible) {
-          activeFn = (x: number) => evalExpression(expr.raw, x);
+          activeFn = (x: number) => evalExpression(expr.ast!, x);
         }
       }
       drawCrosshair(ctx, this.viewport, mouse.x, mouse.y, activeFn, '#666680', w, h);

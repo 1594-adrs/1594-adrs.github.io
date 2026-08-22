@@ -15,7 +15,7 @@
       <span class="hamburger"></span>
     </button>
 
-    <ul class="nav-links" [class.active]="isMenuOpen()" id="nav-menu" role="list">
+    <ul class="nav-links" [class.active]="isMenuOpen()" id="nav-menu">
       @for (link of navLinks; track link.id) {
         @if (link.isButton) {
           <li class="nav-item">
@@ -31,11 +31,10 @@
         } @else {
           <li class="nav-item">
             <a
-              [routerLink]="'/'"
-              [fragment]="link.id"
               class="nav-link"
               [class.active]="activeLink() === link.id"
-              (click)="setActiveLink(link.id)"
+              (click)="scrollToSection(link.id); $event.preventDefault()"
+              [href]="'#' + link.id"
             >
               {{ link.label }}
             </a>

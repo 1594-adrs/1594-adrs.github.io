@@ -1,5 +1,11 @@
 import { Viewport } from './viewport';
 
+// Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
+const COLOR_BG = '#0d0d15';
+const COLOR_GRID = '#1a1a2e';
+const COLOR_AXIS = '#333355';
+const COLOR_LABEL = '#666680';
+
 function niceStep(range: number): number {
   const rough = range / 8;
   const pow = Math.pow(10, Math.floor(Math.log10(rough)));
@@ -22,10 +28,10 @@ export function drawGrid(
   const stepY = niceStep(yRange);
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#0d0d15';
+  ctx.fillStyle = COLOR_BG;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.strokeStyle = '#1a1a2e';
+  ctx.strokeStyle = COLOR_GRID;
   ctx.lineWidth = 1;
 
   const startX = Math.ceil(viewport.xMin / stepX) * stepX;
@@ -47,7 +53,7 @@ export function drawGrid(
   }
 
   const [ox, oy] = viewport.worldToScreen(0, 0, width, height);
-  ctx.strokeStyle = '#333355';
+  ctx.strokeStyle = COLOR_AXIS;
   ctx.lineWidth = 1.5;
 
   ctx.beginPath();
@@ -60,7 +66,7 @@ export function drawGrid(
   ctx.lineTo(ox, height);
   ctx.stroke();
 
-  ctx.fillStyle = '#666680';
+  ctx.fillStyle = COLOR_LABEL;
   ctx.font = '11px "JetBrains Mono", monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';

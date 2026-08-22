@@ -132,7 +132,8 @@
     </div>
   </aside>
 
-  <main class="canvas-container">
+  <main class="canvas-container" tabindex="0" aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset."
+    (keydown)="onCanvasKeyDown($event)">
     <canvas
       #graphCanvas
       (mousemove)="onCanvasMouseMove($event)"

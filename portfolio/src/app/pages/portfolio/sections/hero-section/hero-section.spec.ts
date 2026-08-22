@@ -20,4 +20,16 @@ describe('HeroSection', () => {
     expect(compiled.querySelector('.name')?.textContent).toContain('Andrés Rincón');
     expect(compiled.querySelector('.role')?.textContent).toContain('Full Stack Developer');
   });
+
+  it('should hide image on error', () => {
+    const fixture = TestBed.createComponent(HeroSection);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    expect(component.imageFailed()).toBeFalsy();
+    component.onImageError();
+    fixture.detectChanges();
+    expect(component.imageFailed()).toBeTruthy();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('.profile-img')).toBeNull();
+  });
 });

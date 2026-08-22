@@ -1,0 +1,122 @@
+.terminal-card,
+.project-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.terminal-header,
+.card-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-bg-dark);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.terminal-dot,
+.card-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-border);
+}
+
+.terminal-dot:first-child,
+.card-dot:first-child {
+  background: var(--color-corruption);
+}
+
+.terminal-dot:nth-child(2),
+.card-dot:nth-child(2) {
+  background: #ffaa00;
+}
+
+.terminal-dot:nth-child(3),
+.card-dot:nth-child(3) {
+  background: var(--color-primary);
+}
+
+.terminal-title,
+.card-filename {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-left: 8px;
+  letter-spacing: var(--letter-spacing-terminal);
+}
+
+.terminal-body,
+.project-content {
+  padding: 1.5rem;
+}
+
+.section-title {
+  font-size: var(--font-size-4xl);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin-bottom: 2rem;
+  position: relative;
+  display: block;
+  text-align: left;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.btn {
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--color-border);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  flex: 1;
+  justify-content: center;
+  font-family: var(--font-family-display);
+  letter-spacing: var(--letter-spacing-terminal);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.skill-tag,
+.tech-badge {
+  background: transparent;
+  color: var(--color-primary);
+  padding: 0.35rem 0.7rem;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-family-display);
+  letter-spacing: var(--letter-spacing-terminal);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.skill-tag:hover,
+.tech-badge:hover {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+@media (max-width: 1024px) {
+  .section-title {
+    font-size: var(--font-size-3xl);
+  }
+}
+
+@media (max-width: 768px) {
+  .section-title {
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .section-title {
+    font-size: var(--font-size-xl);
+  }
+}

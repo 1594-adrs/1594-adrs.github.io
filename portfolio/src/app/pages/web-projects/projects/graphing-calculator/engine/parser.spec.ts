@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { parse } from './parser';
+import { describe, it, expect, afterEach } from 'vitest';
+import { parse, clearAstCache } from './parser';
 import { evaluate } from './evaluator';
+
+afterEach(() => {
+  clearAstCache();
+});
 
 describe('parser', () => {
   it('should parse a number', () => {
@@ -122,5 +126,17 @@ describe('parser', () => {
   it('should parse expression with spaces', () => {
     const ast = parse('  2  +  3  ');
     expect(evaluate(ast, {})).toBe(5);
+  });
+
+  it('should cache AST for the same expression', () => {
+    const first = parse('sin(x)');
+    const second = parse('sin(x)');
+    expect(first).toBe(second);
+  });
+
+  it('should return different ASTs for different expressions', () => {
+    const a = parse('sin(x)');
+    const b = parse('cos(x)');
+    expect(a).not.toBe(b);
   });
 });

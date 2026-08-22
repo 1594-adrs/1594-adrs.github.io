@@ -53,7 +53,9 @@ export function evaluate(ast: ExpressionNode, variables: Record<string, number>)
   }
 }
 
-export function evalExpression(raw: string, x: number): number {
-  const ast = parse(raw);
+export function evalExpression(raw: string, x: number): number;
+export function evalExpression(ast: ExpressionNode, x: number): number;
+export function evalExpression(rawOrAst: string | ExpressionNode, x: number): number {
+  const ast = typeof rawOrAst === 'string' ? parse(rawOrAst) : rawOrAst;
   return evaluate(ast, { x });
 }

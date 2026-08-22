@@ -1,13 +1,4 @@
-import {
-  Component,
-  ChangeDetectionStrategy,
-  PLATFORM_ID,
-  inject,
-  AfterViewInit,
-  ElementRef,
-  viewChild,
-} from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { SkillCategory, Course } from '../../../../shared/models/portfolio.models';
 import { SKILLS, COURSES, EDUCATION, SOFT_SKILLS } from '../../../../shared/data/portfolio.data';
 import { RevealOnScroll } from '../../../../shared/directives/reveal-on-scroll.directive';
