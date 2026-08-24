@@ -139,4 +139,41 @@ describe('parser', () => {
     const b = parse('cos(x)');
     expect(a).not.toBe(b);
   });
+
+  describe('new functions', () => {
+    it('should parse sec(x)', () => {
+      const ast = parse('sec(x)');
+      expect(ast.type).toBe('FunctionCall');
+    });
+
+    it('should parse asin(x)', () => {
+      const ast = parse('asin(x)');
+      expect(ast.type).toBe('FunctionCall');
+    });
+
+    it('should parse sinh(x)', () => {
+      const ast = parse('sinh(x)');
+      expect(ast.type).toBe('FunctionCall');
+    });
+
+    it('should parse floor(x)', () => {
+      const ast = parse('floor(x)');
+      expect(ast.type).toBe('FunctionCall');
+    });
+
+    it('should parse min(x, 1)', () => {
+      const ast = parse('min(x, 1)');
+      expect(ast.type).toBe('FunctionCallMultiArg');
+    });
+
+    it('should parse max(x, 0)', () => {
+      const ast = parse('max(x, 0)');
+      expect(ast.type).toBe('FunctionCallMultiArg');
+    });
+
+    it('should parse mod(x, 2)', () => {
+      const ast = parse('mod(x, 2)');
+      expect(ast.type).toBe('FunctionCallMultiArg');
+    });
+  });
 });

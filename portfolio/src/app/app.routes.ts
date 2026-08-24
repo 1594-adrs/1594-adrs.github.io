@@ -9,16 +9,14 @@ export const routes: Routes = [
   {
     path: 'web-projects',
     loadComponent: () =>
-      import('./pages/web-projects/web-projects.component').then(
-        (m) => m.WebProjectsComponent,
-      ),
+      import('./pages/web-projects/web-projects.component').then((m) => m.WebProjectsComponent),
   },
   {
     path: 'web-projects/calculator',
     loadComponent: () =>
-      import(
-        './pages/web-projects/projects/graphing-calculator/graphing-calculator.component'
-      ).then((m) => m.GraphingCalculatorComponent),
+      import('./pages/web-projects/projects/graphing-calculator/graphing-calculator.component').then(
+        (m) => m.GraphingCalculatorComponent,
+      ),
   },
   {
     path: '**',

@@ -38,7 +38,7 @@ describe('integrator', () => {
   });
 
   it('should handle integrable singularity at boundary (1/sqrt(x) from 0 to 1 ≈ 2)', () => {
-    const result = integrate((x) => x === 0 ? Infinity : 1 / Math.sqrt(x), 0, 1);
+    const result = integrate((x) => (x === 0 ? Infinity : 1 / Math.sqrt(x)), 0, 1);
     expect(result).toBeGreaterThan(1.5);
     expect(result).toBeLessThan(2.5);
   });
@@ -53,13 +53,13 @@ describe('integrator', () => {
   });
 
   it('should detect divergent integral (1/x^2 from -1 to 1)', () => {
-    const f = (x: number) => x === 0 ? Infinity : 1 / (x * x);
+    const f = (x: number) => (x === 0 ? Infinity : 1 / (x * x));
     const result = integrate(f, -1, 1);
     expect(result).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('should handle function returning NaN at isolated point', () => {
-    const f = (x: number) => x === 0 ? NaN : x;
+    const f = (x: number) => (x === 0 ? NaN : x);
     const result = integrate(f, -1, 1);
     expect(result).toBeCloseTo(0, 3);
   });

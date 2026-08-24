@@ -15,6 +15,25 @@ const FUNCTIONS: Record<string, (x: number) => number> = {
   sqrt: Math.sqrt,
   abs: Math.abs,
   exp: Math.exp,
+  sec: (x) => 1 / Math.cos(x),
+  csc: (x) => 1 / Math.sin(x),
+  cot: (x) => 1 / Math.tan(x),
+  asin: Math.asin,
+  acos: Math.acos,
+  atan: Math.atan,
+  sinh: Math.sinh,
+  cosh: Math.cosh,
+  tanh: Math.tanh,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  round: Math.round,
+  sign: Math.sign,
+};
+
+const MULTI_ARG_FUNCTIONS: Record<string, (...args: number[]) => number> = {
+  min: (...args) => Math.min(...args),
+  max: (...args) => Math.max(...args),
+  mod: (...args) => args[0] % args[1],
 };
 
 export function evaluate(ast: ExpressionNode, variables: Record<string, number>): number {
@@ -31,12 +50,18 @@ export function evaluate(ast: ExpressionNode, variables: Record<string, number>)
       const left = evaluate(ast.left, variables);
       const right = evaluate(ast.right, variables);
       switch (ast.operator) {
-        case '+': return left + right;
-        case '-': return left - right;
-        case '*': return left * right;
-        case '/': return left / right;
-        case '^': return Math.pow(left, right);
-        default: throw new Error(`Unknown operator: '${ast.operator}'`);
+        case '+':
+          return left + right;
+        case '-':
+          return left - right;
+        case '*':
+          return left * right;
+        case '/':
+          return left / right;
+        case '^':
+          return Math.pow(left, right);
+        default:
+          throw new Error(`Unknown operator: '${ast.operator}'`);
       }
     }
 
@@ -50,12 +75,29 @@ export function evaluate(ast: ExpressionNode, variables: Record<string, number>)
       if (!fn) throw new Error(`Unknown function: '${ast.name}'`);
       return fn(evaluate(ast.arg, variables));
     }
+
+    case 'FunctionCallMultiArg': {
+      const fn = MULTI_ARG_FUNCTIONS[ast.name];
+      if (!fn) throw new Error(`Unknown function: '${ast.name}'`);
+      return fn(...ast.args.map((a) => evaluate(a, variables)));
+    }
   }
 }
 
-export function evalExpression(raw: string, x: number): number;
-export function evalExpression(ast: ExpressionNode, x: number): number;
-export function evalExpression(rawOrAst: string | ExpressionNode, x: number): number {
+export function evalExpression(raw: string, x: number, y?: number): number;
+export function evalExpression(ast: ExpressionNode, x: number, y?: number): number;
+export function evalExpression(rawOrAst: string | ExpressionNode, x: number, y?: number): number {
   const ast = typeof rawOrAst === 'string' ? parse(rawOrAst) : rawOrAst;
-  return evaluate(ast, { x });
+  const vars: Record<string, number> = { x };
+  if (y !== undefined) vars['y'] = y;
+  return evaluate(ast, vars);
+}
+
+export function evalConstantExpression(raw: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed) throw new Error('Empty expression');
+  const ast = parse(trimmed);
+  const result = evaluate(ast, {});
+  if (!isFinite(result)) throw new Error('Expression is not a finite number');
+  return result;
 }

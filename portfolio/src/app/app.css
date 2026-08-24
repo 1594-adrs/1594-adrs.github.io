@@ -66,12 +66,12 @@
 }
 
 @media (max-width: 768px) {
-#main-content {
-  position: relative;
-  z-index: 101;
-}
+  #main-content {
+    position: relative;
+    z-index: 101;
+  }
 
-.footer {
+  .footer {
     padding: 1.5rem 1.5rem;
   }
 

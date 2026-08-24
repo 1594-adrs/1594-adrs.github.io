@@ -16,7 +16,10 @@
   align-items: center;
   background: var(--color-bg-card);
   color: var(--color-text-muted);
-  transition: transform var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
   position: relative;
   cursor: pointer;
   font-size: 1.1rem;
@@ -48,7 +51,10 @@
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
-  transition: opacity var(--transition-fast), visibility var(--transition-fast), transform var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    visibility var(--transition-fast),
+    transform var(--transition-fast);
   font-size: var(--font-size-xs);
   font-family: var(--font-family-display);
   letter-spacing: var(--letter-spacing-terminal);

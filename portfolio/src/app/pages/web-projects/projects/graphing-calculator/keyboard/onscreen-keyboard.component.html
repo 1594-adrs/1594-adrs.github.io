@@ -1,0 +1,20 @@
+<div class="keyboard">
+  @for (row of rows; track $index) {
+    <div class="keyboard-row">
+      @for (key of row; track key.label) {
+        <button
+          class="key"
+          [class.key-function]="key.category === 'function'"
+          [class.key-operator]="key.category === 'operator'"
+          [class.key-constant]="key.category === 'constant'"
+          [class.key-special]="key.category === 'special'"
+          [style.width]="key.width ? key.width * 100 + '%' : ''"
+          (click)="onKey(key)"
+          type="button"
+        >
+          {{ key.label }}
+        </button>
+      }
+    </div>
+  }
+</div>

@@ -19,6 +19,8 @@
     "@angular/platform-browser": "^21.2.21",
     "@angular/platform-server": "^21.2.21",
     "@angular/router": "^21.2.21",
+    "@types/three": "^0.185.4",
+    "three": "^0.185.1",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
