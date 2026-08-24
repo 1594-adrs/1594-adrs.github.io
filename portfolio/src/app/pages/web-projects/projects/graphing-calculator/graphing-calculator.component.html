@@ -10,15 +10,52 @@
       @for (fn of functions(); track $index) {
         <div class="function-row">
           <span class="color-dot" [style.background]="fn.color"></span>
-          <span class="fn-label">f<sub>{{ $index + 1 }}</sub>(x) =</span>
+          <span class="fn-label" [class.implicit-label]="fn.mode === 'implicit'"
+            >f<sub>{{ $index + 1 }}</sub
+            >{{
+              fn.mode === 'implicit'
+                ? '(x,y) ='
+                : fn.mode === 'parametric'
+                  ? '(t) ='
+                  : fn.mode === 'polar'
+                    ? '(θ) ='
+                    : '(x) ='
+            }}</span
+          >
           <input
+            #fnInput
             class="fn-input"
             [value]="fn.raw"
             (input)="updateExpression($index, $any($event.target).value)"
-            placeholder="e.g. sin(x)"
+            (focus)="onInputFocus($index)"
+            (blur)="onInputBlur()"
+            [placeholder]="
+              fn.mode === 'implicit'
+                ? 'e.g. x^2+y^2=1'
+                : fn.mode === 'parametric'
+                  ? 'e.g. cos(t),sin(t)'
+                  : fn.mode === 'polar'
+                    ? 'e.g. r=cos(3*theta)'
+                    : 'e.g. sin(x)'
+            "
             spellcheck="false"
           />
-          <button class="icon-btn" (click)="toggleVisibility($index)" [title]="fn.visible ? 'Hide' : 'Show'">
+          <button class="icon-btn mode-btn" (click)="cycleMode($index)" [title]="fn.mode">
+            {{
+              fn.mode === 'implicit'
+                ? '='
+                : fn.mode === 'parametric'
+                  ? 't'
+                  : fn.mode === 'polar'
+                    ? 'r'
+                    : 'y'
+            }}
+          </button>
+          <button
+            class="icon-btn"
+            (click)="toggleVisibility($index)"
+            [title]="fn.visible ? 'Hide' : 'Show'"
+          >
             {{ fn.visible ? '◉' : '○' }}
           </button>
           <button class="icon-btn danger" (click)="removeFunction($index)" title="Remove">×</button>
@@ -39,8 +76,21 @@
         <button class="t-btn" (click)="activateSolid()" [class.active]="activeSolid()">
           ↻ solid_rev
         </button>
-        <button class="t-btn" (click)="activateBoundedArea()" [class.active]="activeBoundedArea()">
-          ▲ area_between
+        <button
+          class="t-btn"
+          (click)="activateBoundedArea()"
+          [class.active]="activeBoundedArea()"
+          [disabled]="!hasMultipleFunctions()"
+        >
+          ▲ area_2fn
+        </button>
+        <button
+          class="t-btn"
+          (click)="activateMultiArea()"
+          [class.active]="activeMultiArea()"
+          [disabled]="!hasMultipleFunctions()"
+        >
+          ▲ area_nfn
         </button>
       </div>
     </div>
@@ -51,11 +101,23 @@
         <div class="range-inputs">
           <label class="range-field">
             a =
-            <input type="number" [value]="activeIntegral()!.a" (change)="updateIntegralA($any($event.target).value)" />
+            <input
+              type="text"
+              [value]="activeIntegral()!.a"
+              (change)="updateIntegralA($any($event.target).value)"
+              placeholder="pi"
+              [class.input-error]="limitErrors()['integralA']"
+            />
           </label>
           <label class="range-field">
             b =
-            <input type="number" [value]="activeIntegral()!.b" (change)="updateIntegralB($any($event.target).value)" />
+            <input
+              type="text"
+              [value]="activeIntegral()!.b"
+              (change)="updateIntegralB($any($event.target).value)"
+              placeholder="e/2"
+              [class.input-error]="limitErrors()['integralB']"
+            />
           </label>
         </div>
       </div>
@@ -67,25 +129,54 @@
         <div class="range-inputs">
           <label class="range-field">
             a =
-            <input type="number" [value]="activeSolid()!.a" (change)="updateSolidA($any($event.target).value)" />
+            <input
+              type="text"
+              [value]="activeSolid()!.a"
+              (change)="updateSolidA($any($event.target).value)"
+              placeholder="0"
+              [class.input-error]="limitErrors()['solidA']"
+            />
           </label>
           <label class="range-field">
             b =
-            <input type="number" [value]="activeSolid()!.b" (change)="updateSolidB($any($event.target).value)" />
+            <input
+              type="text"
+              [value]="activeSolid()!.b"
+              (change)="updateSolidB($any($event.target).value)"
+              placeholder="2*pi"
+              [class.input-error]="limitErrors()['solidB']"
+            />
           </label>
         </div>
         <div class="axis-config">
           <span class="range-label">&gt; rotation_axis</span>
           <div class="range-inputs">
-            <select class="axis-select" [value]="activeSolid()!.axis.type" (change)="updateSolidAxisType($any($event.target).value)">
+            <select
+              class="axis-select"
+              [value]="activeSolid()!.axis.type"
+              (change)="updateSolidAxisType($any($event.target).value)"
+            >
               <option value="x">y = k (horizontal)</option>
               <option value="y">x = k (vertical)</option>
             </select>
             <label class="range-field">
               k =
-              <input type="number" [value]="activeSolid()!.axis.value" (change)="updateSolidAxisValue($any($event.target).value)" step="0.5" />
+              <input
+                type="number"
+                [value]="activeSolid()!.axis.value"
+                (change)="updateSolidAxisValue($any($event.target).value)"
+                step="0.5"
+              />
             </label>
           </div>
+        </div>
+        <div class="solid-view-toggle">
+          <button class="t-btn" [class.active]="!show3DSolid()" (click)="show3DSolid.set(false)">
+            2D cross-section
+          </button>
+          <button class="t-btn" [class.active]="show3DSolid()" (click)="show3DSolid.set(true)">
+            3D view
+          </button>
         </div>
       </div>
     }
@@ -96,7 +187,11 @@
         <div class="bounded-fn-selects">
           <label class="range-field">
             upper =
-            <select class="axis-select" [value]="activeBoundedArea()!.fnIndexUpper" (change)="updateBoundedUpper($any($event.target).value)">
+            <select
+              class="axis-select"
+              [value]="activeBoundedArea()!.fnIndexUpper"
+              (change)="updateBoundedUpper($any($event.target).value)"
+            >
               @for (fn of functions(); track $index) {
                 <option [value]="$index">f{{ $index + 1 }}</option>
               }
@@ -104,7 +199,11 @@
           </label>
           <label class="range-field">
             lower =
-            <select class="axis-select" [value]="activeBoundedArea()!.fnIndexLower" (change)="updateBoundedLower($any($event.target).value)">
+            <select
+              class="axis-select"
+              [value]="activeBoundedArea()!.fnIndexLower"
+              (change)="updateBoundedLower($any($event.target).value)"
+            >
               @for (fn of functions(); track $index) {
                 <option [value]="$index">f{{ $index + 1 }}</option>
               }
@@ -114,34 +213,126 @@
         <div class="range-inputs">
           <label class="range-field">
             a =
-            <input type="number" [value]="activeBoundedArea()!.a" (change)="updateBoundedA($any($event.target).value)" />
+            <input
+              type="text"
+              [value]="activeBoundedArea()!.a"
+              (change)="updateBoundedA($any($event.target).value)"
+              placeholder="-pi"
+              [class.input-error]="limitErrors()['boundedA']"
+            />
           </label>
           <label class="range-field">
             b =
-            <input type="number" [value]="activeBoundedArea()!.b" (change)="updateBoundedB($any($event.target).value)" />
+            <input
+              type="text"
+              [value]="activeBoundedArea()!.b"
+              (change)="updateBoundedB($any($event.target).value)"
+              placeholder="pi"
+              [class.input-error]="limitErrors()['boundedB']"
+            />
+          </label>
+        </div>
+      </div>
+    }
+
+    @if (activeMultiArea()) {
+      <div class="range-section">
+        <span class="range-label">&gt; multi_function_area</span>
+        <div class="bounded-fn-selects">
+          @for (fn of functions(); track $index) {
+            <label class="range-field multi-fn-toggle">
+              <input
+                type="checkbox"
+                [checked]="activeMultiArea()!.functionIndices.includes($index)"
+                (change)="toggleMultiAreaFunction($index)"
+              />
+              <span class="color-dot" [style.background]="fn.color"></span>
+              f{{ $index + 1 }}
+            </label>
+          }
+        </div>
+        <div class="range-inputs">
+          <label class="range-field">
+            a =
+            <input
+              type="text"
+              [value]="activeMultiArea()!.a"
+              (change)="updateMultiAreaA($any($event.target).value)"
+              placeholder="0"
+              [class.input-error]="limitErrors()['multiA']"
+            />
+          </label>
+          <label class="range-field">
+            b =
+            <input
+              type="text"
+              [value]="activeMultiArea()!.b"
+              (change)="updateMultiAreaB($any($event.target).value)"
+              placeholder="2*pi"
+              [class.input-error]="limitErrors()['multiB']"
+            />
           </label>
         </div>
       </div>
     }
 
     <div class="sidebar-footer">
-      <button class="t-btn" (click)="toggleAngleUnit()">
-        angle: {{ angleUnit() }}
+      <button class="t-btn" (click)="toggleAngleUnit()">angle: {{ angleUnit() }}</button>
+      <button class="t-btn" (click)="toggleKeyboard()" [class.active]="showKeyboard()">
+        keyboard
       </button>
-      <button class="t-btn" (click)="resetView()">reset_view</button>
+      <button class="t-btn" (click)="showHelp.set(true)">? help</button>
     </div>
+
+    @if (showKeyboard()) {
+      <app-onscreen-keyboard (keyPress)="onKeyPress($event)" (keyAction)="onKeyAction($event)" />
+    }
   </aside>
 
-  <main class="canvas-container" tabindex="0" aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset."
-    (keydown)="onCanvasKeyDown($event)">
-    <canvas
-      #graphCanvas
-      (mousemove)="onCanvasMouseMove($event)"
-      (mouseleave)="onCanvasMouseLeave()"
-      (wheel)="onCanvasWheel($event)"
-      (mousedown)="onCanvasMouseDown($event)"
-      (mouseup)="onCanvasMouseUp()"
-    ></canvas>
+  <main
+    class="canvas-container"
+    tabindex="0"
+    aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset."
+    (keydown)="onCanvasKeyDown($event)"
+    (mouseenter)="showCanvasControls.set(true)"
+    (mouseleave)="showCanvasControls.set(false)"
+  >
+    @if (show3DSolid() && solidFunction()) {
+      <div class="solid-3d-container">
+        <app-solid-3d
+          [fn]="solidFunction()!"
+          [a]="activeSolid()!.a"
+          [b]="activeSolid()!.b"
+          [axis]="activeSolid()!.axis"
+          [color]="solidColor()"
+          [visible]="show3DSolid()"
+        />
+      </div>
+    } @else {
+      <canvas
+        #graphCanvas
+        (mousemove)="onCanvasMouseMove($event)"
+        (mouseleave)="onCanvasMouseLeave()"
+        (wheel)="onCanvasWheel($event)"
+        (mousedown)="onCanvasMouseDown($event)"
+        (mouseup)="onCanvasMouseUp()"
+      ></canvas>
+    }
+    @if (showCanvasControls() && !show3DSolid()) {
+      <div class="canvas-controls">
+        <button class="canvas-ctrl-btn" (click)="zoomIn()" title="Zoom in">+</button>
+        <button class="canvas-ctrl-btn" (click)="zoomOut()" title="Zoom out">−</button>
+        <button class="canvas-ctrl-btn" (click)="resetView()" title="Reset view">⌂</button>
+        <button
+          class="canvas-ctrl-btn"
+          [class.active]="showGrid()"
+          (click)="toggleGrid()"
+          title="Toggle grid"
+        >
+          ⊞
+        </button>
+      </div>
+    }
   </main>
 
   @if (results().length > 0) {
@@ -156,3 +347,7 @@
     </footer>
   }
 </div>
+
+@if (showHelp()) {
+  <app-help-modal (close)="showHelp.set(false)" />
+}

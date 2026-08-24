@@ -1,0 +1,63 @@
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--color-bg-card);
+  border-top: 1px solid var(--color-border);
+}
+
+.keyboard-row {
+  display: flex;
+  gap: 2px;
+}
+
+.key {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-dark);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-display);
+  font-size: 0.6rem;
+  letter-spacing: var(--letter-spacing-terminal);
+  cursor: pointer;
+  transition: all 0.1s;
+  padding: 0 4px;
+}
+
+.key:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.key:active {
+  background: rgba(0, 255, 136, 0.1);
+}
+
+.key-function {
+  color: var(--color-primary);
+  border-color: rgba(0, 255, 136, 0.2);
+}
+
+.key-function:hover {
+  background: rgba(0, 255, 136, 0.08);
+}
+
+.key-constant {
+  color: var(--color-secondary, #00ccff);
+  border-color: rgba(0, 204, 255, 0.2);
+}
+
+.key-constant:hover {
+  background: rgba(0, 204, 255, 0.08);
+}
+
+.key-special {
+  color: var(--color-text-subtle);
+}
+
+.key-special:hover {
+  background: rgba(255, 255, 255, 0.05);
+}

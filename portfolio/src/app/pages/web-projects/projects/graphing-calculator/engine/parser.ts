@@ -1,9 +1,5 @@
 export type ExpressionNode =
-  | NumberLiteral
-  | Variable
-  | BinaryOp
-  | UnaryOp
-  | FunctionCall;
+  NumberLiteral | Variable | BinaryOp | UnaryOp | FunctionCall | FunctionCallMultiArg;
 
 export interface NumberLiteral {
   type: 'NumberLiteral';
@@ -34,6 +30,12 @@ export interface FunctionCall {
   arg: ExpressionNode;
 }
 
+export interface FunctionCallMultiArg {
+  type: 'FunctionCallMultiArg';
+  name: string;
+  args: ExpressionNode[];
+}
+
 type TokenType = 'number' | 'variable' | 'operator' | 'lparen' | 'rparen' | 'comma' | 'eof';
 
 interface Token {
@@ -42,8 +44,30 @@ interface Token {
 }
 
 const KNOWN_FUNCTIONS = new Set([
-  'sin', 'cos', 'tan', 'log', 'ln', 'sqrt', 'abs', 'exp',
+  'sin',
+  'cos',
+  'tan',
+  'log',
+  'ln',
+  'sqrt',
+  'abs',
+  'exp',
+  'sec',
+  'csc',
+  'cot',
+  'asin',
+  'acos',
+  'atan',
+  'sinh',
+  'cosh',
+  'tanh',
+  'floor',
+  'ceil',
+  'round',
+  'sign',
 ]);
+
+const MULTI_ARG_FUNCTIONS = new Set(['min', 'max', 'mod']);
 
 class Lexer {
   private pos = 0;
@@ -60,8 +84,11 @@ class Lexer {
 
       const ch = input[this.pos];
 
-      if (ch >= '0' && ch <= '9' || ch === '.') {
+      if ((ch >= '0' && ch <= '9') || ch === '.') {
         this.tokens.push(this.readNumber(input));
+      } else if (ch === 'π') {
+        this.tokens.push({ type: 'variable', value: 'π' });
+        this.pos++;
       } else if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_') {
         this.tokens.push(this.readIdentifier(input));
       } else if (ch === '(') {
@@ -97,7 +124,10 @@ class Lexer {
 
   private readNumber(input: string): Token {
     let num = '';
-    while (this.pos < input.length && ((input[this.pos] >= '0' && input[this.pos] <= '9') || input[this.pos] === '.')) {
+    while (
+      this.pos < input.length &&
+      ((input[this.pos] >= '0' && input[this.pos] <= '9') || input[this.pos] === '.')
+    ) {
       num += input[this.pos];
       this.pos++;
     }
@@ -106,7 +136,13 @@ class Lexer {
 
   private readIdentifier(input: string): Token {
     let id = '';
-    while (this.pos < input.length && ((input[this.pos] >= 'a' && input[this.pos] <= 'z') || (input[this.pos] >= 'A' && input[this.pos] <= 'Z') || (input[this.pos] >= '0' && input[this.pos] <= '9') || input[this.pos] === '_')) {
+    while (
+      this.pos < input.length &&
+      ((input[this.pos] >= 'a' && input[this.pos] <= 'z') ||
+        (input[this.pos] >= 'A' && input[this.pos] <= 'Z') ||
+        (input[this.pos] >= '0' && input[this.pos] <= '9') ||
+        input[this.pos] === '_')
+    ) {
       id += input[this.pos];
       this.pos++;
     }
@@ -157,7 +193,10 @@ class Parser {
 
   private parseAddSub(): ExpressionNode {
     let left = this.parseMulDiv();
-    while (this.current().type === 'operator' && (this.current().value === '+' || this.current().value === '-')) {
+    while (
+      this.current().type === 'operator' &&
+      (this.current().value === '+' || this.current().value === '-')
+    ) {
       const op = this.advance().value;
       const right = this.parseMulDiv();
       left = { type: 'BinaryOp', operator: op, left, right };
@@ -167,7 +206,10 @@ class Parser {
 
   private parseMulDiv(): ExpressionNode {
     let left = this.parsePower();
-    while (this.current().type === 'operator' && (this.current().value === '*' || this.current().value === '/')) {
+    while (
+      this.current().type === 'operator' &&
+      (this.current().value === '*' || this.current().value === '/')
+    ) {
       const op = this.advance().value;
       const right = this.parsePower();
       left = { type: 'BinaryOp', operator: op, left, right };
@@ -186,7 +228,10 @@ class Parser {
   }
 
   private parseUnary(): ExpressionNode {
-    if (this.current().type === 'operator' && (this.current().value === '+' || this.current().value === '-')) {
+    if (
+      this.current().type === 'operator' &&
+      (this.current().value === '+' || this.current().value === '-')
+    ) {
       const op = this.advance().value;
       const operand = this.parseUnary();
       if (operand.type === 'NumberLiteral' && op === '-') {
@@ -218,6 +263,17 @@ class Parser {
         const arg = this.parseExpression();
         this.expect('rparen');
         return { type: 'FunctionCall', name, arg };
+      }
+
+      if (MULTI_ARG_FUNCTIONS.has(name)) {
+        this.expect('lparen');
+        const args: ExpressionNode[] = [this.parseExpression()];
+        while (this.current().type === 'comma') {
+          this.advance();
+          args.push(this.parseExpression());
+        }
+        this.expect('rparen');
+        return { type: 'FunctionCallMultiArg', name, args };
       }
 
       return { type: 'Variable', name };

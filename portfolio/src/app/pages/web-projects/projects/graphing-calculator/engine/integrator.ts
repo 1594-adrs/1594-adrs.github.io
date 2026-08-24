@@ -7,7 +7,12 @@ function evalSafe(f: (x: number) => number, x: number): number | null {
   }
 }
 
-function simpson(f: (x: number) => number, a: number, b: number, n: number): { sum: number; skipped: number } {
+function simpson(
+  f: (x: number) => number,
+  a: number,
+  b: number,
+  n: number,
+): { sum: number; skipped: number } {
   if (n % 2 !== 0) n++;
   const h = (b - a) / n;
   let sum = 0;
@@ -22,26 +27,24 @@ function simpson(f: (x: number) => number, a: number, b: number, n: number): { s
   for (let i = 1; i < n; i++) {
     const x = a + i * h;
     const fx = evalSafe(f, x);
-    if (fx === null) { skipped++; continue; }
+    if (fx === null) {
+      skipped++;
+      continue;
+    }
     sum += (i % 2 === 0 ? 2 : 4) * fx;
   }
 
   return { sum: (h / 3) * sum, skipped };
 }
 
-export function integrate(
-  f: (x: number) => number,
-  a: number,
-  b: number,
-  n = 200,
-): number {
+export function integrate(f: (x: number) => number, a: number, b: number, n = 200): number {
   if (a === b) return 0;
 
   const r1 = simpson(f, a, b, n);
   const r2 = simpson(f, a, b, n * 2);
 
   if (r1.skipped > n * 0.3 || r2.skipped > n * 0.6) {
-    const sign = (r1.sum + r2.sum) >= 0 ? 1 : -1;
+    const sign = r1.sum + r2.sum >= 0 ? 1 : -1;
     return sign * Number.POSITIVE_INFINITY;
   }
 
@@ -71,7 +74,11 @@ export function computeIntegralPoints(
   for (let i = 0; i <= steps; i++) {
     const x = a + i * h;
     let y: number;
-    try { y = f(x); } catch { y = NaN; }
+    try {
+      y = f(x);
+    } catch {
+      y = NaN;
+    }
     if (!isFinite(y)) y = NaN;
     points.push({ x, y });
   }

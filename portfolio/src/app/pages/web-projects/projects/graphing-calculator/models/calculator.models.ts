@@ -7,11 +7,16 @@ export interface RotationAxis {
   value: number;
 }
 
+export type CurveMode = 'explicit' | 'implicit' | 'parametric' | 'polar';
+
 export interface MathExpression {
   raw: string;
   ast: ExpressionNode | null;
   color: string;
   visible: boolean;
+  mode: CurveMode;
+  paramX?: ExpressionNode | null;
+  paramY?: ExpressionNode | null;
 }
 
 export interface PlotRange {
@@ -38,6 +43,13 @@ export interface BoundedAreaConfig {
   fnIndexLower: number;
   a: number;
   b: number;
+}
+
+export interface MultiFunctionAreaConfig {
+  functionIndices: number[];
+  a: number;
+  b: number;
+  autoDetectIntersections: boolean;
 }
 
 export interface Point2D {
