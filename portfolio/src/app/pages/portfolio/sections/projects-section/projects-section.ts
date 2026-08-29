@@ -4,13 +4,14 @@ import { RouterLink } from '@angular/router';
 import { Project } from '../../../../shared/models/portfolio.models';
 import { PROJECTS } from '../../../../shared/data/portfolio.data';
 import { RevealOnScroll } from '../../../../shared/directives/reveal-on-scroll.directive';
+import { IconComponent } from '../../../../shared/icons/icon.component';
 
 @Component({
   selector: 'app-projects-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './projects-section.html',
   styleUrls: ['./projects-section.css'],
-  imports: [RevealOnScroll, LowerCasePipe, RouterLink],
+  imports: [RevealOnScroll, LowerCasePipe, RouterLink, IconComponent],
 })
 export class ProjectsSection {
   projects: Project[] = PROJECTS;

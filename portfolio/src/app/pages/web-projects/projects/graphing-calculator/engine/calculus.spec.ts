@@ -1,16 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import {
   derivative,
-  solidVolume,
-  solidSurfaceArea,
-  areaBetweenCurves,
-  areaBetweenCurvesWithRegions,
+  solidVolumeSingle,
+  solidSurfaceAreaSingle,
+  areaSingle,
+  solidVolumeMulti,
+  solidSurfaceAreaMulti,
 } from './calculus';
+import type { SolidRegion } from './calculus';
+
+const PI = Math.PI;
 
 describe('calculus', () => {
   describe('derivative', () => {
     it('should compute derivative of x^2 at x=1 ≈ 2', () => {
-      expect(derivative((x) => x * x, 1)).toBeCloseTo(2, 2);
+      expect(derivative((x: number) => x * x, 1)).toBeCloseTo(2, 2);
     });
 
     it('should compute derivative of sin(x) at x=0 ≈ 1', () => {
@@ -22,84 +26,55 @@ describe('calculus', () => {
     });
   });
 
-  describe('solidVolume', () => {
+  describe('solidVolumeMulti', () => {
     it('should compute volume around y=0 for f(x)=1 from 0 to 1 ≈ π', () => {
-      const vol = solidVolume(() => 1, 0, 1, { type: 'x', value: 0 });
+      const fns = [(x: number) => 1, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 0 });
       expect(vol).toBeCloseTo(Math.PI, 2);
     });
 
-    it('should compute volume around y=1 for f(x)=1 from 0 to 1 ≈ 0', () => {
-      const vol = solidVolume(() => 1, 0, 1, { type: 'x', value: 1 });
+    it('should compute volume around y=1 for f(x)=1 and g(x)=1 ≈ 0', () => {
+      const fns = [(x: number) => 1, (x: number) => 1];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 1 });
       expect(vol).toBeCloseTo(0, 2);
     });
 
     it('should compute volume around y=0 for f(x)=x from 0 to 1 ≈ π/3', () => {
-      const vol = solidVolume((x) => x, 0, 1, { type: 'x', value: 0 });
+      const fns = [(x: number) => x, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 0 });
       expect(vol).toBeCloseTo(Math.PI / 3, 2);
     });
 
-    it('should compute volume around y=2 for f(x)=1 from 0 to 1 ≈ π', () => {
-      const vol = solidVolume(() => 1, 0, 1, { type: 'x', value: 2 });
-      expect(vol).toBeCloseTo(Math.PI, 2);
+    it('should compute volume around y=2 for f(x)=1, g(x)=0 from 0 to 1 ≈ 3π (washer: outer=|0-2|=2, inner=|1-2|=1)', () => {
+      const fns = [(x: number) => 1, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 2 });
+      expect(vol).toBeCloseTo(3 * Math.PI, 2);
     });
 
-    it('should default to axis y=0', () => {
-      const vol = solidVolume(() => 1, 0, 1);
-      expect(vol).toBeCloseTo(Math.PI, 2);
+    it('should return 0 for empty regions', () => {
+      const fns = [(x: number) => x];
+      const vol = solidVolumeMulti(fns, [], { type: 'x', value: 0 });
+      expect(vol).toBe(0);
     });
   });
 
-  describe('solidSurfaceArea', () => {
-    it('should compute surface area around y=0 for f(x)=1 from 0 to 1 ≈ 2π', () => {
-      const sa = solidSurfaceArea(() => 1, 0, 1, { type: 'x', value: 0 });
-      expect(sa).toBeCloseTo(2 * Math.PI, 1);
+  describe('solidSurfaceAreaMulti', () => {
+    it('should compute surface area around y=0 for f(x)=1, g(x)=0 from 0 to 1 ≈ 4π (lateral 2π + 2 caps)', () => {
+      const fns = [(x: number) => 1, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const sa = solidSurfaceAreaMulti(fns, regions, { type: 'x', value: 0 });
+      expect(sa).toBeCloseTo(4 * Math.PI, 0);
     });
 
-    it('should compute surface area around y=1 for f(x)=1 ≈ 0', () => {
-      const sa = solidSurfaceArea(() => 1, 0, 1, { type: 'x', value: 1 });
+    it('should compute surface area around y=1 for f(x)=1 and g(x)=1 ≈ 0', () => {
+      const fns = [(x: number) => 1, (x: number) => 1];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const sa = solidSurfaceAreaMulti(fns, regions, { type: 'x', value: 1 });
       expect(sa).toBeCloseTo(0, 1);
-    });
-  });
-
-  describe('areaBetweenCurves', () => {
-    it('should compute area between f=1 and g=0 from 0 to 1 ≈ 1', () => {
-      const area = areaBetweenCurves(
-        () => 1,
-        () => 0,
-        0,
-        1,
-      );
-      expect(area).toBeCloseTo(1, 3);
-    });
-
-    it('should compute area between f=x and g=0 from 0 to 1 ≈ 0.5', () => {
-      const area = areaBetweenCurves(
-        (x) => x,
-        () => 0,
-        0,
-        1,
-      );
-      expect(area).toBeCloseTo(0.5, 3);
-    });
-
-    it('should compute area between f=x and g=x/2 from 0 to 2 ≈ 1', () => {
-      const area = areaBetweenCurves(
-        (x) => x,
-        (x) => x / 2,
-        0,
-        2,
-      );
-      expect(area).toBeCloseTo(1, 3);
-    });
-
-    it('should handle inverted curves (absolute value)', () => {
-      const area = areaBetweenCurves(
-        () => 0,
-        () => 1,
-        0,
-        1,
-      );
-      expect(area).toBeCloseTo(1, 3);
     });
   });
 
@@ -116,90 +91,88 @@ describe('calculus', () => {
       expect(d).toBe(0);
     });
 
-    it('solidVolume with singularity should return finite or inf', () => {
+    it('solidVolumeMulti with singularity should return finite or inf', () => {
       const f = (x: number) => (x === 0 ? Infinity : 1 / Math.sqrt(x));
-      const vol = solidVolume(f, 0, 1, { type: 'x', value: 0 });
+      const fns = [f, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 0 });
       expect(isFinite(vol) || vol === Number.POSITIVE_INFINITY).toBe(true);
     });
 
-    it('solidSurfaceArea with singularity should return finite or inf', () => {
+    it('solidSurfaceAreaMulti with singularity should return finite or inf', () => {
       const f = (x: number) => (x === 0 ? Infinity : 1 / Math.sqrt(x));
-      const sa = solidSurfaceArea(f, 0, 1, { type: 'x', value: 0 });
+      const fns = [f, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const sa = solidSurfaceAreaMulti(fns, regions, { type: 'x', value: 0 });
       expect(isFinite(sa) || sa === Number.POSITIVE_INFINITY).toBe(true);
     });
 
-    it('areaBetweenCurves with one infinite function should return finite', () => {
-      const fU = (x: number) => (x === 0 ? Infinity : 1 / (x * x));
-      const area = areaBetweenCurves(fU, () => 0, 0.1, 1);
-      expect(isFinite(area)).toBe(true);
-    });
-
-    it('solidVolume around vertical axis should return finite for bounded function', () => {
-      const vol = solidVolume((x) => x, 0, 1, { type: 'y', value: 0 });
+    it('solidVolumeMulti around vertical axis should return finite for bounded function', () => {
+      const fns = [(x: number) => x, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'y', value: 0 });
       expect(isFinite(vol)).toBe(true);
       expect(vol).toBeGreaterThan(0);
     });
   });
 
-  describe('areaBetweenCurves with crossing curves', () => {
-    it('should compute area between sin(x) and 0 from -π to π ≈ 4', () => {
-      const area = areaBetweenCurves(Math.sin, () => 0, -Math.PI, Math.PI);
-      expect(area).toBeCloseTo(4, 1);
+  describe('solidVolumeSingle', () => {
+    it('should compute volume of f(x)=1 from 0 to 1 around y=0 ≈ π', () => {
+      const vol = solidVolumeSingle((x: number) => 1, 0, 1, { type: 'x', value: 0 });
+      expect(vol).toBeCloseTo(Math.PI, 2);
     });
 
-    it('should compute area between x² and x from 0 to 2 (crosses at x=1) = 1', () => {
-      const area = areaBetweenCurves(
-        (x) => x * x,
-        (x) => x,
-        0,
-        2,
-      );
-      expect(area).toBeCloseTo(1, 2);
+    it('should compute volume of f(x)=x from 0 to 1 around y=0 ≈ π/3', () => {
+      const vol = solidVolumeSingle((x: number) => x, 0, 1, { type: 'x', value: 0 });
+      expect(vol).toBeCloseTo(Math.PI / 3, 2);
     });
 
-    it('should compute area between sin(x) and cos(x) from 0 to 2π', () => {
-      const area = areaBetweenCurves(Math.sin, Math.cos, 0, 2 * Math.PI);
-      expect(area).toBeCloseTo(4 * Math.SQRT2, 1);
+    it('should compute volume of f(x)=1 from 0 to 1 around y=2 (disc r=|1-2|=1)', () => {
+      const vol = solidVolumeSingle((x: number) => 1, 0, 1, { type: 'x', value: 2 });
+      expect(vol).toBeCloseTo(Math.PI, 2);
     });
   });
 
-  describe('areaBetweenCurvesWithRegions', () => {
-    it('should split x² and x from 0 to 2 at x=1 (crossing at x=0 is boundary)', () => {
-      const result = areaBetweenCurvesWithRegions(
-        (x) => x * x,
-        (x) => x,
-        0,
-        2,
-      );
-      expect(result.regions.length).toBeGreaterThanOrEqual(2);
-      expect(result.totalArea).toBeCloseTo(1, 2);
+  describe('solidSurfaceAreaSingle', () => {
+    it('should compute surface area of f(x)=1 from 0 to 1 around y=0 ≈ 2π (lateral only)', () => {
+      const sa = solidSurfaceAreaSingle((x: number) => 1, 0, 1, { type: 'x', value: 0 });
+      expect(sa).toBeCloseTo(2 * Math.PI, 0);
     });
 
-    it('should compute correct total area for crossing curves', () => {
-      const result = areaBetweenCurvesWithRegions(
-        (x) => x * x,
-        (x) => x,
-        0,
-        2,
-      );
-      expect(result.totalArea).toBeCloseTo(1, 2);
+    it('should return finite for bounded function', () => {
+      const sa = solidSurfaceAreaSingle((x: number) => x * x, 0, 1, { type: 'y', value: 0 });
+      expect(isFinite(sa)).toBe(true);
+      expect(sa).toBeGreaterThan(0);
+    });
+  });
+
+  describe('areaSingle', () => {
+    it('should compute area of f(x)=x from 0 to 1 ≈ 0.5', () => {
+      const area = areaSingle((x: number) => x, 0, 1);
+      expect(area).toBeCloseTo(0.5, 4);
     });
 
-    it('should handle non-crossing curves (single region)', () => {
-      const result = areaBetweenCurvesWithRegions(
-        () => 1,
-        () => 0,
-        0,
-        1,
-      );
-      expect(result.regions.length).toBe(1);
-      expect(result.totalArea).toBeCloseTo(1, 3);
+    it('should compute area of f(x)=sin(x) from 0 to π ≈ 2', () => {
+      const area = areaSingle(Math.sin, 0, PI);
+      expect(area).toBeCloseTo(2, 4);
     });
 
-    it('should handle sin(x) vs cos(x) from 0 to 2π with crossing points', () => {
-      const result = areaBetweenCurvesWithRegions(Math.sin, Math.cos, 0, 2 * Math.PI);
-      expect(result.regions.length).toBeGreaterThanOrEqual(2);
-      expect(result.totalArea).toBeCloseTo(4 * Math.SQRT2, 1);
+    it('should compute area of f(x)=x^2 from 0 to 1 ≈ 1/3', () => {
+      const area = areaSingle((x: number) => x * x, 0, 1);
+      expect(area).toBeCloseTo(1 / 3, 4);
+    });
+  });
+
+  describe('solidVolumeMulti with crossing curves', () => {
+    it('should compute volume for region where top/bottom swap at crossing', () => {
+      const fns = [(x: number) => x * x, (x: number) => x];
+      const regions: SolidRegion[] = [
+        { a: 0, b: 1, topFunctionIndex: 1, bottomFunctionIndex: 0 },
+        { a: 1, b: 2, topFunctionIndex: 0, bottomFunctionIndex: 1 },
+      ];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 0 });
+      expect(isFinite(vol)).toBe(true);
+      expect(vol).toBeGreaterThan(0);
     });
   });
 });

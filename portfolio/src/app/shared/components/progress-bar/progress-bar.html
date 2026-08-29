@@ -1,3 +1,10 @@
-<div class="scroll-progress-container">
+<div
+  class="scroll-progress-container"
+  role="progressbar"
+  [attr.aria-valuenow]="scrollProgress()"
+  aria-valuemin="0"
+  aria-valuemax="100"
+  aria-label="Page scroll progress"
+>
   <div class="scroll-progress-bar" [style.height.%]="scrollProgress()"></div>
 </div>

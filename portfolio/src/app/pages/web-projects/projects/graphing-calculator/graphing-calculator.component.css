@@ -1,79 +1,107 @@
 :host {
   display: block;
   height: 100vh;
-  background: var(--color-bg-dark);
+  background: #0a0a0f;
 }
+
 .calculator-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 300px 1fr;
   grid-template-rows: 1fr auto;
   height: 100vh;
   overflow: hidden;
 }
+
 .canvas-container {
   position: relative;
   overflow: hidden;
   background: #0d0d15;
 }
+
 .canvas-container canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
+
 .canvas-container:focus-visible {
   outline: none;
 }
+
 .solid-3d-container {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 10;
+  z-index: 1;
   background: #0d0d15;
 }
+
 .solid-view-toggle {
   display: flex;
-  gap: 4px;
-  margin-top: 0.5rem;
+  gap: 3px;
+  margin-top: 0.4rem;
 }
+
 .solid-view-toggle .t-btn {
   flex: 1;
   text-align: center;
-  font-size: 0.6rem;
-  padding: 0.3rem 0.2rem;
+  font-size: 10px;
+  padding: 4px 2px;
 }
+
 .canvas-controls {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
-  z-index: 20;
+  bottom: 10px;
+  right: 10px;
+  z-index: 2;
   display: flex;
-  gap: 4px;
+  gap: 3px;
 }
+
 .canvas-ctrl-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--color-border, #333355);
-  background: rgba(10, 10, 15, 0.8);
+  width: 30px;
+  height: 30px;
+  border: 1px solid #1a1a2e;
+  background: rgba(10, 10, 15, 0.85);
   backdrop-filter: blur(4px);
-  color: var(--color-text-muted, #666680);
-  font-size: 14px;
+  color: #555;
+  font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 4px;
 }
+
 .canvas-ctrl-btn:hover {
-  border-color: var(--color-primary, #00ff88);
-  color: var(--color-primary, #00ff88);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
+
 .canvas-ctrl-btn.active {
-  border-color: var(--color-primary, #00ff88);
-  color: var(--color-primary, #00ff88);
-  background: rgba(0, 255, 136, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(0, 255, 136, 0.08);
 }
+
+.function-row[draggable='true'] {
+  cursor: grab;
+}
+
+.function-row[draggable='true']:active {
+  cursor: grabbing;
+}
+
+.function-row.drag-over {
+  border-top: 2px solid var(--color-primary);
+}
+
 @media (max-width: 768px) {
   .calculator-layout {
     grid-template-columns: 1fr;

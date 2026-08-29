@@ -1,5 +1,6 @@
 import { Viewport } from './viewport';
 import type { RotationAxis } from '../models/calculator.models';
+import type { SolidRegion } from '../engine/calculus';
 import { tryEval } from './utils';
 
 function findAxisCrossings(
@@ -35,27 +36,6 @@ function findAxisCrossings(
   return crossings;
 }
 
-function buildSubRegions(
-  fn: (x: number) => number,
-  a: number,
-  b: number,
-  k: number,
-  crossings: number[],
-): Array<{ a: number; b: number; functionAbove: boolean }> {
-  const boundaries = [a, ...crossings, b];
-  const regions: Array<{ a: number; b: number; functionAbove: boolean }> = [];
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    const ra = boundaries[i];
-    const rb = boundaries[i + 1];
-    if (rb - ra < 1e-12) continue;
-    const mid = (ra + rb) / 2;
-    const yMid = tryEval(fn, mid);
-    if (isNaN(yMid)) continue;
-    regions.push({ a: ra, b: rb, functionAbove: yMid > k });
-  }
-  return regions;
-}
-
 function buildCurveSegments(
   fn: (x: number) => number,
   a: number,
@@ -80,7 +60,7 @@ function buildCurveSegments(
   return segments;
 }
 
-export function drawSolidCrossSection(
+export function drawSolidCrossSectionSingle(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
   fn: (x: number) => number,
@@ -96,52 +76,215 @@ export function drawSolidCrossSection(
   const k = axis.value;
 
   if (axis.type === 'x') {
-    drawHorizontalAxisSolid(ctx, viewport, fn, a, b, k, steps, h, width, height, color);
+    const [, axisY] = viewport.worldToScreen(0, k, width, height);
+    const axisVisible = axisY >= -10 && axisY <= height + 10;
+
+    if (axisVisible) {
+      const crossings = findAxisCrossings(fn, a, b, k);
+      const boundaries = [a, ...crossings, b];
+      const subRegions: Array<{ a: number; b: number; above: boolean }> = [];
+      for (let i = 0; i < boundaries.length - 1; i++) {
+        const ra = boundaries[i];
+        const rb = boundaries[i + 1];
+        if (rb - ra < 1e-12) continue;
+        const mid = (ra + rb) / 2;
+        const yMid = tryEval(fn, mid);
+        if (isNaN(yMid)) continue;
+        subRegions.push({ a: ra, b: rb, above: yMid > k });
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, width, height);
+      ctx.clip();
+
+      for (const region of subRegions) {
+        const rSteps = Math.max(50, Math.abs(region.b - region.a) * 20);
+        const ih = (region.b - region.a) / rSteps;
+
+        ctx.beginPath();
+        const [startAxisSx] = viewport.worldToScreen(region.a, k, width, height);
+        ctx.moveTo(startAxisSx, axisY);
+
+        const [endAxisSx] = viewport.worldToScreen(region.b, k, width, height);
+        ctx.lineTo(endAxisSx, axisY);
+
+        for (let i = rSteps; i >= 0; i--) {
+          const x = region.a + i * ih;
+          const y = tryEval(fn, x);
+          if (isNaN(y)) continue;
+          const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+          ctx.lineTo(sx, sy);
+        }
+
+        ctx.closePath();
+        ctx.fillStyle = color + '18';
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      ctx.strokeStyle = '#ffaa0088';
+      ctx.lineWidth = 1.5;
+      const [sa] = viewport.worldToScreen(a, 0, width, height);
+      const [sb] = viewport.worldToScreen(b, 0, width, height);
+      ctx.beginPath();
+      ctx.moveTo(sa, axisY);
+      ctx.lineTo(sb, axisY);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = a + i * h;
+      const y = tryEval(fn, x);
+      if (isNaN(y)) { started = false; continue; }
+      const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+
+    drawHorizontalBoundaryCap(ctx, viewport, fn, a, k, width, height, color);
+    drawHorizontalBoundaryCap(ctx, viewport, fn, b, k, width, height, color);
+
+    if (axisVisible) {
+      drawRotationArrow(ctx, viewport, a, k, width, height, 'x', k);
+    } else {
+      drawEdgeIndicator(ctx, viewport, k, width, height, color, 'y');
+    }
   } else {
-    drawVerticalAxisSolid(ctx, viewport, fn, a, b, k, steps, h, width, height, color);
+    const [axisX] = viewport.worldToScreen(k, 0, width, height);
+    const axisVisible = axisX >= -10 && axisX <= width + 10;
+
+    const segments = buildCurveSegments(fn, a, b, steps);
+
+    if (axisVisible) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, width, height);
+      ctx.clip();
+
+      for (const seg of segments) {
+        ctx.beginPath();
+        const [startSx, startSy] = viewport.worldToScreen(seg[0].x, k, width, height);
+        ctx.moveTo(startSx, startSy);
+
+        const [axisEndSx, axisEndSy] = viewport.worldToScreen(seg[seg.length - 1].x, k, width, height);
+        ctx.lineTo(axisEndSx, axisEndSy);
+
+        for (let i = seg.length - 1; i >= 0; i--) {
+          const [sx, sy] = viewport.worldToScreen(seg[i].x, seg[i].y, width, height);
+          ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color + '18';
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      const [, topY] = viewport.worldToScreen(0, viewport.yMax, width, height);
+      const [, botY] = viewport.worldToScreen(0, viewport.yMin, width, height);
+      ctx.strokeStyle = '#ffaa0088';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(axisX, topY);
+      ctx.lineTo(axisX, botY);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    let started = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = a + i * h;
+      const y = tryEval(fn, x);
+      if (isNaN(y)) { started = false; continue; }
+      const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+
+    drawVerticalBoundaryCap(ctx, viewport, fn, a, k, width, height, color);
+    drawVerticalBoundaryCap(ctx, viewport, fn, b, k, width, height, color);
+
+    if (axisVisible) {
+      const arrowY = tryEval(fn, a);
+      const safeArrowY = isNaN(arrowY) ? (viewport.yMin + viewport.yMax) / 2 : arrowY;
+      drawRotationArrow(ctx, viewport, a, safeArrowY, width, height, 'y', k);
+    } else {
+      drawEdgeIndicator(ctx, viewport, k, width, height, color, 'x');
+    }
   }
 }
 
-// ===== HORIZONTAL AXIS (y = k) =====
-// Cross-section: area between y=f(x) and y=2k-f(x) (mirror across axis)
-
-function drawHorizontalAxisSolid(
+export function drawSolidCrossSectionMulti(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
-  fn: (x: number) => number,
+  functions: Array<(x: number) => number>,
+  functionColors: string[],
+  regions: SolidRegion[],
+  axis: RotationAxis,
+  width: number,
+  height: number,
+): void {
+  if (regions.length === 0 || functions.length === 0) return;
+  const allA = regions[0].a;
+  const allB = regions[regions.length - 1].b;
+  const steps = Math.min(500, Math.max(100, Math.abs(allB - allA) * 20));
+  const k = axis.value;
+
+  if (axis.type === 'x') {
+    drawHorizontalMulti(ctx, viewport, functions, functionColors, regions, allA, allB, k, steps, width, height);
+  } else {
+    drawVerticalMulti(ctx, viewport, functions, functionColors, regions, allA, allB, k, steps, width, height);
+  }
+}
+
+function drawHorizontalMulti(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  functions: Array<(x: number) => number>,
+  functionColors: string[],
+  regions: SolidRegion[],
   a: number,
   b: number,
   k: number,
   steps: number,
-  h: number,
   width: number,
   height: number,
-  color: string,
 ): void {
   const [, axisY] = viewport.worldToScreen(0, k, width, height);
   const axisVisible = axisY >= -10 && axisY <= height + 10;
 
-  // --- FILL: area between function and mirror across y=k ---
   if (axisVisible) {
-    const crossings = findAxisCrossings(fn, a, b, k);
-    const subRegions = buildSubRegions(fn, a, b, k, crossings);
-
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, width, height);
     ctx.clip();
 
-    for (const region of subRegions) {
+    for (const region of regions) {
+      if (region.b - region.a < 1e-12) continue;
+      const topFn = functions[region.topFunctionIndex];
+      const botFn = functions[region.bottomFunctionIndex];
+      const color = functionColors[region.topFunctionIndex] ?? '#00ff88';
       const regionSteps = Math.max(50, Math.abs(region.b - region.a) * 20);
       const ih = (region.b - region.a) / regionSteps;
 
       ctx.beginPath();
-      const [regionSa] = viewport.worldToScreen(region.a, k, width, height);
-      ctx.moveTo(regionSa, axisY);
+      const [startSx] = viewport.worldToScreen(region.a, k, width, height);
+      ctx.moveTo(startSx, axisY);
 
       for (let i = 0; i <= regionSteps; i++) {
         const x = region.a + i * ih;
-        const y = tryEval(fn, x);
+        const y = tryEval(topFn, x);
         if (isNaN(y)) continue;
         const [sx, sy] = viewport.worldToScreen(x, y, width, height);
         ctx.lineTo(sx, sy);
@@ -149,10 +292,9 @@ function drawHorizontalAxisSolid(
 
       for (let i = regionSteps; i >= 0; i--) {
         const x = region.a + i * ih;
-        const y = tryEval(fn, x);
+        const y = tryEval(botFn, x);
         if (isNaN(y)) continue;
-        const mirrorY = 2 * k - y;
-        const [sx, sy] = viewport.worldToScreen(x, mirrorY, width, height);
+        const [sx, sy] = viewport.worldToScreen(x, y, width, height);
         ctx.lineTo(sx, sy);
       }
 
@@ -163,7 +305,6 @@ function drawHorizontalAxisSolid(
 
     ctx.restore();
 
-    // Axis dashed line
     ctx.strokeStyle = '#ffaa0066';
     ctx.lineWidth = 1;
     ctx.setLineDash([8, 4]);
@@ -176,107 +317,119 @@ function drawHorizontalAxisSolid(
     ctx.setLineDash([]);
   }
 
-  // --- OUTLINE: function curve (primary) ---
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  let started = false;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const y = tryEval(fn, x);
-    if (isNaN(y)) {
-      started = false;
-      continue;
-    }
-    const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-    if (!started) {
-      ctx.moveTo(sx, sy);
-      started = true;
-    } else ctx.lineTo(sx, sy);
-  }
-  ctx.stroke();
+  for (const region of regions) {
+    if (region.b - region.a < 1e-12) continue;
+    const topFn = functions[region.topFunctionIndex];
+    const botFn = functions[region.bottomFunctionIndex];
+    const topColor = functionColors[region.topFunctionIndex] ?? '#00ff88';
+    const botColor = functionColors[region.bottomFunctionIndex] ?? '#00ff88';
+    const rSteps = Math.max(50, Math.abs(region.b - region.a) * 20);
+    const ih = (region.b - region.a) / rSteps;
 
-  // --- OUTLINE: mirror curve (secondary) ---
-  ctx.strokeStyle = color + '80';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  started = false;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const y = tryEval(fn, x);
-    if (isNaN(y)) {
-      started = false;
-      continue;
+    ctx.strokeStyle = topColor;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= rSteps; i++) {
+      const x = region.a + i * ih;
+      const y = tryEval(topFn, x);
+      if (isNaN(y)) { started = false; continue; }
+      const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
     }
-    const mirrorY = 2 * k - y;
-    const [sx, sy] = viewport.worldToScreen(x, mirrorY, width, height);
-    if (!started) {
-      ctx.moveTo(sx, sy);
-      started = true;
-    } else ctx.lineTo(sx, sy);
-  }
-  ctx.stroke();
+    ctx.stroke();
 
-  // Boundary caps: vertical lines from function to mirror at x=a and x=b
-  drawHorizontalBoundaryCap(ctx, viewport, fn, a, k, width, height, color);
-  drawHorizontalBoundaryCap(ctx, viewport, fn, b, k, width, height, color);
+    if (region.bottomFunctionIndex !== region.topFunctionIndex) {
+      ctx.strokeStyle = botColor + '80';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      started = false;
+      for (let i = 0; i <= rSteps; i++) {
+        const x = region.a + i * ih;
+        const y = tryEval(botFn, x);
+        if (isNaN(y)) { started = false; continue; }
+        const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+        if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+  }
+
+  drawHorizontalBoundaryCapMulti(ctx, viewport, functions, regions[0], a, k, width, height);
+  drawHorizontalBoundaryCapMulti(ctx, viewport, functions, regions[regions.length - 1], b, k, width, height);
+
+  for (let i = 1; i < regions.length; i++) {
+    const ix = regions[i].a;
+    const topFn = functions[regions[i].topFunctionIndex];
+    const y = tryEval(topFn, ix);
+    if (isNaN(y)) continue;
+    const [sx, sy] = viewport.worldToScreen(ix, y, width, height);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff40';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
   if (axisVisible) {
     drawRotationArrow(ctx, viewport, a, k, width, height, 'x', k);
   } else {
-    drawEdgeIndicator(ctx, viewport, k, width, height, color, 'y');
+    drawEdgeIndicator(ctx, viewport, k, width, height, functionColors[0] ?? '#00ff88', 'y');
   }
 }
 
-// ===== VERTICAL AXIS (x = k) =====
-// Cross-section: area between f(x) and its mirror f(2k-x), filling the symmetric
-// polygon that represents the full profile of the solid of revolution.
-
-function drawVerticalAxisSolid(
+function drawVerticalMulti(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
-  fn: (x: number) => number,
+  functions: Array<(x: number) => number>,
+  functionColors: string[],
+  regions: SolidRegion[],
   a: number,
   b: number,
   k: number,
   steps: number,
-  h: number,
   width: number,
   height: number,
-  color: string,
 ): void {
   const [axisX] = viewport.worldToScreen(k, 0, width, height);
   const axisVisible = axisX >= -10 && axisX <= width + 10;
 
-  // Build curve segments (split at NaN discontinuities)
-  const segments = buildCurveSegments(fn, a, b, steps);
-
-  // --- FILL: polygon between original curve and its mirror across x=k ---
   if (axisVisible) {
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, width, height);
     ctx.clip();
 
-    for (const seg of segments) {
-      ctx.beginPath();
+    for (const region of regions) {
+      if (region.b - region.a < 1e-12) continue;
+      const topFn = functions[region.topFunctionIndex];
+      const botFn = functions[region.bottomFunctionIndex];
+      const color = functionColors[region.topFunctionIndex] ?? '#00ff88';
+      const topSegs = buildCurveSegments(topFn, region.a, region.b, Math.max(50, Math.abs(region.b - region.a) * 20));
+      const botSegs = buildCurveSegments(botFn, region.a, region.b, Math.max(50, Math.abs(region.b - region.a) * 20));
+      const topPts = topSegs.flat();
+      const botPts = botSegs.flat();
+      if (topPts.length < 2 || botPts.length < 2) continue;
 
-      // Original curve forward
-      for (let i = 0; i < seg.length; i++) {
-        const [sx, sy] = viewport.worldToScreen(seg[i].x, seg[i].y, width, height);
+      ctx.beginPath();
+      for (let i = 0; i < topPts.length; i++) {
+        const [sx, sy] = viewport.worldToScreen(topPts[i].x, topPts[i].y, width, height);
         if (i === 0) ctx.moveTo(sx, sy);
         else ctx.lineTo(sx, sy);
       }
-
-      // Mirror curve backward: mirror of (x, y) across x=k is (2k-x, y)
-      for (let i = seg.length - 1; i >= 0; i--) {
-        const mirrorX = 2 * k - seg[i].x;
-        const [sx, sy] = viewport.worldToScreen(mirrorX, seg[i].y, width, height);
+      for (let i = botPts.length - 1; i >= 0; i--) {
+        const [sx, sy] = viewport.worldToScreen(botPts[i].x, botPts[i].y, width, height);
         ctx.lineTo(sx, sy);
       }
-
       ctx.closePath();
       ctx.fillStyle = color + '15';
       ctx.fill();
@@ -284,7 +437,6 @@ function drawVerticalAxisSolid(
 
     ctx.restore();
 
-    // Axis dashed line (full viewport height)
     const [, topY] = viewport.worldToScreen(0, viewport.yMax, width, height);
     const [, botY] = viewport.worldToScreen(0, viewport.yMin, width, height);
     ctx.strokeStyle = '#ffaa0066';
@@ -297,59 +449,75 @@ function drawVerticalAxisSolid(
     ctx.setLineDash([]);
   }
 
-  // --- OUTLINE: function curve (primary) ---
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  let started = false;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const y = tryEval(fn, x);
-    if (isNaN(y)) {
-      started = false;
-      continue;
-    }
-    const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-    if (!started) {
-      ctx.moveTo(sx, sy);
-      started = true;
-    } else ctx.lineTo(sx, sy);
-  }
-  ctx.stroke();
+  for (const region of regions) {
+    if (region.b - region.a < 1e-12) continue;
+    const topFn = functions[region.topFunctionIndex];
+    const botFn = functions[region.bottomFunctionIndex];
+    const topColor = functionColors[region.topFunctionIndex] ?? '#00ff88';
+    const botColor = functionColors[region.bottomFunctionIndex] ?? '#00ff88';
+    const rSteps = Math.max(50, Math.abs(region.b - region.a) * 20);
+    const ih = (region.b - region.a) / rSteps;
 
-  // --- OUTLINE: mirror curve (secondary) ---
-  ctx.strokeStyle = color + '80';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  started = false;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const y = tryEval(fn, x);
-    if (isNaN(y)) {
-      started = false;
-      continue;
+    ctx.strokeStyle = topColor;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= rSteps; i++) {
+      const x = region.a + i * ih;
+      const y = tryEval(topFn, x);
+      if (isNaN(y)) { started = false; continue; }
+      const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
     }
-    const mirrorX = 2 * k - x;
-    const [sx, sy] = viewport.worldToScreen(mirrorX, y, width, height);
-    if (!started) {
-      ctx.moveTo(sx, sy);
-      started = true;
-    } else ctx.lineTo(sx, sy);
-  }
-  ctx.stroke();
+    ctx.stroke();
 
-  // --- Boundary caps: horizontal lines from function to mirror at x=a and x=b ---
-  drawVerticalBoundaryCap(ctx, viewport, fn, a, k, width, height, color);
-  drawVerticalBoundaryCap(ctx, viewport, fn, b, k, width, height, color);
+    if (region.bottomFunctionIndex !== region.topFunctionIndex) {
+      ctx.strokeStyle = botColor + '80';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      started = false;
+      for (let i = 0; i <= rSteps; i++) {
+        const x = region.a + i * ih;
+        const y = tryEval(botFn, x);
+        if (isNaN(y)) { started = false; continue; }
+        const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+        if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+  }
+
+  drawVerticalBoundaryCapMulti(ctx, viewport, functions, regions[0], a, k, width, height);
+  drawVerticalBoundaryCapMulti(ctx, viewport, functions, regions[regions.length - 1], b, k, width, height);
+
+  for (let i = 1; i < regions.length; i++) {
+    const ix = regions[i].a;
+    const topFn = functions[regions[i].topFunctionIndex];
+    const y = tryEval(topFn, ix);
+    if (isNaN(y)) continue;
+    const [sx, sy] = viewport.worldToScreen(ix, y, width, height);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff40';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
   if (axisVisible) {
-    const arrowY = tryEval(fn, a);
+    const arrowY = tryEval(functions[regions[0].topFunctionIndex], a);
     const safeArrowY = isNaN(arrowY) ? (viewport.yMin + viewport.yMax) / 2 : arrowY;
     drawRotationArrow(ctx, viewport, a, safeArrowY, width, height, 'y', k);
   } else {
-    drawEdgeIndicator(ctx, viewport, k, width, height, color, 'x');
+    drawEdgeIndicator(ctx, viewport, k, width, height, functionColors[0] ?? '#00ff88', 'x');
   }
 }
 
@@ -370,13 +538,12 @@ function drawHorizontalBoundaryCap(
   const [, axisY] = viewport.worldToScreen(0, k, width, height);
   if (axisY < -10 || axisY > height + 10) return;
   const [sx, syFn] = viewport.worldToScreen(wx, y, width, height);
-  const [, syMirror] = viewport.worldToScreen(wx, 2 * k - y, width, height);
   ctx.strokeStyle = color + '60';
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
   ctx.moveTo(sx, syFn);
-  ctx.lineTo(sx, syMirror);
+  ctx.lineTo(sx, axisY);
   ctx.stroke();
   ctx.setLineDash([]);
 }
@@ -396,13 +563,66 @@ function drawVerticalBoundaryCap(
   const [axisX] = viewport.worldToScreen(k, 0, width, height);
   if (axisX < -10 || axisX > width + 10) return;
   const [sxFn, sy] = viewport.worldToScreen(wx, y, width, height);
-  const [sxMirror] = viewport.worldToScreen(2 * k - wx, y, width, height);
   ctx.strokeStyle = color + '60';
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
   ctx.moveTo(sxFn, sy);
-  ctx.lineTo(sxMirror, sy);
+  ctx.lineTo(axisX, sy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawHorizontalBoundaryCapMulti(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  functions: Array<(x: number) => number>,
+  region: SolidRegion,
+  wx: number,
+  k: number,
+  width: number,
+  height: number,
+): void {
+  const topY = tryEval(functions[region.topFunctionIndex], wx);
+  const botY = tryEval(functions[region.bottomFunctionIndex], wx);
+  if (isNaN(topY) || isNaN(botY)) return;
+  const [, axisY] = viewport.worldToScreen(0, k, width, height);
+  if (axisY < -10 || axisY > height + 10) return;
+  const [sx, syTop] = viewport.worldToScreen(wx, topY, width, height);
+  const [, syBot] = viewport.worldToScreen(wx, botY, width, height);
+  ctx.strokeStyle = '#ffffff60';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(sx, syTop);
+  ctx.lineTo(sx, syBot);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawVerticalBoundaryCapMulti(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  functions: Array<(x: number) => number>,
+  region: SolidRegion,
+  wx: number,
+  k: number,
+  width: number,
+  height: number,
+): void {
+  const topY = tryEval(functions[region.topFunctionIndex], wx);
+  const botY = tryEval(functions[region.bottomFunctionIndex], wx);
+  if (isNaN(topY) || isNaN(botY)) return;
+  const [axisX] = viewport.worldToScreen(k, 0, width, height);
+  if (axisX < -10 || axisX > width + 10) return;
+  const [sxTop, syTop] = viewport.worldToScreen(wx, topY, width, height);
+  const [sxBot, syBot] = viewport.worldToScreen(wx, botY, width, height);
+  ctx.strokeStyle = '#ffffff60';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(sxTop, syTop);
+  ctx.lineTo(sxBot, syBot);
   ctx.stroke();
   ctx.setLineDash([]);
 }

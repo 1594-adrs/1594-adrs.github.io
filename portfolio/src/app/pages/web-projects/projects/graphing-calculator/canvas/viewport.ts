@@ -25,8 +25,10 @@ export class Viewport {
 
   zoom(factor: number, centerX: number, centerY: number, width: number, height: number): void {
     const [wx, wy] = this.screenToWorld(centerX, centerY, width, height);
-    const newW = (this.xMax - this.xMin) / factor;
-    const newH = (this.yMax - this.yMin) / factor;
+    let newW = (this.xMax - this.xMin) / factor;
+    let newH = (this.yMax - this.yMin) / factor;
+    newW = Math.max(1e-10, Math.min(1e15, newW));
+    newH = Math.max(1e-10, Math.min(1e15, newH));
     this.xMin = wx - (centerX / width) * newW;
     this.xMax = this.xMin + newW;
     this.yMin = wy - ((height - centerY) / height) * newH;

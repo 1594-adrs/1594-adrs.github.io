@@ -6,27 +6,45 @@ import {
   inject,
   ElementRef,
   viewChild,
+  NgZone,
+  ChangeDetectorRef,
+  AfterViewInit,
+  OnDestroy,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
 @Component({
   selector: 'app-eye',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    '(window:mousemove)': 'onMouseMove($event)',
-  },
   templateUrl: './eye.html',
   styleUrls: ['./eye.css'],
 })
-export class Eye {
+export class Eye implements AfterViewInit, OnDestroy {
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
+  private ngZone = inject(NgZone);
+  private cdr = inject(ChangeDetectorRef);
   private eyeElement = viewChild<ElementRef>('eye');
 
   irisTransform = signal('translate(0px, 0px)');
 
-  onMouseMove(event: MouseEvent) {
-    if (!this.isBrowser) return;
+  private lastX = 0;
+  private lastY = 0;
+  private onMouseMoveHandler = (event: MouseEvent) => this.handleMouseMove(event);
 
+  ngAfterViewInit(): void {
+    if (!this.isBrowser) return;
+    this.ngZone.runOutsideAngular(() => {
+      window.addEventListener('mousemove', this.onMouseMoveHandler);
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.isBrowser) {
+      window.removeEventListener('mousemove', this.onMouseMoveHandler);
+    }
+  }
+
+  private handleMouseMove(event: MouseEvent): void {
     const eye = this.eyeElement()?.nativeElement;
     if (!eye) return;
 
@@ -43,6 +61,11 @@ export class Eye {
     const x = Math.cos(angle) * distance;
     const y = Math.sin(angle) * distance;
 
-    this.irisTransform.set(`translate(${x}px, ${y}px)`);
+    if (Math.abs(x - this.lastX) > 0.5 || Math.abs(y - this.lastY) > 0.5) {
+      this.lastX = x;
+      this.lastY = y;
+      this.irisTransform.set(`translate(${x}px, ${y}px)`);
+      this.cdr.markForCheck();
+    }
   }
 }

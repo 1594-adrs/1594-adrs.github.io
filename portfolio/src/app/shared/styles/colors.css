@@ -2,17 +2,18 @@
   --color-primary: #00ff88;
   --color-secondary: #00ccff;
   --color-corruption: #ff0040;
-  --color-accent: #1a1a2e;
-  --color-accent-dark: #0f0f1a;
+  --color-warning: #ffaa00;
   --color-bg-dark: #0a0a0f;
   --color-bg-card: #12121a;
-  --color-bg-glass: rgba(10, 10, 15, 0.92);
+  --color-canvas-bg: #0d0d15;
   --color-text: #e0e0e0;
   --color-text-muted: #666680;
   --color-text-subtle: #888899;
   --color-border: #1a1a2e;
-  --color-border-hover: #00ff88;
   --color-glow: rgba(0, 255, 136, 0.25);
-  --color-glow-strong: rgba(0, 255, 136, 0.5);
-  --shadow-color: 220, 40%, 2%;
+  --color-glow-10: rgba(0, 255, 136, 0.1);
+  --color-glow-15: rgba(0, 255, 136, 0.15);
+  --color-glow-20: rgba(0, 255, 136, 0.2);
+  --color-iris-green: #008844;
+  --color-iris-dark: #004422;
 }

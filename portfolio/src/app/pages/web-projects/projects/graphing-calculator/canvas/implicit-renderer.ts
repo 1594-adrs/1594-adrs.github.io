@@ -50,7 +50,10 @@ function drawContour(
   }
 
   ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
 
+  ctx.beginPath();
   for (let row = 0; row < steps; row++) {
     for (let col = 0; col < steps; col++) {
       const tl = val[row][col];
@@ -70,9 +73,6 @@ function drawContour(
       const wy0 = viewport.yMax - row * dy;
       const wx1 = wx0 + dx;
       const wy1 = wy0 - dy;
-
-      const [sx0, sy0] = viewport.worldToScreen(wx0, wy0, width, height);
-      const [sx1, sy1] = viewport.worldToScreen(wx1, wy1, width, height);
 
       const segments: Array<[[number, number], [number, number]]> = [];
 
@@ -102,7 +102,7 @@ function drawContour(
         case 11:
           segments.push([
             lerp(tr, tl, wx1, wy0, wx0, wy0, level),
-            lerp(br, bl, wx1, wy1, wx0, wy1, level),
+            lerp(br, tr, wx1, wy1, wx1, wy0, level),
           ]);
           break;
         case 5:
@@ -118,8 +118,8 @@ function drawContour(
         case 6:
         case 9:
           segments.push([
-            lerp(bl, br, wx0, wy1, wx1, wy1, level),
-            lerp(tl, bl, wx0, wy0, wx0, wy1, level),
+            lerp(tr, tl, wx1, wy0, wx0, wy0, level),
+            lerp(br, bl, wx1, wy1, wx0, wy1, level),
           ]);
           break;
         case 7:
@@ -144,13 +144,12 @@ function drawContour(
       for (const [[ax, ay], [bx, by]] of segments) {
         const [sa, sb_] = viewport.worldToScreen(ax, ay, width, height);
         const [sc, sd] = viewport.worldToScreen(bx, by, width, height);
-        ctx.beginPath();
         ctx.moveTo(sa, sb_);
         ctx.lineTo(sc, sd);
-        ctx.stroke();
       }
     }
   }
+  ctx.stroke();
 }
 
 export function drawImplicitCurve(

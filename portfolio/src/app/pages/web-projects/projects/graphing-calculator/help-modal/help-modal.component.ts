@@ -1,13 +1,27 @@
-import { Component, ChangeDetectionStrategy, output, HostListener } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  output,
+  HostListener,
+  ElementRef,
+  inject,
+  AfterViewInit,
+  viewChild,
+} from '@angular/core';
 
 @Component({
   selector: 'app-help-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="modal-backdrop" (click)="close.emit()">
-      <div class="modal-content" (click)="$event.stopPropagation()">
-        <button class="modal-close" (click)="close.emit()">×</button>
-        <h2 class="modal-title">&gt; help</h2>
+    <div class="modal-backdrop" role="dialog" aria-modal="true" (click)="close.emit()">
+      <div
+        class="modal-content"
+        aria-labelledby="modal-title"
+        (click)="$event.stopPropagation()"
+        #modalContent
+      >
+        <button class="modal-close" (click)="close.emit()" autofocus>&times;</button>
+        <h2 class="modal-title" id="modal-title">&gt; help</h2>
 
         <div class="help-section">
           <h3>KEYBOARD SHORTCUTS (canvas)</h3>
@@ -44,11 +58,12 @@ import { Component, ChangeDetectionStrategy, output, HostListener } from '@angul
           <h3>TOOLS</h3>
           <div class="help-grid">
             <span class="key-hint">∫ integral</span><span>Compute definite integral</span>
-            <span class="key-hint">↻ solid_rev</span><span>Solid of revolution</span>
-            <span class="key-hint">▲ area_2fn</span><span>Area between 2 curves</span>
-            <span class="key-hint">▲ area_nfn</span><span>Area between n curves</span>
+            <span class="key-hint">↻ solid_rev_nfn</span><span>Solid of revolution (1+ functions, manual limits)</span>
+            <span class="key-hint">▲ area_nfn</span><span>Area between n curves (manual limits)</span>
           </div>
           <p class="help-note">Limits accept expressions: pi, e/2, sqrt(2), 2*pi</p>
+          <p class="help-note">solid_rev_nfn: 1 function → disc method; 2+ → washer method</p>
+          <p class="help-note">overlap mode: "only where ALL overlap" excludes crossings of non-selected functions</p>
         </div>
 
         <div class="help-section">
@@ -99,6 +114,10 @@ import { Component, ChangeDetectionStrategy, output, HostListener } from '@angul
       .modal-close:hover {
         color: var(--color-text, #ffffff);
       }
+      .modal-close:focus-visible {
+        outline: 2px solid var(--color-primary, #00ff88);
+        outline-offset: 2px;
+      }
       .modal-title {
         font-family: var(--font-family-display, monospace);
         font-size: var(--font-size-sm, 0.8rem);
@@ -135,11 +154,46 @@ import { Component, ChangeDetectionStrategy, output, HostListener } from '@angul
     `,
   ],
 })
-export class HelpModalComponent {
+export class HelpModalComponent implements AfterViewInit {
   close = output<void>();
+
+  private modalContent = viewChild<ElementRef<HTMLElement>>('modalContent');
+  private el = inject(ElementRef);
+
+  ngAfterViewInit(): void {
+    const modal = this.modalContent()?.nativeElement;
+    if (modal) {
+      const closeBtn = modal.querySelector('.modal-close') as HTMLElement | null;
+      closeBtn?.focus();
+    }
+  }
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
     this.close.emit();
+  }
+
+  @HostListener('document:keydown.tab', ['$event'])
+  onTabKey(event: Event): void {
+    const keyboardEvent = event as KeyboardEvent;
+    const modal = this.el.nativeElement.querySelector('.modal-content') as HTMLElement | null;
+    if (!modal) return;
+    const focusable = modal.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (keyboardEvent.shiftKey) {
+      if (document.activeElement === first) {
+        keyboardEvent.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        keyboardEvent.preventDefault();
+        first.focus();
+      }
+    }
   }
 }

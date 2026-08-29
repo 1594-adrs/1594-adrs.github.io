@@ -7,6 +7,7 @@ export interface NavLink {
 
 export interface SocialNetwork {
   icon: string;
+  iconName: string;
   url: string;
   label: string;
 }
@@ -47,4 +48,5 @@ export interface WebProject {
   route: string;
   technologies: string[];
   icon: string;
+  iconName: string;
 }

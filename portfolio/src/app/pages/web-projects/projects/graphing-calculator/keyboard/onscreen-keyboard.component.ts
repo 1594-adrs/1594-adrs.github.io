@@ -1,5 +1,5 @@
-import { Component, ChangeDetectionStrategy, output } from '@angular/core';
-import { KEYBOARD_ROWS, type KeyDef } from './keyboard-layout';
+import { Component, ChangeDetectionStrategy, output, signal } from '@angular/core';
+import { KEYBOARD_TABS, type KeyDef } from './keyboard-layout';
 
 @Component({
   selector: 'app-onscreen-keyboard',
@@ -10,7 +10,16 @@ import { KEYBOARD_ROWS, type KeyDef } from './keyboard-layout';
 export class OnscreenKeyboardComponent {
   keyPress = output<string>();
   keyAction = output<'backspace' | 'left' | 'right' | 'clear'>();
-  rows = KEYBOARD_ROWS;
+  tabs = KEYBOARD_TABS;
+  activeTab = signal(0);
+
+  get rows(): KeyDef[][] {
+    return this.tabs[this.activeTab()].rows;
+  }
+
+  setTab(index: number): void {
+    this.activeTab.set(index);
+  }
 
   onKey(key: KeyDef): void {
     if (key.action) {

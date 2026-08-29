@@ -18,16 +18,19 @@ export const NAV_LINKS: NavLink[] = [
 export const SOCIAL_NETWORKS: SocialNetwork[] = [
   {
     icon: 'fab fa-github',
+    iconName: 'github',
     url: 'https://github.com/1594-adrs',
     label: 'GitHub',
   },
   {
     icon: 'fab fa-linkedin',
+    iconName: 'linkedin',
     url: 'https://www.linkedin.com/in/1594-adrs/',
     label: 'LinkedIn',
   },
   {
     icon: 'fa-regular fa-envelope',
+    iconName: 'envelope',
     url: 'mailto:andresdrincons2007@gmail.com',
     label: 'Email',
   },
@@ -126,5 +129,6 @@ export const WEB_PROJECTS: WebProject[] = [
     route: '/web-projects/calculator',
     technologies: ['Angular', 'Canvas API', 'Custom Parser'],
     icon: 'fas fa-calculator',
+    iconName: 'calculator',
   },
 ];

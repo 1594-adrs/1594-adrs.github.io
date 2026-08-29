@@ -1,4 +1,5 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, OnInit, inject } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { HeroSection } from './sections/hero-section/hero-section';
 import { AboutMe } from './sections/about-me/about-me';
 import { ProjectsSection } from './sections/projects-section/projects-section';
@@ -13,4 +14,10 @@ import { ProjectsSection } from './sections/projects-section/projects-section';
     <app-projects-section />
   `,
 })
-export class PortfolioComponent {}
+export class PortfolioComponent implements OnInit {
+  private titleService = inject(Title);
+
+  ngOnInit(): void {
+    this.titleService.setTitle('Andres Rincon — Full Stack Developer');
+  }
+}

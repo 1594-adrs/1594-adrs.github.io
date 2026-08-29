@@ -28,7 +28,7 @@
 
 .terminal-dot:nth-child(2),
 .card-dot:nth-child(2) {
-  background: #ffaa00;
+  background: var(--color-warning);
 }
 
 .terminal-dot:nth-child(3),
@@ -105,7 +105,7 @@
 
 .skill-tag:hover,
 .tech-badge:hover {
-  background: rgba(0, 255, 136, 0.1);
+  background: var(--color-glow-10);
   border-color: var(--color-primary);
   color: var(--color-primary);
 }

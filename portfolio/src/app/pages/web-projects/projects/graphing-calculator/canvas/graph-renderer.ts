@@ -1,5 +1,6 @@
 import { Viewport } from './viewport';
 import { tryEval } from './utils';
+import type { Asymptote } from '../engine/asymptote-detector';
 
 const CLAMP = 1e8;
 
@@ -347,7 +348,7 @@ export function drawParametric(
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  const steps = Math.max(500, Math.abs(tMax - tMin) * 50);
+  const steps = Math.min(10000, Math.max(500, Math.abs(tMax - tMin) * 50));
   const dt = (tMax - tMin) / steps;
 
   const maxY = viewport.yMax + (viewport.yMax - viewport.yMin) * 0.1;
@@ -388,7 +389,7 @@ export function drawPolar(
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  const steps = Math.max(500, Math.abs(thetaMax - thetaMin) * 50);
+  const steps = Math.min(10000, Math.max(500, Math.abs(thetaMax - thetaMin) * 50));
   const dtheta = (thetaMax - thetaMin) / steps;
 
   const maxY = viewport.yMax + (viewport.yMax - viewport.yMin) * 0.1;
@@ -419,4 +420,146 @@ export function drawPolar(
     } else ctx.lineTo(sx, sy);
   }
   ctx.stroke();
+}
+
+export function drawInequality(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  fn: (x: number) => number,
+  comparison: '>' | '<' | '>=' | '<=',
+  color: string,
+  width: number,
+  height: number,
+): void {
+  drawFunction(ctx, viewport, fn, color, width, height);
+
+  const maxY = viewport.yMax + (viewport.yMax - viewport.yMin) * 0.1;
+  const minY = viewport.yMin - (viewport.yMax - viewport.yMin) * 0.1;
+
+  ctx.save();
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = color;
+
+  const check = (yMouse: number, yFn: number): boolean => {
+    switch (comparison) {
+      case '>':
+        return yMouse > yFn;
+      case '<':
+        return yMouse < yFn;
+      case '>=':
+        return yMouse >= yFn;
+      case '<=':
+        return yMouse <= yFn;
+    }
+  };
+
+  for (let px = 0; px <= width; px += 2) {
+    const [wx] = viewport.screenToWorld(px, 0, width, height);
+    const wyFn = evalSafe(fn, wx);
+    if (isNaN(wyFn) || !isFinite(wyFn)) continue;
+
+    const [, syFn] = viewport.worldToScreen(wx, wyFn, width, height);
+    const [, syTop] = viewport.worldToScreen(wx, maxY, width, height);
+    const [, syBot] = viewport.worldToScreen(wx, minY, width, height);
+
+    const top = Math.max(syTop, 0);
+    const bot = Math.min(syBot, height);
+
+    if (check(top, syFn)) {
+      ctx.fillRect(px, top, 2, Math.max(0, syFn - top));
+    }
+    if (check(bot, syFn)) {
+      ctx.fillRect(px, syFn, 2, Math.max(0, bot - syFn));
+    }
+  }
+
+  ctx.restore();
+}
+
+export function drawImplicitInequality(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  fn: (x: number, y: number) => number,
+  comparison: '>' | '<' | '>=' | '<=',
+  color: string,
+  width: number,
+  height: number,
+): void {
+  const step = 2;
+  ctx.save();
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = color;
+
+  const check = (val: number): boolean => {
+    switch (comparison) {
+      case '>':
+        return val > 0;
+      case '<':
+        return val < 0;
+      case '>=':
+        return val >= 0;
+      case '<=':
+        return val <= 0;
+    }
+  };
+
+  for (let px = 0; px <= width; px += step) {
+    for (let py = 0; py <= height; py += step) {
+      const [wx, wy] = viewport.screenToWorld(px, py, width, height);
+      try {
+        const val = fn(wx, wy);
+        if (check(val)) {
+          ctx.fillRect(px, py, step, step);
+        }
+      } catch {
+        /* skip */
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+export function drawAsymptote(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  asymptote: Asymptote,
+  width: number,
+  height: number,
+): void {
+  ctx.save();
+  ctx.strokeStyle = '#666680';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6, 4]);
+
+  if (asymptote.type === 'vertical') {
+    const [sx] = viewport.worldToScreen(asymptote.value, 0, width, height);
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, height);
+    ctx.stroke();
+    ctx.fillStyle = '#666680';
+    ctx.font = '11px JetBrains Mono, monospace';
+    ctx.fillText(asymptote.equation, sx + 4, 14);
+  } else if (asymptote.type === 'horizontal') {
+    const [, sy] = viewport.worldToScreen(0, asymptote.value, width, height);
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(width, sy);
+    ctx.stroke();
+    ctx.fillStyle = '#666680';
+    ctx.font = '11px JetBrains Mono, monospace';
+    ctx.fillText(asymptote.equation, 4, sy - 4);
+  } else if (asymptote.type === 'oblique') {
+    const y1 = asymptote.value * viewport.xMin + (asymptote.intercept ?? 0);
+    const y2 = asymptote.value * viewport.xMax + (asymptote.intercept ?? 0);
+    const [sx1, sy1] = viewport.worldToScreen(viewport.xMin, y1, width, height);
+    const [sx2, sy2] = viewport.worldToScreen(viewport.xMax, y2, width, height);
+    ctx.beginPath();
+    ctx.moveTo(sx1, sy1);
+    ctx.lineTo(sx2, sy2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }

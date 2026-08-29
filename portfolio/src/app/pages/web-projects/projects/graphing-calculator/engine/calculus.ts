@@ -21,67 +21,237 @@ export function derivative(f: (x: number) => number, x: number, h = 0.0001): num
   return d;
 }
 
-export function solidVolume(
-  f: (x: number) => number,
-  a: number,
-  b: number,
-  axis: RotationAxis = { type: 'x', value: 0 },
-): number {
-  if (axis.type === 'x') {
-    return clampResult(Math.PI * integrate((x) => Math.pow(f(x) - axis.value, 2), a, b));
-  }
-  if (axis.type === 'y') {
-    return clampResult(2 * Math.PI * integrate((x) => Math.abs(x - axis.value) * f(x), a, b));
-  }
-  return clampResult(Math.PI * integrate((x) => Math.pow(f(x) - axis.value, 2), a, b));
+export interface SolidRegion {
+  a: number;
+  b: number;
+  topFunctionIndex: number;
+  bottomFunctionIndex: number;
 }
 
-export function solidSurfaceArea(
+export function solidVolumeSingle(
   f: (x: number) => number,
   a: number,
   b: number,
-  axis: RotationAxis = { type: 'x', value: 0 },
+  axis: RotationAxis,
 ): number {
+  const k = axis.value;
+  if (axis.type === 'x') {
+    return clampResult(Math.PI * integrate((x) => Math.pow(f(x) - k, 2), a, b));
+  }
+  return clampResult(2 * Math.PI * integrate((x) => Math.abs(x - k) * f(x), a, b));
+}
+
+export function solidSurfaceAreaSingle(
+  f: (x: number) => number,
+  a: number,
+  b: number,
+  axis: RotationAxis,
+): number {
+  const k = axis.value;
   if (axis.type === 'x') {
     return clampResult(
-      2 *
-        Math.PI *
-        integrate(
-          (x) => Math.abs(f(x) - axis.value) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)),
-          a,
-          b,
-        ),
-    );
-  }
-  if (axis.type === 'y') {
-    return clampResult(
-      2 *
-        Math.PI *
-        integrate(
-          (x) => Math.abs(x - axis.value) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)),
-          a,
-          b,
-        ),
+      2 * Math.PI * integrate(
+        (x) => Math.abs(f(x) - k) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)),
+        a, b,
+      ),
     );
   }
   return clampResult(
-    2 *
-      Math.PI *
-      integrate(
-        (x) => Math.abs(f(x) - axis.value) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)),
-        a,
-        b,
-      ),
+    2 * Math.PI * integrate(
+      (x) => Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)),
+      a, b,
+    ),
   );
 }
 
-export function areaBetweenCurves(
-  fUpper: (x: number) => number,
-  fLower: (x: number) => number,
+export function areaSingle(
+  f: (x: number) => number,
   a: number,
   b: number,
 ): number {
-  return clampResult(integrate((x) => Math.abs(fUpper(x) - fLower(x)), a, b));
+  return clampResult(integrate((x) => Math.abs(f(x)), a, b));
+}
+
+function outerInnerR(topY: number, botY: number, k: number): { outerR: number; innerR: number } {
+  const dTop = Math.abs(topY - k);
+  const dBot = Math.abs(botY - k);
+  return dTop >= dBot ? { outerR: dTop, innerR: dBot } : { outerR: dBot, innerR: dTop };
+}
+
+function makeIntegrandVolumeH(
+  functions: Array<(x: number) => number>,
+  topIdx: number,
+  bottomIdx: number,
+  k: number,
+): (x: number) => number {
+  return (x: number) => {
+    const topVal = functions[topIdx](x);
+    const botVal = functions[bottomIdx](x);
+    if (!isFinite(topVal) || !isFinite(botVal)) return 0;
+    const { outerR, innerR } = outerInnerR(topVal, botVal, k);
+    return outerR * outerR - innerR * innerR;
+  };
+}
+
+function makeIntegrandVolumeV(
+  functions: Array<(x: number) => number>,
+  topIdx: number,
+  bottomIdx: number,
+  k: number,
+): (x: number) => number {
+  return (x: number) => {
+    const topVal = functions[topIdx](x);
+    const botVal = functions[bottomIdx](x);
+    if (!isFinite(topVal) || !isFinite(botVal)) return 0;
+    return Math.abs(x - k) * Math.abs(topVal - botVal);
+  };
+}
+
+function makeIntegrandSurfaceOuterH(
+  functions: Array<(x: number) => number>,
+  topIdx: number,
+  bottomIdx: number,
+  k: number,
+): (x: number) => number {
+  return (x: number) => {
+    const topVal = functions[topIdx](x);
+    const botVal = functions[bottomIdx](x);
+    if (!isFinite(topVal) || !isFinite(botVal)) return 0;
+    const { outerR } = outerInnerR(topVal, botVal, k);
+    const isTopOuter = Math.abs(topVal - k) >= Math.abs(botVal - k);
+    const fn = isTopOuter ? functions[topIdx] : functions[bottomIdx];
+    return outerR * Math.sqrt(1 + Math.pow(derivative(fn, x), 2));
+  };
+}
+
+function makeIntegrandSurfaceInnerH(
+  functions: Array<(x: number) => number>,
+  topIdx: number,
+  bottomIdx: number,
+  k: number,
+): (x: number) => number {
+  return (x: number) => {
+    const topVal = functions[topIdx](x);
+    const botVal = functions[bottomIdx](x);
+    if (!isFinite(topVal) || !isFinite(botVal)) return 0;
+    const { innerR } = outerInnerR(topVal, botVal, k);
+    const isTopInner = Math.abs(topVal - k) < Math.abs(botVal - k);
+    const fn = isTopInner ? functions[topIdx] : functions[bottomIdx];
+    return innerR * Math.sqrt(1 + Math.pow(derivative(fn, x), 2));
+  };
+}
+
+function makeIntegrandSurfaceOuterV(
+  functions: Array<(x: number) => number>,
+  topIdx: number,
+  _bottomIdx: number,
+  _k: number,
+): (x: number) => number {
+  return (x: number) => {
+    const topVal = functions[topIdx](x);
+    if (!isFinite(topVal)) return 0;
+    return Math.abs(x - _k) * Math.sqrt(1 + Math.pow(derivative(functions[topIdx], x), 2));
+  };
+}
+
+function makeIntegrandSurfaceInnerV(
+  functions: Array<(x: number) => number>,
+  _topIdx: number,
+  bottomIdx: number,
+  k: number,
+): (x: number) => number {
+  return (x: number) => {
+    const botVal = functions[bottomIdx](x);
+    if (!isFinite(botVal)) return 0;
+    return Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(functions[bottomIdx], x), 2));
+  };
+}
+
+function computeCapAreaH(
+  functions: Array<(x: number) => number>,
+  topIdx: number,
+  bottomIdx: number,
+  k: number,
+  wx: number,
+): number {
+  const topY = functions[topIdx](wx);
+  const botY = functions[bottomIdx](wx);
+  if (!isFinite(topY) || !isFinite(botY)) return 0;
+  const { outerR, innerR } = outerInnerR(topY, botY, k);
+  return Math.PI * (outerR * outerR - innerR * innerR);
+}
+
+function computeCapAreaV(
+  functions: Array<(x: number) => number>,
+  topIdx: number,
+  bottomIdx: number,
+  k: number,
+  wx: number,
+): number {
+  const topY = functions[topIdx](wx);
+  const botY = functions[bottomIdx](wx);
+  if (!isFinite(topY) || !isFinite(botY)) return 0;
+  return 2 * Math.PI * Math.abs(wx - k) * Math.abs(topY - botY);
+}
+
+export function solidVolumeMulti(
+  functions: Array<(x: number) => number>,
+  regions: SolidRegion[],
+  axis: RotationAxis,
+): number {
+  if (regions.length === 0) return 0;
+  const k = axis.value;
+  let total = 0;
+
+  for (const region of regions) {
+    if (region.b - region.a < 1e-12) continue;
+    const factor = axis.type === 'x' ? Math.PI : 2 * Math.PI;
+    const integrand =
+      axis.type === 'x'
+        ? makeIntegrandVolumeH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
+        : makeIntegrandVolumeV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+    total += factor * integrate(integrand, region.a, region.b);
+  }
+
+  return clampResult(total);
+}
+
+export function solidSurfaceAreaMulti(
+  functions: Array<(x: number) => number>,
+  regions: SolidRegion[],
+  axis: RotationAxis,
+): number {
+  if (regions.length === 0) return 0;
+  const k = axis.value;
+  let total = 0;
+
+  for (const region of regions) {
+    if (region.b - region.a < 1e-12) continue;
+
+    const outerIntegrand =
+      axis.type === 'x'
+        ? makeIntegrandSurfaceOuterH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
+        : makeIntegrandSurfaceOuterV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+    total += 2 * Math.PI * integrate(outerIntegrand, region.a, region.b);
+
+    const innerIntegrand =
+      axis.type === 'x'
+        ? makeIntegrandSurfaceInnerH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
+        : makeIntegrandSurfaceInnerV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+    total += 2 * Math.PI * integrate(innerIntegrand, region.a, region.b);
+  }
+
+  if (regions.length > 0) {
+    const first = regions[0];
+    const last = regions[regions.length - 1];
+    const capFn =
+      axis.type === 'x'
+        ? computeCapAreaH.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k)
+        : computeCapAreaV.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k);
+    total += capFn(first.a) + capFn(last.b);
+  }
+
+  return clampResult(total);
 }
 
 export interface AreaRegion {
@@ -92,61 +262,114 @@ export interface AreaRegion {
   bottomFunctionIndex: number;
 }
 
-export function areaBetweenCurvesWithRegions(
-  fUpper: (x: number) => number,
-  fLower: (x: number) => number,
-  a: number,
-  b: number,
-  steps = 200,
-): { totalArea: number; regions: AreaRegion[] } {
-  const h = (b - a) / steps;
-  const crossPoints: number[] = [];
-  const EPS = 1e-12;
+export function areaParametric(
+  fnX: (t: number) => number,
+  fnY: (t: number) => number,
+  tA: number,
+  tB: number,
+): number {
+  const h = 0.0001;
+  const f = (t: number) => {
+    const y = fnY(t);
+    const dxdt = (fnX(t + h) - fnX(t - h)) / (2 * h);
+    return isFinite(y) && isFinite(dxdt) ? y * dxdt : 0;
+  };
+  return clampResult(integrate(f, tA, tB));
+}
 
-  let prevDiff = NaN;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const diff = fUpper(x) - fLower(x);
-    if (!isFinite(diff)) {
-      prevDiff = NaN;
-      continue;
+export function areaPolar(
+  fn: (theta: number) => number,
+  thetaA: number,
+  thetaB: number,
+): number {
+  const f = (theta: number) => {
+    const r = fn(theta);
+    return isFinite(r) ? r * r : 0;
+  };
+  return clampResult(0.5 * integrate(f, thetaA, thetaB));
+}
+
+export function solidVolumeParametric(
+  fnX: (t: number) => number,
+  fnY: (t: number) => number,
+  tA: number,
+  tB: number,
+  axis: { type: 'x' | 'y'; k: number },
+): number {
+  const h = 0.0001;
+  const f = (t: number) => {
+    const x = fnX(t);
+    const y = fnY(t);
+    const dxdt = (fnX(t + h) - fnX(t - h)) / (2 * h);
+    const dydt = (fnY(t + h) - fnY(t - h)) / (2 * h);
+    const ds = Math.sqrt(dxdt * dxdt + dydt * dydt);
+    if (!isFinite(ds)) return 0;
+
+    if (axis.type === 'x') {
+      const radius = Math.abs(y - axis.k);
+      return 2 * Math.PI * radius * Math.abs(dxdt);
     }
-    if (Math.abs(diff) < EPS) {
-      crossPoints.push(x);
-      prevDiff = diff;
-      continue;
+    const radius = Math.abs(x - axis.k);
+    return 2 * Math.PI * radius * Math.abs(dydt);
+  };
+  return clampResult(integrate(f, tA, tB));
+}
+
+export function solidVolumePolar(
+  fn: (theta: number) => number,
+  thetaA: number,
+  thetaB: number,
+  axis: { type: 'x' | 'y'; k: number },
+): number {
+  const f = (theta: number) => {
+    const r = fn(theta);
+    if (!isFinite(r)) return 0;
+
+    if (axis.type === 'x') {
+      return Math.PI * r * r * Math.sin(theta) * Math.sin(theta);
     }
-    if (isFinite(prevDiff) && Math.abs(prevDiff) >= EPS && prevDiff * diff < 0) {
-      const t = prevDiff / (prevDiff - diff);
-      crossPoints.push(a + (i - 1) * h + t * h);
-    }
-    prevDiff = diff;
-  }
+    return Math.PI * r * r * Math.cos(theta) * Math.cos(theta);
+  };
+  return clampResult(integrate(f, thetaA, thetaB));
+}
 
-  const boundaries = [a, ...crossPoints, b];
-  const regions: AreaRegion[] = [];
-  let totalArea = 0;
+export function derivativeParametric(
+  fnX: (t: number) => number,
+  fnY: (t: number) => number,
+  t: number,
+  h = 0.0001,
+): number {
+  const dxdt = (fnX(t + h) - fnX(t - h)) / (2 * h);
+  const dydt = (fnY(t + h) - fnY(t - h)) / (2 * h);
+  if (Math.abs(dxdt) < 1e-15) return Infinity;
+  const d = dydt / dxdt;
+  return isFinite(d) ? d : 0;
+}
 
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    const ra = boundaries[i];
-    const rb = boundaries[i + 1];
-    const mid = (ra + rb) / 2;
-    const yU = fUpper(mid);
-    const yL = fLower(mid);
-    if (!isFinite(yU) || !isFinite(yL)) continue;
+export function derivativePolar(
+  fn: (theta: number) => number,
+  theta: number,
+  h = 0.0001,
+): number {
+  const r = fn(theta);
+  const drdt = (fn(theta + h) - fn(theta - h)) / (2 * h);
+  if (!isFinite(r) || !isFinite(drdt)) return 0;
+  const num = drdt * Math.sin(theta) + r * Math.cos(theta);
+  const den = drdt * Math.cos(theta) - r * Math.sin(theta);
+  if (Math.abs(den) < 1e-15) return Infinity;
+  const d = num / den;
+  return isFinite(d) ? d : 0;
+}
 
-    const topIsUpper = yU >= yL;
-    const area = clampResult(integrate((x) => Math.abs(fUpper(x) - fLower(x)), ra, rb));
-
-    regions.push({
-      a: ra,
-      b: rb,
-      area,
-      topFunctionIndex: topIsUpper ? 0 : 1,
-      bottomFunctionIndex: topIsUpper ? 1 : 0,
-    });
-    totalArea += area;
-  }
-
-  return { totalArea: clampResult(totalArea), regions };
+export function derivativeImplicit(
+  fn: (x: number, y: number) => number,
+  x: number,
+  y: number,
+  h = 0.0001,
+): number {
+  const fx = (fn(x + h, y) - fn(x - h, y)) / (2 * h);
+  const fy = (fn(x, y + h) - fn(x, y - h)) / (2 * h);
+  if (Math.abs(fy) < 1e-15) return Infinity;
+  const d = -fx / fy;
+  return isFinite(d) ? d : 0;
 }

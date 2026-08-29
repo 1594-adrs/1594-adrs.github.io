@@ -1,6 +1,7 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   signal,
   computed,
   ElementRef,
@@ -14,6 +15,7 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { Title } from '@angular/platform-browser';
 import { Viewport } from './canvas/viewport';
 import { drawGrid } from './canvas/grid-renderer';
 import { Solid3DComponent } from './canvas/solid-3d/solid-3d.component';
@@ -25,23 +27,38 @@ import {
   drawAreaBetween,
   drawParametric,
   drawPolar,
+  drawInequality,
+  drawImplicitInequality,
+  drawAsymptote,
 } from './canvas/graph-renderer';
 import { drawImplicitCurve } from './canvas/implicit-renderer';
-import { drawSolidCrossSection } from './canvas/solid-renderer';
+import { solveConicForY } from './engine/conic-solver';
+import { detectAsymptotes } from './engine/asymptote-detector';
+import {
+  drawSolidCrossSectionSingle,
+  drawSolidCrossSectionMulti,
+} from './canvas/solid-renderer';
 import { parse } from './engine/parser';
 import { evalExpression, evalConstantExpression } from './engine/evaluator';
 import { integrate } from './engine/integrator';
-import { solidVolume, solidSurfaceArea, areaBetweenCurves } from './engine/calculus';
+import {
+  solidVolumeSingle,
+  solidSurfaceAreaSingle,
+  areaSingle,
+  solidVolumeMulti,
+  solidSurfaceAreaMulti,
+} from './engine/calculus';
 import { findIntersections } from './engine/intersection-finder';
-import { computeAreaRegions } from './engine/area-splitter';
+import { computeAreaRegions, computeRevolutionRegions } from './engine/area-splitter';
 import { FUNCTION_COLORS } from './utils/color';
 import { OnscreenKeyboardComponent } from './keyboard/onscreen-keyboard.component';
+import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
+import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
 import type {
   MathExpression,
   IntegralResult,
   RotationAxis,
   SolidConfig,
-  BoundedAreaConfig,
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
@@ -59,16 +76,19 @@ function formatValue(v: number): string {
 @Component({
   selector: 'app-graphing-calculator',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, OnscreenKeyboardComponent, Solid3DComponent, HelpModalComponent],
+  imports: [RouterLink, OnscreenKeyboardComponent, Solid3DComponent, HelpModalComponent, MathRendererComponent, ConicAssistantComponent],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: ['./graphing-calculator.component.css', './sidebar.css', './results.css'],
 })
 export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private ngZone = inject(NgZone);
+  private cdr = inject(ChangeDetectorRef);
+  private titleService = inject(Title);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   fnInputs = viewChildren<ElementRef<HTMLInputElement>>('fnInput');
+  helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
 
   functions = signal<MathExpression[]>([
     { raw: 'sin(x)', ast: null, color: FUNCTION_COLORS[0], visible: true, mode: 'explicit' },
@@ -76,30 +96,143 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   activeIntegral = signal<{ fnIndex: number; a: number; b: number } | null>(null);
   activeSolid = signal<SolidConfig | null>(null);
-  activeBoundedArea = signal<BoundedAreaConfig | null>(null);
   activeMultiArea = signal<MultiFunctionAreaConfig | null>(null);
-  solidRotation = signal(45);
-  angleUnit = signal<'deg' | 'rad'>('deg');
+  angleUnit = signal<'deg' | 'rad'>('rad');
   limitErrors = signal<Record<string, boolean>>({});
   showKeyboard = signal(false);
   show3DSolid = signal(false);
   showHelp = signal(false);
   showCanvasControls = signal(false);
+  showConicAssistant = signal(false);
   showGrid = signal(true);
   focusedInputIndex = signal<number | null>(null);
+  evalPoint = signal<string>('0');
+  dragIndex = signal<number | null>(null);
 
-  solidFunction = computed<((x: number) => number) | null>(() => {
-    const sol = this.activeSolid();
-    if (!sol) return null;
-    const expr = this.functions()[sol.fnIndex];
-    if (!expr?.ast || !expr.visible || expr.mode !== 'explicit') return null;
-    return (x: number) => evalExpression(expr.ast!, x);
+  evalResults = computed(() => {
+    const point = parseFloat(this.evalPoint());
+    if (isNaN(point)) return [];
+    const au = this.angleUnit();
+    return this.functions()
+      .filter((f) => f.visible && f.ast)
+      .map((f, i) => {
+        const realIndex = this.functions().indexOf(f);
+        try {
+          const value = evalExpression(f.ast!, point, undefined, au);
+          return {
+            fnIndex: realIndex,
+            color: f.color,
+            value: isFinite(value) ? formatValue(value) : 'undefined',
+          };
+        } catch {
+          return { fnIndex: realIndex, color: f.color, value: 'undefined' };
+        }
+      });
   });
 
-  solidColor = computed(() => {
+  solidEvalFns = computed<Array<(x: number) => number>>(() => {
     const sol = this.activeSolid();
-    if (!sol) return '#00ff88';
-    return this.functions()[sol.fnIndex]?.color ?? '#00ff88';
+    if (!sol) return [];
+    const au = this.angleUnit();
+    return sol.functionIndices
+      .map((i) => this.functions()[i])
+      .filter((e) => !!e?.visible && this.canUseWithTools(e))
+      .map((e) => {
+        if (e.mode === 'explicit' && e.ast) {
+          return (x: number) => evalExpression(e.ast!, x, undefined, au);
+        }
+        if (e.mode === 'implicit' && e.ast) {
+          const branches = solveConicForY(e.ast);
+          if (branches && branches.length > 0) {
+            const branchFn = branches[0].fn;
+            return (x: number) => branchFn(x) ?? NaN;
+          }
+          return (x: number) => evalExpression(e.ast!, x, undefined, au);
+        }
+        if (e.mode === 'parametric' && e.paramX && e.paramY) {
+          const evalX = (t: number) => evalExpression(e.paramX!, t, undefined, au);
+          const evalY = (t: number) => evalExpression(e.paramY!, t, undefined, au);
+          const tMin = this.evalRange(e.tMin, 0);
+          const tMax = this.evalRange(e.tMax, 2 * Math.PI);
+          const N = 500;
+          const pts: Array<{ x: number; y: number }> = [];
+          for (let i = 0; i <= N; i++) {
+            const t = tMin + (i / N) * (tMax - tMin);
+            try {
+              const px = evalX(t);
+              const py = evalY(t);
+              if (isFinite(px) && isFinite(py)) pts.push({ x: px, y: py });
+            } catch { /* skip */ }
+          }
+          return (x: number) => {
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = pts[i];
+              const p1 = pts[i + 1];
+              if ((p0.x <= x && p1.x >= x) || (p1.x <= x && p0.x >= x)) {
+                const dx = p1.x - p0.x;
+                if (Math.abs(dx) < 1e-15) return p0.y;
+                const t = (x - p0.x) / dx;
+                return p0.y + t * (p1.y - p0.y);
+              }
+            }
+            return NaN;
+          };
+        }
+        if (e.mode === 'polar' && e.ast) {
+          const evalR = (theta: number) => evalExpression(e.ast!, theta, undefined, au);
+          const thetaMin = this.evalRange(e.thetaMin, 0);
+          const thetaMax = this.evalRange(e.thetaMax, 2 * Math.PI);
+          const N = 500;
+          const pts: Array<{ x: number; y: number }> = [];
+          for (let i = 0; i <= N; i++) {
+            const theta = thetaMin + (i / N) * (thetaMax - thetaMin);
+            try {
+              const r = evalR(theta);
+              if (isFinite(r)) pts.push({ x: r * Math.cos(theta), y: r * Math.sin(theta) });
+            } catch { /* skip */ }
+          }
+          return (x: number) => {
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = pts[i];
+              const p1 = pts[i + 1];
+              if ((p0.x <= x && p1.x >= x) || (p1.x <= x && p0.x >= x)) {
+                const dx = p1.x - p0.x;
+                if (Math.abs(dx) < 1e-15) return p0.y;
+                const t = (x - p0.x) / dx;
+                return p0.y + t * (p1.y - p0.y);
+              }
+            }
+            return NaN;
+          };
+        }
+        return (x: number) => NaN;
+      });
+  });
+
+  solidFnColors = computed<string[]>(() => {
+    const sol = this.activeSolid();
+    if (!sol) return [];
+    return sol.functionIndices
+      .map((i) => this.functions()[i])
+      .filter((e) => !!e?.visible && this.canUseWithTools(e))
+      .map((e) => e.color);
+  });
+
+  solidRegions = computed(() => {
+    const fns = this.solidEvalFns();
+    const sol = this.activeSolid();
+    if (!sol || fns.length < 1) return [];
+    if (fns.length === 1) {
+      return [{ a: sol.a, b: sol.b, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
+    }
+    const intersections = findIntersections(fns, sol.a, sol.b);
+    return computeRevolutionRegions(fns, intersections, sol.a, sol.b, sol.overlapMode);
+  });
+
+  hasSolidData = computed(() => {
+    const sol = this.activeSolid();
+    if (!sol) return false;
+    return this.solidRegions().length > 0;
   });
 
   viewport = new Viewport();
@@ -110,55 +243,60 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private renderRequested = false;
   private animFrameId = 0;
+  private pendingRafIds: number[] = [];
+  private blurTimerId: ReturnType<typeof setTimeout> | null = null;
 
   private requestRender(): void {
     if (this.renderRequested) return;
     this.renderRequested = true;
     this.animFrameId = requestAnimationFrame(() => {
-      this.renderRequested = false;
-      this.render();
+      this.ngZone.runOutsideAngular(() => {
+        this.renderRequested = false;
+        this.render();
+        this.cdr.markForCheck();
+      });
     });
   }
 
   results = computed<IntegralResult[]>(() => {
     const res: IntegralResult[] = [];
+    const au = this.angleUnit();
     const intg = this.activeIntegral();
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
       if (expr?.ast && expr.visible) {
-        const fn = (x: number) => evalExpression(expr.ast!, x);
+        const fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
         const value = integrate(fn, intg.a, intg.b);
         res.push({ label: `∫ ${expr.raw} dx`, value: formatValue(value) });
       }
     }
     const sol = this.activeSolid();
     if (sol) {
-      const expr = this.functions()[sol.fnIndex];
-      if (expr?.ast && expr.visible) {
-        const fn = (x: number) => evalExpression(expr.ast!, x);
-        const vol = solidVolume(fn, sol.a, sol.b, sol.axis);
-        const sa = solidSurfaceArea(fn, sol.a, sol.b, sol.axis);
-        const axisLabel =
-          sol.axis.type === 'x' && sol.axis.value === 0
-            ? 'y = 0'
-            : sol.axis.type === 'y' && sol.axis.value === 0
-              ? 'x = 0'
-              : sol.axis.type === 'y'
-                ? `x = ${sol.axis.value}`
-                : `y = ${sol.axis.value}`;
-        res.push({ label: `V [${axisLabel}]`, value: formatValue(vol) });
-        res.push({ label: `S [${axisLabel}]`, value: formatValue(sa) });
-      }
-    }
-    const bnd = this.activeBoundedArea();
-    if (bnd) {
-      const exprU = this.functions()[bnd.fnIndexUpper];
-      const exprL = this.functions()[bnd.fnIndexLower];
-      if (exprU?.ast && exprU.visible && exprL?.ast && exprL.visible) {
-        const fU = (x: number) => evalExpression(exprU.ast!, x);
-        const fL = (x: number) => evalExpression(exprL.ast!, x);
-        const value = areaBetweenCurves(fU, fL, bnd.a, bnd.b);
-        res.push({ label: `A [${exprU.raw} , ${exprL.raw}]`, value: formatValue(value) });
+      const evalFns = this.solidEvalFns();
+      const regions = this.solidRegions();
+      const axisLabel =
+        sol.axis.type === 'x' && sol.axis.value === 0
+          ? 'y = 0'
+          : sol.axis.type === 'y' && sol.axis.value === 0
+            ? 'x = 0'
+            : sol.axis.type === 'y'
+              ? `x = ${sol.axis.value}`
+              : `y = ${sol.axis.value}`;
+
+      if (evalFns.length === 1 && regions.length > 0) {
+        const vol = solidVolumeSingle(evalFns[0], sol.a, sol.b, sol.axis);
+        const sa = solidSurfaceAreaSingle(evalFns[0], sol.a, sol.b, sol.axis);
+        const fnLabel = this.functions()[sol.functionIndices[0]]?.raw ?? 'f';
+        res.push({ label: `V [${axisLabel}] (${fnLabel})`, value: formatValue(vol) });
+        res.push({ label: `S [${axisLabel}] (${fnLabel})`, value: formatValue(sa) });
+      } else if (evalFns.length >= 2 && regions.length > 0) {
+        const vol = solidVolumeMulti(evalFns, regions, sol.axis);
+        const sa = solidSurfaceAreaMulti(evalFns, regions, sol.axis);
+        const fnLabels = sol.functionIndices
+          .map((i) => this.functions()[i]?.raw ?? `f${i + 1}`)
+          .join(', ');
+        res.push({ label: `V [${axisLabel}] (${fnLabels})`, value: formatValue(vol) });
+        res.push({ label: `S [${axisLabel}] (${fnLabels})`, value: formatValue(sa) });
       }
     }
 
@@ -168,20 +306,44 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         .map((i) => this.functions()[i])
         .filter(
           (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
-            !!e?.ast && e.visible,
+            !!e?.ast && e.visible && this.canUseWithTools(e),
         );
       if (fns.length >= 2) {
-        const evalFns = fns.map((f) => (x: number) => evalExpression(f.ast, x));
-        const regions = computeAreaRegions(
-          evalFns,
-          findIntersections(evalFns, mArea.a, mArea.b),
-          mArea.a,
-          mArea.b,
-        );
+        const evalFns = fns.map((f) => {
+          if (f.mode === 'explicit') {
+            return (x: number) => evalExpression(f.ast, x, undefined, au);
+          }
+          const branches = solveConicForY(f.ast);
+          if (branches && branches.length > 0) {
+            const branchFn = branches[0].fn;
+            return (x: number) => branchFn(x) ?? NaN;
+          }
+          return (x: number) => evalExpression(f.ast, x, undefined, au);
+        });
+        const intersections = findIntersections(evalFns, mArea.a, mArea.b);
+        const regions = computeAreaRegions(evalFns, intersections, mArea.a, mArea.b);
         let total = 0;
         for (const r of regions) total += r.area;
         const labels = fns.map((f) => f.raw).join(', ');
         res.push({ label: `A [${labels}]`, value: formatValue(total) });
+      }
+    } else if (mArea && mArea.functionIndices.length === 1) {
+      const expr = this.functions()[mArea.functionIndices[0]];
+      if (expr?.ast && expr.visible && this.canUseWithTools(expr)) {
+        let fn: (x: number) => number;
+        if (expr.mode === 'explicit') {
+          fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
+        } else {
+          const branches = solveConicForY(expr.ast!);
+          if (branches && branches.length > 0) {
+            const branchFn = branches[0].fn;
+            fn = (x: number) => branchFn(x) ?? NaN;
+          } else {
+            fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
+          }
+        }
+        const value = areaSingle(fn, mArea.a, mArea.b);
+        res.push({ label: `A [${expr.raw}]`, value: formatValue(value) });
       }
     }
 
@@ -189,6 +351,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   });
 
   ngAfterViewInit(): void {
+    this.titleService.setTitle('Graphing Calculator — Andres Rincon');
     if (!this.isBrowser) return;
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
@@ -207,7 +370,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
-    if (this.isBrowser) cancelAnimationFrame(this.animFrameId);
+    if (this.isBrowser) {
+      cancelAnimationFrame(this.animFrameId);
+      for (const id of this.pendingRafIds) cancelAnimationFrame(id);
+      this.pendingRafIds = [];
+    }
+    if (this.blurTimerId !== null) {
+      clearTimeout(this.blurTimerId);
+      this.blurTimerId = null;
+    }
   }
 
   addFunction(): void {
@@ -228,9 +399,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   removeFunction(index: number): void {
     this.functions.update((fns) => fns.filter((_, i) => i !== index));
     if (this.functions().length < 2) {
-      this.activeBoundedArea.set(null);
       this.activeMultiArea.set(null);
     }
+    this.activeSolid.update((s) => {
+      if (!s) return null;
+      const newIndices = s.functionIndices
+        .filter((i) => i !== index)
+        .map((i) => (i > index ? i - 1 : i));
+      return newIndices.length >= 1 ? { ...s, functionIndices: newIndices } : null;
+    });
     this.requestRender();
   }
 
@@ -240,11 +417,31 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (i !== index) return fn;
         const mode = this.detectMode(raw);
         if (mode === 'implicit') {
+          const inequalityMatch = raw.match(/(.*?)(>=|<=|>|<)(.*)/);
+          if (inequalityMatch) {
+            const lhs = inequalityMatch[1].trim();
+            const op = inequalityMatch[2] as '>' | '<' | '>=' | '<=';
+            const rhs = inequalityMatch[3].trim();
+            if (/^y$/i.test(lhs)) {
+              try {
+                const ast = parse(rhs);
+                return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op };
+              } catch {
+                return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: op };
+              }
+            }
+            try {
+              const ast = parse(`(${lhs})-(${rhs})`);
+              return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op };
+            } catch {
+              return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: op };
+            }
+          }
           try {
             const ast = parse(raw);
-            return { ...fn, raw, ast, mode, paramX: null, paramY: null };
+            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
           } catch {
-            return { ...fn, raw, ast: null, mode, paramX: null, paramY: null };
+            return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
           }
         }
         if (mode === 'parametric') {
@@ -253,27 +450,27 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             try {
               const paramX = parse(parts[0].trim());
               const paramY = parse(parts[1].trim());
-              return { ...fn, raw, ast: null, mode, paramX, paramY };
+              return { ...fn, raw, ast: null, mode, paramX, paramY, inequalityOp: undefined };
             } catch {
-              return { ...fn, raw, ast: null, mode, paramX: null, paramY: null };
+              return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
             }
           }
-          return { ...fn, raw, ast: null, mode, paramX: null, paramY: null };
+          return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
         }
         if (mode === 'polar') {
           const expr = raw.replace(/^r\s*=\s*/i, '');
           try {
             const ast = parse(expr);
-            return { ...fn, raw, ast, mode, paramX: null, paramY: null };
+            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
           } catch {
-            return { ...fn, raw, ast: null, mode, paramX: null, paramY: null };
+            return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
           }
         }
         try {
           const ast = parse(raw);
-          return { ...fn, raw, ast, mode: 'explicit', paramX: null, paramY: null };
+          return { ...fn, raw, ast, mode: 'explicit', paramX: null, paramY: null, inequalityOp: undefined };
         } catch {
-          return { ...fn, raw, ast: null, mode: 'explicit', paramX: null, paramY: null };
+          return { ...fn, raw, ast: null, mode: 'explicit', paramX: null, paramY: null, inequalityOp: undefined };
         }
       }),
     );
@@ -294,99 +491,28 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (i !== index) return fn;
         const currentIdx = modes.indexOf(fn.mode);
         const nextMode = modes[(currentIdx + 1) % modes.length];
-        return { ...fn, mode: nextMode, ast: null, paramX: null, paramY: null };
+        return { ...fn, mode: nextMode, ast: null, paramX: null, paramY: null, inequalityOp: undefined };
       }),
     );
     const fn = this.functions()[index];
     if (fn) this.updateExpression(index, fn.raw);
   }
 
+  updateParamRange(index: number, field: 'tMin' | 'tMax' | 'thetaMin' | 'thetaMax', value: string): void {
+    this.functions.update((fns) =>
+      fns.map((fn, i) => (i === index ? { ...fn, [field]: value } : fn)),
+    );
+    this.requestRender();
+  }
+
   private detectMode(raw: string): CurveMode {
     const trimmed = raw.trim();
-    if (/^[^=]+=/.test(trimmed) && !/^r\s*=/i.test(trimmed)) return 'implicit';
     if (/^r\s*=/i.test(trimmed)) return 'polar';
+    if (/[<>]=?/.test(trimmed)) return 'implicit';
     if (/^[^a-zA-Z]*[xy]\s*[,)].*t/.test(trimmed) || /t\s*[,)].*[xy]/.test(trimmed))
       return 'parametric';
+    if (/[=]/.test(trimmed) && !/^[yY]\s*=/.test(trimmed)) return 'implicit';
     return 'explicit';
-  }
-
-  activateIntegral(): void {
-    const current = this.activeIntegral();
-    if (current) {
-      this.activeIntegral.set(null);
-    } else {
-      this.activeIntegral.set({ fnIndex: 0, a: -2, b: 2 });
-    }
-    this.requestRender();
-  }
-
-  activateSolid(): void {
-    const current = this.activeSolid();
-    if (current) {
-      this.activeSolid.set(null);
-    } else {
-      this.activeSolid.set({ fnIndex: 0, a: 0, b: 3, axis: { type: 'x', value: 0 } });
-    }
-    this.requestRender();
-  }
-
-  activateBoundedArea(): void {
-    const current = this.activeBoundedArea();
-    if (current) {
-      this.activeBoundedArea.set(null);
-    } else {
-      const fns = this.functions();
-      this.activeBoundedArea.set({
-        fnIndexUpper: 0,
-        fnIndexLower: Math.min(1, fns.length - 1),
-        a: -2,
-        b: 2,
-      });
-    }
-    this.requestRender();
-  }
-
-  activateMultiArea(): void {
-    const current = this.activeMultiArea();
-    if (current) {
-      this.activeMultiArea.set(null);
-    } else {
-      this.activeMultiArea.set({
-        functionIndices: [0, Math.min(1, this.functions().length - 1)],
-        a: -2,
-        b: 2,
-        autoDetectIntersections: true,
-      });
-    }
-    this.requestRender();
-  }
-
-  toggleMultiAreaFunction(index: number): void {
-    this.activeMultiArea.update((cfg) => {
-      if (!cfg) return null;
-      const has = cfg.functionIndices.includes(index);
-      if (has) {
-        return { ...cfg, functionIndices: cfg.functionIndices.filter((i) => i !== index) };
-      }
-      return { ...cfg, functionIndices: [...cfg.functionIndices, index].sort() };
-    });
-    this.requestRender();
-  }
-
-  updateMultiAreaA(value: string): void {
-    const v = this.parseLimit(value, 'multiA');
-    if (v !== null) {
-      this.activeMultiArea.update((cfg) => (cfg ? { ...cfg, a: v } : null));
-      this.requestRender();
-    }
-  }
-
-  updateMultiAreaB(value: string): void {
-    const v = this.parseLimit(value, 'multiB');
-    if (v !== null) {
-      this.activeMultiArea.update((cfg) => (cfg ? { ...cfg, b: v } : null));
-      this.requestRender();
-    }
   }
 
   updateIntegralA(value: string): void {
@@ -403,6 +529,81 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.activeIntegral.update((i) => (i ? { ...i, b: v } : null));
       this.requestRender();
     }
+  }
+
+  activateIntegral(): void {
+    const current = this.activeIntegral();
+    if (current) {
+      this.activeIntegral.set(null);
+    } else {
+      this.activeSolid.set(null);
+      this.activeMultiArea.set(null);
+      this.show3DSolid.set(false);
+      this.activeIntegral.set({ fnIndex: 0, a: -2, b: 2 });
+    }
+    this.requestRender();
+  }
+
+  activateSolid(): void {
+    const current = this.activeSolid();
+    if (current) {
+      this.activeSolid.set(null);
+      this.show3DSolid.set(false);
+    } else {
+      this.activeIntegral.set(null);
+      this.activeMultiArea.set(null);
+      const visibles = this.functions()
+        .map((f, i) => ({ f, i }))
+        .filter((x) => x.f.visible && (x.f.ast || x.f.mode === 'implicit'));
+      const indices = visibles.slice(0, Math.min(2, visibles.length)).map((x) => x.i);
+
+      const evalFns = indices
+        .map((i) => this.functions()[i])
+        .filter(
+          (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
+            !!e?.ast && e.visible && this.canUseWithTools(e),
+        )
+        .map((e) => (x: number) => evalExpression(e.ast!, x));
+
+      let a = this.viewport.xMin;
+      let b = this.viewport.xMax;
+
+      if (evalFns.length >= 2) {
+        const intersections = findIntersections(evalFns, this.viewport.xMin, this.viewport.xMax);
+        if (intersections.length >= 2) {
+          a = intersections[0].x;
+          b = intersections[intersections.length - 1].x;
+        } else if (intersections.length === 1) {
+          a = intersections[0].x;
+          b = this.viewport.xMax;
+        }
+      } else if (evalFns.length === 1) {
+        a = this.viewport.xMin;
+        b = this.viewport.xMax;
+      }
+
+      this.activeSolid.set({
+        functionIndices: indices.length > 0 ? indices : [0],
+        a,
+        b,
+        axis: { type: 'x', value: 0 },
+        overlapMode: 'pairwise',
+      });
+    }
+    this.requestRender();
+  }
+
+  toggleSolidFunction(index: number): void {
+    this.activeSolid.update((cfg) => {
+      if (!cfg) return null;
+      const has = cfg.functionIndices.includes(index);
+      if (has) {
+        const newIndices = cfg.functionIndices.filter((i) => i !== index);
+        return newIndices.length >= 1 ? { ...cfg, functionIndices: newIndices } : null;
+      }
+      return { ...cfg, functionIndices: [...cfg.functionIndices, index].sort() };
+    });
+    this.requestRender();
   }
 
   updateSolidA(value: string): void {
@@ -441,36 +642,71 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  updateBoundedUpper(value: string): void {
-    const v = parseInt(value, 10);
-    if (!isNaN(v) && v >= 0 && v < this.functions().length) {
-      this.activeBoundedArea.update((b) => (b ? { ...b, fnIndexUpper: v } : null));
-      this.requestRender();
-    }
+  updateSolidOverlapMode(checked: boolean): void {
+    this.activeSolid.update((s) =>
+      s ? { ...s, overlapMode: checked ? 'all' : 'pairwise' } : null,
+    );
+    this.requestRender();
   }
 
-  updateBoundedLower(value: string): void {
-    const v = parseInt(value, 10);
-    if (!isNaN(v) && v >= 0 && v < this.functions().length) {
-      this.activeBoundedArea.update((b) => (b ? { ...b, fnIndexLower: v } : null));
-      this.requestRender();
+  activateMultiArea(): void {
+    const current = this.activeMultiArea();
+    if (current) {
+      this.activeMultiArea.set(null);
+    } else {
+      this.activeIntegral.set(null);
+      this.activeSolid.set(null);
+      this.show3DSolid.set(false);
+      const indices =
+        this.functions().length >= 2
+          ? [0, 1]
+          : this.functions().length === 1
+            ? [0]
+            : [];
+      this.activeMultiArea.set({
+        functionIndices: indices,
+        a: -2,
+        b: 2,
+        autoDetectIntersections: true,
+        overlapMode: 'pairwise',
+      });
     }
+    this.requestRender();
   }
 
-  updateBoundedA(value: string): void {
-    const v = this.parseLimit(value, 'boundedA');
+  toggleMultiAreaFunction(index: number): void {
+    this.activeMultiArea.update((cfg) => {
+      if (!cfg) return null;
+      const has = cfg.functionIndices.includes(index);
+      if (has) {
+        return { ...cfg, functionIndices: cfg.functionIndices.filter((i) => i !== index) };
+      }
+      return { ...cfg, functionIndices: [...cfg.functionIndices, index].sort() };
+    });
+    this.requestRender();
+  }
+
+  updateMultiAreaA(value: string): void {
+    const v = this.parseLimit(value, 'multiA');
     if (v !== null) {
-      this.activeBoundedArea.update((b) => (b ? { ...b, a: v } : null));
+      this.activeMultiArea.update((cfg) => (cfg ? { ...cfg, a: v } : null));
       this.requestRender();
     }
   }
 
-  updateBoundedB(value: string): void {
-    const v = this.parseLimit(value, 'boundedB');
+  updateMultiAreaB(value: string): void {
+    const v = this.parseLimit(value, 'multiB');
     if (v !== null) {
-      this.activeBoundedArea.update((b) => (b ? { ...b, b: v } : null));
+      this.activeMultiArea.update((cfg) => (cfg ? { ...cfg, b: v } : null));
       this.requestRender();
     }
+  }
+
+  updateMultiAreaOverlapMode(checked: boolean): void {
+    this.activeMultiArea.update((cfg) =>
+      cfg ? { ...cfg, overlapMode: checked ? 'all' : 'pairwise' } : null,
+    );
+    this.requestRender();
   }
 
   onCanvasMouseMove(event: MouseEvent): void {
@@ -589,10 +825,19 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.requestRender();
   }
 
-  hasMultipleFunctions = computed(() => this.functions().length >= 2);
-
   toggleAngleUnit(): void {
     this.angleUnit.update((u) => (u === 'deg' ? 'rad' : 'deg'));
+  }
+
+  canUseWithTools(fn: MathExpression): boolean {
+    if (!fn.visible) return false;
+    if (fn.mode === 'explicit') return !!fn.ast;
+    if (fn.mode === 'implicit') {
+      return !!fn.ast && solveConicForY(fn.ast) !== null;
+    }
+    if (fn.mode === 'parametric') return !!(fn.paramX && fn.paramY);
+    if (fn.mode === 'polar') return !!fn.ast;
+    return false;
   }
 
   toggleKeyboard(): void {
@@ -604,7 +849,89 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   onInputBlur(): void {
-    setTimeout(() => this.focusedInputIndex.set(null), 100);
+    if (this.blurTimerId !== null) clearTimeout(this.blurTimerId);
+    this.blurTimerId = setTimeout(() => this.focusedInputIndex.set(null), 100);
+  }
+
+  onDragStart(index: number, event: DragEvent): void {
+    this.dragIndex.set(index);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(index));
+    }
+  }
+
+  onDragOver(index: number, event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  onDrop(targetIndex: number, event: DragEvent): void {
+    event.preventDefault();
+    const sourceIndex = this.dragIndex();
+    if (sourceIndex === null || sourceIndex === targetIndex) return;
+
+    this.functions.update((fns) => {
+      const updated = [...fns];
+      const [moved] = updated.splice(sourceIndex, 1);
+      updated.splice(targetIndex, 0, moved);
+      return updated;
+    });
+
+    if (this.activeSolid()) {
+      this.activeSolid.update((sol) => {
+        if (!sol) return null;
+        const newIndices = sol.functionIndices.map((i) => {
+          if (i === sourceIndex) return targetIndex;
+          if (sourceIndex < targetIndex && i > sourceIndex && i <= targetIndex) return i - 1;
+          if (sourceIndex > targetIndex && i >= targetIndex && i < sourceIndex) return i + 1;
+          return i;
+        });
+        return { ...sol, functionIndices: newIndices };
+      });
+    }
+
+    if (this.activeIntegral()) {
+      this.activeIntegral.update((intg) => {
+        if (!intg) return null;
+        let newIdx = intg.fnIndex;
+        if (intg.fnIndex === sourceIndex) newIdx = targetIndex;
+        else if (sourceIndex < targetIndex && intg.fnIndex > sourceIndex && intg.fnIndex <= targetIndex) newIdx = intg.fnIndex - 1;
+        else if (sourceIndex > targetIndex && intg.fnIndex >= targetIndex && intg.fnIndex < sourceIndex) newIdx = intg.fnIndex + 1;
+        return { ...intg, fnIndex: newIdx };
+      });
+    }
+
+    this.dragIndex.set(null);
+    this.requestRender();
+  }
+
+  onDragEnd(): void {
+    this.dragIndex.set(null);
+  }
+
+  onHelpClose(): void {
+    this.showHelp.set(false);
+    this.helpBtn()?.nativeElement?.focus();
+  }
+
+  addConicToGraph(expression: string): void {
+    if (this.functions().length >= 5) return;
+    const idx = this.functions().length;
+    this.functions.update((fns) => [
+      ...fns,
+      {
+        raw: expression,
+        ast: null,
+        color: FUNCTION_COLORS[idx % FUNCTION_COLORS.length],
+        visible: true,
+        mode: 'implicit',
+      },
+    ]);
+    this.updateExpression(idx, expression);
+    this.showConicAssistant.set(false);
   }
 
   onKeyPress(symbol: string): void {
@@ -620,10 +947,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const newValue = current.slice(0, start) + symbol + current.slice(end);
     this.updateExpression(idx, newValue);
 
-    requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       inputEl.selectionStart = inputEl.selectionEnd = start + symbol.length;
       inputEl.focus();
     });
+    this.pendingRafIds.push(rafId);
   }
 
   onKeyAction(action: 'backspace' | 'left' | 'right' | 'clear'): void {
@@ -637,10 +965,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     if (action === 'clear') {
       this.updateExpression(idx, '');
-      requestAnimationFrame(() => {
+      const rafId = requestAnimationFrame(() => {
         inputEl.selectionStart = inputEl.selectionEnd = 0;
         inputEl.focus();
       });
+      this.pendingRafIds.push(rafId);
       return;
     }
 
@@ -650,21 +979,24 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (start > 0) {
         const newValue = current.slice(0, start - 1) + current.slice(start);
         this.updateExpression(idx, newValue);
-        requestAnimationFrame(() => {
+        const rafId = requestAnimationFrame(() => {
           inputEl.selectionStart = inputEl.selectionEnd = start - 1;
           inputEl.focus();
         });
+        this.pendingRafIds.push(rafId);
       }
     } else if (action === 'left') {
-      requestAnimationFrame(() => {
+      const rafId = requestAnimationFrame(() => {
         inputEl.selectionStart = inputEl.selectionEnd = Math.max(0, start - 1);
         inputEl.focus();
       });
+      this.pendingRafIds.push(rafId);
     } else if (action === 'right') {
-      requestAnimationFrame(() => {
+      const rafId = requestAnimationFrame(() => {
         inputEl.selectionStart = inputEl.selectionEnd = Math.min(current.length, start + 1);
         inputEl.focus();
       });
+      this.pendingRafIds.push(rafId);
     }
   }
 
@@ -686,6 +1018,19 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } catch {
       this.limitErrors.update((e) => ({ ...e, [key]: true }));
       return null;
+    }
+  }
+
+  private evalRange(raw: string | undefined, defaultVal: number): number {
+    if (!raw) return defaultVal;
+    const trimmed = raw.trim();
+    if (!trimmed) return defaultVal;
+    const num = parseFloat(trimmed);
+    if (!isNaN(num)) return num;
+    try {
+      return evalConstantExpression(trimmed);
+    } catch {
+      return defaultVal;
     }
   }
 
@@ -716,6 +1061,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     const w = canvas.width;
     const h = canvas.height;
+    const au = this.angleUnit();
 
     if (this.showGrid()) {
       drawGrid(ctx, this.viewport, w, h);
@@ -728,32 +1074,51 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     for (const fn of this.functions()) {
       if (!fn.visible || !fn.raw) continue;
       if (fn.mode === 'implicit') {
-        if (!fn.raw.includes('=')) continue;
-        const parts = fn.raw.split('=');
-        if (parts.length !== 2) continue;
-        const lhs = parts[0].trim();
-        const rhs = parts[1].trim();
-        const exprStr = `(${lhs})-(${rhs})`;
-        try {
-          const expr = parse(exprStr);
-          const evalFn = (x: number, y: number) => evalExpression(expr, x, y);
-          drawImplicitCurve(ctx, this.viewport, evalFn, fn.color, w, h);
-        } catch {
-          /* skip */
+        if (fn.inequalityOp && fn.ast) {
+          const isExplicit = /^\s*y\s*(>=|<=|>|<)/i.test(fn.raw);
+          if (isExplicit) {
+            const evalFn = (x: number) => evalExpression(fn.ast!, x, undefined, au);
+            drawInequality(ctx, this.viewport, evalFn, fn.inequalityOp, fn.color, w, h);
+          } else {
+            const evalFn = (x: number, y: number) => evalExpression(fn.ast!, x, y, au);
+            drawImplicitInequality(ctx, this.viewport, evalFn, fn.inequalityOp, fn.color, w, h);
+          }
+        } else {
+          if (!fn.raw.includes('=')) continue;
+          const parts = fn.raw.split('=');
+          if (parts.length !== 2) continue;
+          const lhs = parts[0].trim();
+          const rhs = parts[1].trim();
+          const exprStr = `(${lhs})-(${rhs})`;
+          try {
+            const expr = parse(exprStr);
+            const evalFn = (x: number, y: number) => evalExpression(expr, x, y, au);
+            drawImplicitCurve(ctx, this.viewport, evalFn, fn.color, w, h);
+          } catch {
+            /* skip */
+          }
         }
       } else if (fn.mode === 'parametric') {
         if (!fn.paramX || !fn.paramY) continue;
-        const evalX = (t: number) => evalExpression(fn.paramX!, t);
-        const evalY = (t: number) => evalExpression(fn.paramY!, t);
-        drawParametric(ctx, this.viewport, evalX, evalY, 0, 2 * Math.PI, fn.color, w, h);
+        const evalX = (t: number) => evalExpression(fn.paramX!, t, undefined, au);
+        const evalY = (t: number) => evalExpression(fn.paramY!, t, undefined, au);
+        const tMin = this.evalRange(fn.tMin, 0);
+        const tMax = this.evalRange(fn.tMax, 2 * Math.PI);
+        drawParametric(ctx, this.viewport, evalX, evalY, tMin, tMax, fn.color, w, h);
       } else if (fn.mode === 'polar') {
         if (!fn.ast) continue;
-        const evalR = (theta: number) => evalExpression(fn.ast!, theta);
-        drawPolar(ctx, this.viewport, evalR, 0, 2 * Math.PI, fn.color, w, h);
+        const evalR = (theta: number) => evalExpression(fn.ast!, theta, undefined, au);
+        const thetaMin = this.evalRange(fn.thetaMin, 0);
+        const thetaMax = this.evalRange(fn.thetaMax, 2 * Math.PI);
+        drawPolar(ctx, this.viewport, evalR, thetaMin, thetaMax, fn.color, w, h);
       } else {
         if (!fn.ast) continue;
-        const evalFn = (x: number) => evalExpression(fn.ast!, x);
+        const evalFn = (x: number) => evalExpression(fn.ast!, x, undefined, au);
         drawFunction(ctx, this.viewport, evalFn, fn.color, w, h);
+        const asymptotes = detectAsymptotes(evalFn, this.viewport.xMin, this.viewport.xMax);
+        for (const a of asymptotes) {
+          drawAsymptote(ctx, this.viewport, a, w, h);
+        }
       }
     }
 
@@ -761,19 +1126,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
       if (expr?.ast && expr.visible) {
-        const fn = (x: number) => evalExpression(expr.ast!, x);
+        const fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
         drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, expr.color, w, h);
-      }
-    }
-
-    const bnd = this.activeBoundedArea();
-    if (bnd) {
-      const exprU = this.functions()[bnd.fnIndexUpper];
-      const exprL = this.functions()[bnd.fnIndexLower];
-      if (exprU?.ast && exprU.visible && exprL?.ast && exprL.visible) {
-        const fU = (x: number) => evalExpression(exprU.ast!, x);
-        const fL = (x: number) => evalExpression(exprL.ast!, x);
-        drawAreaBetween(ctx, this.viewport, fU, fL, bnd.a, bnd.b, exprU.color, w, h);
       }
     }
 
@@ -786,7 +1140,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             !!e?.ast && e.visible,
         );
       if (fns.length >= 2) {
-        const evalFns = fns.map((f) => (x: number) => evalExpression(f.ast, x));
+        const evalFns = fns.map((f) => (x: number) => evalExpression(f.ast, x, undefined, au));
         const intersections = findIntersections(evalFns, mArea.a, mArea.b);
         const regions = computeAreaRegions(evalFns, intersections, mArea.a, mArea.b);
 
@@ -813,28 +1167,44 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           ctx.setLineDash([]);
         }
       }
+    } else if (mArea && mArea.functionIndices.length === 1) {
+      const expr = this.functions()[mArea.functionIndices[0]];
+      if (expr?.ast && expr.visible) {
+        const fn = (x: number) => evalExpression(expr.ast!, x);
+        drawIntegralArea(ctx, this.viewport, fn, mArea.a, mArea.b, expr.color, w, h);
+      }
     }
 
     const sol = this.activeSolid();
     if (sol) {
-      const fn = this.solidFunction();
-      if (fn) {
-        const solXMin = Math.min(sol.a, sol.b);
-        const solXMax = Math.max(sol.a, sol.b);
-        if (solXMax >= this.viewport.xMin && solXMin <= this.viewport.xMax) {
-          const expr = this.functions()[sol.fnIndex];
-          drawSolidCrossSection(
+      const evalFns = this.solidEvalFns();
+      const regions = this.solidRegions();
+      if (evalFns.length === 1 && regions.length > 0) {
+        const expr = this.functions()[sol.functionIndices[0]];
+        if (expr?.ast && expr.visible) {
+          drawSolidCrossSectionSingle(
             ctx,
             this.viewport,
-            fn,
+            evalFns[0],
             sol.a,
             sol.b,
             sol.axis,
             w,
             h,
-            expr?.color ?? '#00ff88',
+            expr.color,
           );
         }
+      } else if (evalFns.length >= 2 && regions.length > 0) {
+        drawSolidCrossSectionMulti(
+          ctx,
+          this.viewport,
+          evalFns,
+          this.solidFnColors(),
+          regions,
+          sol.axis,
+          w,
+          h,
+        );
       }
     }
 
@@ -845,7 +1215,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (intgFn) {
         const expr = this.functions()[intgFn.fnIndex];
         if (expr?.ast && expr.visible) {
-          activeFn = (x: number) => evalExpression(expr.ast!, x);
+          activeFn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
         }
       }
       drawCrosshair(ctx, this.viewport, mouse.x, mouse.y, activeFn, '#666680', w, h);

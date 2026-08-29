@@ -21,6 +21,7 @@ export class RevealOnScroll implements OnInit, OnDestroy {
   private ngZone = inject(NgZone);
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private observer?: IntersectionObserver;
+  private hideTimerId: ReturnType<typeof setTimeout> | null = null;
 
   threshold = input(0.15);
   revealed = signal(false);
@@ -39,7 +40,7 @@ export class RevealOnScroll implements OnInit, OnDestroy {
             this.visible.emit();
           } else if (this.revealed()) {
             this.hiding.set(true);
-            setTimeout(() => {
+            this.hideTimerId = setTimeout(() => {
               this.ngZone.run(() => {
                 this.hiding.set(false);
                 this.revealed.set(false);
@@ -56,5 +57,6 @@ export class RevealOnScroll implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.observer?.disconnect();
+    if (this.hideTimerId !== null) clearTimeout(this.hideTimerId);
   }
 }

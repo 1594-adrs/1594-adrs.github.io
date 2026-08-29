@@ -8,6 +8,7 @@ export interface RotationAxis {
 }
 
 export type CurveMode = 'explicit' | 'implicit' | 'parametric' | 'polar';
+export type OverlapMode = 'pairwise' | 'all';
 
 export interface MathExpression {
   raw: string;
@@ -17,6 +18,11 @@ export interface MathExpression {
   mode: CurveMode;
   paramX?: ExpressionNode | null;
   paramY?: ExpressionNode | null;
+  tMin?: string;
+  tMax?: string;
+  thetaMin?: string;
+  thetaMax?: string;
+  inequalityOp?: '>' | '<' | '>=' | '<=';
 }
 
 export interface PlotRange {
@@ -32,17 +38,15 @@ export interface IntegralResult {
 }
 
 export interface SolidConfig {
-  fnIndex: number;
+  functionIndices: number[];
   a: number;
   b: number;
   axis: RotationAxis;
-}
-
-export interface BoundedAreaConfig {
-  fnIndexUpper: number;
-  fnIndexLower: number;
-  a: number;
-  b: number;
+  overlapMode: OverlapMode;
+  tMin?: string;
+  tMax?: string;
+  thetaMin?: string;
+  thetaMax?: string;
 }
 
 export interface MultiFunctionAreaConfig {
@@ -50,6 +54,7 @@ export interface MultiFunctionAreaConfig {
   a: number;
   b: number;
   autoDetectIntersections: boolean;
+  overlapMode: OverlapMode;
 }
 
 export interface Point2D {

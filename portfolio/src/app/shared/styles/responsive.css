@@ -1,7 +1,4 @@
 :root {
-  --breakpoint-sm: 480px;
-  --breakpoint-md: 768px;
-  --breakpoint-lg: 1024px;
   --container-max: 1200px;
   --spacing-xs: 0.5rem;
   --spacing-sm: 0.8rem;
@@ -10,15 +7,13 @@
   --spacing-xl: 2rem;
   --spacing-2xl: 3rem;
   --spacing-3xl: 4rem;
-  --border-radius-sm: 0;
-  --border-radius-md: 0;
-  --border-radius-lg: 0;
-  --border-radius-xl: 0;
-  --border-radius-full: 0;
-  --shadow-glow: 0 0 20px var(--color-glow);
-  --shadow-card: 4px 4px 0 #1a1a2e;
-  --shadow-card-hover: 6px 6px 0 #00ff8833;
   --transition-fast: 0.15s ease;
   --transition-medium: 0.3s ease;
   --transition-slow: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  --z-base: 1;
+  --z-canvas: 10;
+  --z-overlay: 100;
+  --z-nav: 1000;
+  --z-modal: 9999;
+  --z-loading: 99999;
 }
