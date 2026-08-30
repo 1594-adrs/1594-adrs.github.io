@@ -2,8 +2,6 @@ import { Viewport } from './viewport';
 import { tryEval } from './utils';
 import type { Asymptote } from '../engine/asymptote-detector';
 
-const CLAMP = 1e8;
-
 // Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
 const COLOR_LABEL_BG = '#0a0a0f';
 const COLOR_LABEL_BORDER = '#333355';
@@ -323,15 +321,6 @@ export function drawCrosshair(
   ctx.fillText(label, lx, ly - 3);
 }
 
-function evalSafe(fn: (x: number) => number, x: number): number {
-  try {
-    const y = fn(x);
-    return isFinite(y) ? y : NaN;
-  } catch {
-    return NaN;
-  }
-}
-
 export function drawParametric(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
@@ -359,8 +348,8 @@ export function drawParametric(
 
   for (let i = 0; i <= steps; i++) {
     const t = tMin + i * dt;
-    const wx = evalSafe(fnX, t);
-    const wy = evalSafe(fnY, t);
+    const wx = tryEval(fnX, t);
+    const wy = tryEval(fnY, t);
     if (isNaN(wx) || isNaN(wy) || !isFinite(wx) || !isFinite(wy) || wy > maxY || wy < minY) {
       drawing = false;
       continue;
@@ -402,7 +391,7 @@ export function drawPolar(
 
   for (let i = 0; i <= steps; i++) {
     const theta = thetaMin + i * dtheta;
-    const r = evalSafe(fn, theta);
+    const r = tryEval(fn, theta);
     if (isNaN(r) || !isFinite(r)) {
       drawing = false;
       continue;
@@ -455,7 +444,7 @@ export function drawInequality(
 
   for (let px = 0; px <= width; px += 2) {
     const [wx] = viewport.screenToWorld(px, 0, width, height);
-    const wyFn = evalSafe(fn, wx);
+    const wyFn = tryEval(fn, wx);
     if (isNaN(wyFn) || !isFinite(wyFn)) continue;
 
     const [, syFn] = viewport.worldToScreen(wx, wyFn, width, height);

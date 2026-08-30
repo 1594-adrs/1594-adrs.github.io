@@ -9,9 +9,9 @@ import {
   inject,
   input,
   effect,
+  PLATFORM_ID,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { PLATFORM_ID } from '@angular/core';
 import { SolidScene } from './solid-scene';
 import { generateRevolutionMeshMulti } from './solid-geometry';
 import type { RotationAxis } from '../../models/calculator.models';

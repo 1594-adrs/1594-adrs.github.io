@@ -13,10 +13,3 @@ export function tryEval(fn: (x: number) => number, x: number): number {
     return NaN;
   }
 }
-
-export function safeY(y: number): number {
-  if (!isFinite(y)) return 0;
-  if (y > CLAMP) return CLAMP;
-  if (y < -CLAMP) return -CLAMP;
-  return y;
-}

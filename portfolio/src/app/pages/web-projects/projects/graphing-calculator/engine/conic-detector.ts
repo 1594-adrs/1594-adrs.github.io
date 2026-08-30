@@ -1,8 +1,7 @@
 import type { ExpressionNode } from './parser';
+import type { ConicType } from '../models/calculator.models';
 
-export type ConicType = 'circle' | 'ellipse' | 'parabola' | 'hyperbola';
-
-export interface ConicInfo {
+interface ConicInfo {
   type: ConicType;
   center?: { x: number; y: number };
   radius?: number;

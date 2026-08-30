@@ -2,7 +2,7 @@ import type { IntersectionPoint } from './intersection-finder';
 import type { SolidRegion } from './calculus';
 import type { OverlapMode } from '../models/calculator.models';
 
-export interface AreaRegion {
+interface AreaRegion {
   a: number;
   b: number;
   area: number;

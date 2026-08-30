@@ -78,7 +78,7 @@ function formatValue(v: number): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, OnscreenKeyboardComponent, Solid3DComponent, HelpModalComponent, MathRendererComponent, ConicAssistantComponent],
   templateUrl: './graphing-calculator.component.html',
-  styleUrls: ['./graphing-calculator.component.css', './sidebar.css', './results.css'],
+  styleUrls: ['./graphing-calculator.component.css', './results.css'],
 })
 export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));

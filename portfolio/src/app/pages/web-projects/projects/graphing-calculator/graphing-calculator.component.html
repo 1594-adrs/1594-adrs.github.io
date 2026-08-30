@@ -213,13 +213,13 @@
                 (change)="toggleSolidFunction($index)"
                 [disabled]="!canUseWithTools(fn)"
               />
-              <span class="color-dot" [style.background]="fn.color"></span>
+              <span class="color-swatch" [style.background]="fn.color"></span>
               f{{ $index + 1 }}
             </label>
           }
         </div>
         @if (activeSolid()!.functionIndices.length >= 2) {
-          <label class="range-field overlap-toggle">
+          <label class="range-field">
             <input
               type="checkbox"
               [checked]="activeSolid()!.overlapMode === 'all'"
@@ -273,13 +273,13 @@
                 [checked]="activeMultiArea()!.functionIndices.includes($index)"
                 (change)="toggleMultiAreaFunction($index)"
               />
-              <span class="color-dot" [style.background]="fn.color"></span>
+              <span class="color-swatch" [style.background]="fn.color"></span>
               f{{ $index + 1 }}
             </label>
           }
         </div>
         @if (activeMultiArea()!.functionIndices.length >= 2) {
-          <label class="range-field overlap-toggle">
+          <label class="range-field">
             <input
               type="checkbox"
               [checked]="activeMultiArea()!.overlapMode === 'all'"

@@ -1,4 +1,5 @@
-import { tryEval, safeY } from './utils';
+import { describe, it, expect } from 'vitest';
+import { tryEval } from './utils';
 
 const CLAMP = 1e8;
 
@@ -43,36 +44,5 @@ describe('tryEval', () => {
   it('should return values within range unchanged', () => {
     const fn = (_x: number) => 42;
     expect(tryEval(fn, 0)).toBe(42);
-  });
-});
-
-describe('safeY', () => {
-  it('should return the normal value', () => {
-    expect(safeY(5)).toBe(5);
-  });
-
-  it('should return 0 for NaN', () => {
-    expect(safeY(NaN)).toBe(0);
-  });
-
-  it('should return 0 for Infinity', () => {
-    expect(safeY(Infinity)).toBe(0);
-  });
-
-  it('should return 0 for negative Infinity', () => {
-    expect(safeY(-Infinity)).toBe(0);
-  });
-
-  it('should clamp large positive values to CLAMP', () => {
-    expect(safeY(CLAMP + 1000)).toBe(CLAMP);
-  });
-
-  it('should clamp large negative values to -CLAMP', () => {
-    expect(safeY(-(CLAMP + 1000))).toBe(-CLAMP);
-  });
-
-  it('should return values within range unchanged', () => {
-    expect(safeY(-99999999)).toBe(-99999999);
-    expect(safeY(0)).toBe(0);
   });
 });

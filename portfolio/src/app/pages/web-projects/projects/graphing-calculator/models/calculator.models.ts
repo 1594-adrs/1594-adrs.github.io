@@ -1,6 +1,6 @@
 import type { ExpressionNode } from '../engine/parser';
 
-export type RotationAxisType = 'x' | 'y' | 'custom';
+type RotationAxisType = 'x' | 'y' | 'custom';
 
 export interface RotationAxis {
   type: RotationAxisType;
@@ -23,13 +23,6 @@ export interface MathExpression {
   thetaMin?: string;
   thetaMax?: string;
   inequalityOp?: '>' | '<' | '>=' | '<=';
-}
-
-export interface PlotRange {
-  xMin: number;
-  xMax: number;
-  yMin: number;
-  yMax: number;
 }
 
 export interface IntegralResult {
@@ -57,7 +50,4 @@ export interface MultiFunctionAreaConfig {
   overlapMode: OverlapMode;
 }
 
-export interface Point2D {
-  x: number;
-  y: number;
-}
+export type ConicType = 'circle' | 'ellipse' | 'parabola' | 'hyperbola';

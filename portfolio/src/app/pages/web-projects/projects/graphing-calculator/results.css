@@ -48,11 +48,6 @@
   font-size: 12px;
 }
 
-.result-value.diverge {
-  color: var(--color-secondary, #00ccff);
-  font-style: italic;
-}
-
 @media (max-width: 768px) {
   .results-panel {
     grid-column: 1;

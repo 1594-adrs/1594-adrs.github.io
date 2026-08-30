@@ -93,11 +93,6 @@ const TWO_ARG_FUNCTIONS: Record<string, (a: number, b: number) => number> = {
   ncr: nCr,
 };
 
-export interface EvalContext {
-  variables: Record<string, number>;
-  angleUnit: 'rad' | 'deg';
-}
-
 const MAX_EVAL_STEPS = 10000;
 
 export function evaluate(

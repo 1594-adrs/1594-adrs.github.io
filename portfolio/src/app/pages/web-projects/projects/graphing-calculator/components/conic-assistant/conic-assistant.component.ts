@@ -5,8 +5,7 @@ import {
   output,
   computed,
 } from '@angular/core';
-
-type ConicType = 'circle' | 'ellipse' | 'parabola' | 'hyperbola';
+import type { ConicType } from '../../models/calculator.models';
 
 interface ConicParams {
   h: number;

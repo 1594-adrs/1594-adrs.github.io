@@ -7,7 +7,7 @@ export interface KeyDef {
   preview?: string;
 }
 
-export interface KeyboardTab {
+interface KeyboardTab {
   name: string;
   icon: string;
   rows: KeyDef[][];
@@ -161,5 +161,3 @@ export const KEYBOARD_TABS: KeyboardTab[] = [
     ],
   },
 ];
-
-export const KEYBOARD_ROWS = KEYBOARD_TABS[0].rows;
