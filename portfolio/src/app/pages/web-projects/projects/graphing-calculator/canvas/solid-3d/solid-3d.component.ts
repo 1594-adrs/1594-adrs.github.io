@@ -136,8 +136,8 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     const fns = this.functions();
     const regs = this.regions();
     if (fns.length === 0 || regs.length === 0) return;
-    const geo = generateRevolutionMeshMulti(fns, regs, this.axis());
-    this.scene.updateMesh(geo, this.color());
+    const meshes = generateRevolutionMeshMulti(fns, regs, this.axis());
+    this.scene.updateMesh(meshes, this.color());
     this.scene.render();
   }
 

@@ -3,7 +3,6 @@ import {
   PerspectiveCamera,
   WebGLRenderer,
   Mesh,
-  BufferGeometry,
   Color,
   AmbientLight,
   DirectionalLight,
@@ -15,14 +14,21 @@ import {
   Material,
   DoubleSide,
   Spherical,
+  EdgesGeometry,
+  LineSegments,
+  LineBasicMaterial,
 } from 'three';
+import type { SolidMeshes } from './solid-geometry';
 
 export class SolidScene {
   private scene: Scene;
   private camera: PerspectiveCamera;
   private renderer: WebGLRenderer;
-  private mesh: Mesh | null = null;
-  private wireframe: Mesh | null = null;
+  private outerMesh: Mesh | null = null;
+  private innerMesh: Mesh | null = null;
+  private innerWire: Mesh | null = null;
+  private capMesh: Mesh | null = null;
+  private edgeLines: LineSegments | null = null;
   private isDisposed = false;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -55,35 +61,89 @@ export class SolidScene {
     this.scene.add(axes);
   }
 
-  updateMesh(geometry: BufferGeometry, color: string): void {
-    if (this.mesh) {
-      this.scene.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      (this.mesh.material as Material).dispose();
-    }
-    if (this.wireframe) {
-      this.scene.remove(this.wireframe);
-      this.wireframe.geometry.dispose();
-      (this.wireframe.material as Material).dispose();
+  updateMesh(meshes: SolidMeshes, color: string): void {
+    this.disposeMeshes();
+
+    const baseColor = new Color(color);
+    const darkerColor = baseColor.clone().multiplyScalar(0.55);
+
+    this.outerMesh = new Mesh(
+      meshes.outer,
+      new MeshPhongMaterial({
+        color: baseColor,
+        transparent: true,
+        opacity: 0.45,
+        side: DoubleSide,
+      }),
+    );
+    this.scene.add(this.outerMesh);
+
+    if (meshes.inner) {
+      this.innerMesh = new Mesh(
+        meshes.inner,
+        new MeshPhongMaterial({
+          color: darkerColor,
+          transparent: true,
+          opacity: 0.65,
+          side: DoubleSide,
+        }),
+      );
+      this.scene.add(this.innerMesh);
+
+      this.innerWire = new Mesh(
+        meshes.inner,
+        new MeshBasicMaterial({
+          color: darkerColor,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.15,
+        }),
+      );
+      this.scene.add(this.innerWire);
     }
 
-    const material = new MeshPhongMaterial({
-      color: new Color(color),
-      transparent: true,
-      opacity: 0.7,
-      side: DoubleSide,
-    });
-    this.mesh = new Mesh(geometry, material);
-    this.scene.add(this.mesh);
+    this.capMesh = new Mesh(
+      meshes.caps,
+      new MeshPhongMaterial({
+        color: baseColor,
+        transparent: true,
+        opacity: 0.55,
+        side: DoubleSide,
+      }),
+    );
+    this.scene.add(this.capMesh);
 
-    const wireMat = new MeshBasicMaterial({
-      color: new Color(color),
-      wireframe: true,
-      transparent: true,
-      opacity: 0.15,
-    });
-    this.wireframe = new Mesh(geometry, wireMat);
-    this.mesh.add(this.wireframe);
+    const edges = new EdgesGeometry(meshes.caps, 15);
+    this.edgeLines = new LineSegments(
+      edges,
+      new LineBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.3,
+      }),
+    );
+    this.scene.add(this.edgeLines);
+  }
+
+  private disposeMeshes(): void {
+    const fields = [this.outerMesh, this.innerMesh, this.innerWire, this.capMesh] as (Mesh | null)[];
+    for (const m of fields) {
+      if (m) {
+        this.scene.remove(m);
+        m.geometry.dispose();
+        (m.material as Material).dispose();
+      }
+    }
+    if (this.edgeLines) {
+      this.scene.remove(this.edgeLines);
+      this.edgeLines.geometry.dispose();
+      (this.edgeLines.material as Material).dispose();
+    }
+    this.outerMesh = null;
+    this.innerMesh = null;
+    this.innerWire = null;
+    this.capMesh = null;
+    this.edgeLines = null;
   }
 
   render(): void {
@@ -116,16 +176,7 @@ export class SolidScene {
 
   dispose(): void {
     this.isDisposed = true;
-    if (this.mesh) {
-      this.mesh.geometry.dispose();
-      (this.mesh.material as Material).dispose();
-      this.mesh = null;
-    }
-    if (this.wireframe) {
-      this.wireframe.geometry.dispose();
-      (this.wireframe.material as Material).dispose();
-      this.wireframe = null;
-    }
+    this.disposeMeshes();
     this.scene.clear();
     this.renderer.dispose();
   }
