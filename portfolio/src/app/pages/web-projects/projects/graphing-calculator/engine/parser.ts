@@ -1,5 +1,10 @@
 export type ExpressionNode =
-  NumberLiteral | Variable | BinaryOp | UnaryOp | FunctionCall | FunctionCallMultiArg;
+  | NumberLiteral
+  | Variable
+  | BinaryOp
+  | UnaryOp
+  | FunctionCall
+  | FunctionCallMultiArg;
 
 export interface NumberLiteral {
   type: 'NumberLiteral';
@@ -36,7 +41,14 @@ export interface FunctionCallMultiArg {
   args: ExpressionNode[];
 }
 
-type TokenType = 'number' | 'variable' | 'operator' | 'lparen' | 'rparen' | 'comma' | 'eof';
+type TokenType =
+  | 'number'
+  | 'variable'
+  | 'operator'
+  | 'lparen'
+  | 'rparen'
+  | 'comma'
+  | 'eof';
 
 interface Token {
   type: TokenType;
@@ -47,11 +59,6 @@ const KNOWN_FUNCTIONS = new Set([
   'sin',
   'cos',
   'tan',
-  'log',
-  'ln',
-  'sqrt',
-  'abs',
-  'exp',
   'sec',
   'csc',
   'cot',
@@ -61,13 +68,30 @@ const KNOWN_FUNCTIONS = new Set([
   'sinh',
   'cosh',
   'tanh',
+  'log',
+  'ln',
+  'sqrt',
+  'abs',
+  'exp',
   'floor',
   'ceil',
   'round',
   'sign',
+  'factorial',
+  'logb',
+  'root',
+  'atan2',
+  'gamma',
 ]);
 
-const MULTI_ARG_FUNCTIONS = new Set(['min', 'max', 'mod']);
+const MULTI_ARG_FUNCTIONS = new Set(['min', 'max', 'mod', 'logb', 'root', 'atan2', 'npr', 'ncr']);
+
+const MULTI_ARG_REQUIRED_ARGS = new Map([
+  ['mod', 2], ['logb', 2], ['root', 2], ['atan2', 2],
+  ['npr', 2], ['ncr', 2],
+]);
+
+const MAX_AST_NODES = 500;
 
 class Lexer {
   private pos = 0;
@@ -100,6 +124,33 @@ class Lexer {
       } else if (ch === ',') {
         this.tokens.push({ type: 'comma', value: ',' });
         this.pos++;
+      } else if (ch === '<') {
+        if (this.pos + 1 < input.length && input[this.pos + 1] === '=') {
+          this.tokens.push({ type: 'operator', value: '<=' });
+          this.pos += 2;
+        } else {
+          this.tokens.push({ type: 'operator', value: '<' });
+          this.pos++;
+        }
+      } else if (ch === '>') {
+        if (this.pos + 1 < input.length && input[this.pos + 1] === '=') {
+          this.tokens.push({ type: 'operator', value: '>=' });
+          this.pos += 2;
+        } else {
+          this.tokens.push({ type: 'operator', value: '>' });
+          this.pos++;
+        }
+      } else if (ch === '=' ) {
+        if (this.pos + 1 < input.length && input[this.pos + 1] === '=') {
+          this.tokens.push({ type: 'operator', value: '==' });
+          this.pos += 2;
+        } else {
+          this.tokens.push({ type: 'operator', value: '=' });
+          this.pos++;
+        }
+      } else if (ch === '!' && this.pos + 1 < input.length && input[this.pos + 1] === '=') {
+        this.tokens.push({ type: 'operator', value: '!=' });
+        this.pos += 2;
       } else if ('+-*/^'.includes(ch)) {
         this.tokens.push({ type: 'operator', value: ch });
         this.pos++;
@@ -107,8 +158,33 @@ class Lexer {
         throw new Error(`Unexpected character: '${ch}' at position ${this.pos}`);
       }
     }
+    this.insertImplicitMultiplication();
     this.tokens.push({ type: 'eof', value: '' });
     return this.tokens;
+  }
+
+  private insertImplicitMultiplication(): void {
+    const result: Token[] = [];
+    for (let i = 0; i < this.tokens.length; i++) {
+      const tok = this.tokens[i];
+      result.push(tok);
+      if (i + 1 >= this.tokens.length) continue;
+      const next = this.tokens[i + 1];
+
+      const tokIsValue =
+        tok.type === 'number' ||
+        tok.type === 'rparen' ||
+        (tok.type === 'variable' && !isKnownFunction(tok.value));
+      const nextIsValue =
+        next.type === 'variable' ||
+        next.type === 'lparen';
+
+      if (tokIsValue && nextIsValue) {
+        if (tok.type === 'variable' && isKnownFunction(tok.value)) continue;
+        result.push({ type: 'operator', value: '*' });
+      }
+    }
+    this.tokens = result;
   }
 
   private skipWhitespace(): void {
@@ -154,19 +230,32 @@ class Lexer {
   }
 }
 
+function isKnownFunction(name: string): boolean {
+  return KNOWN_FUNCTIONS.has(name) || MULTI_ARG_FUNCTIONS.has(name);
+}
+
 class Parser {
   private tokens: Token[] = [];
   private pos = 0;
+  private nodeCount = 0;
 
   parse(input: string): ExpressionNode {
     const lexer = new Lexer();
     this.tokens = lexer.tokenize(input);
     this.pos = 0;
+    this.nodeCount = 0;
     const expr = this.parseExpression();
     if (this.current().type !== 'eof') {
       throw new Error(`Unexpected token: '${this.current().value}'`);
     }
     return expr;
+  }
+
+  private countNode(): void {
+    this.nodeCount++;
+    if (this.nodeCount > MAX_AST_NODES) {
+      throw new Error('Expression too complex');
+    }
   }
 
   private current(): Token {
@@ -188,7 +277,26 @@ class Parser {
   }
 
   private parseExpression(): ExpressionNode {
-    return this.parseAddSub();
+    return this.parseComparison();
+  }
+
+  private parseComparison(): ExpressionNode {
+    let left = this.parseAddSub();
+    while (
+      this.current().type === 'operator' &&
+      (this.current().value === '<' ||
+        this.current().value === '>' ||
+        this.current().value === '<=' ||
+        this.current().value === '>=' ||
+        this.current().value === '==' ||
+        this.current().value === '!=')
+    ) {
+      const op = this.advance().value;
+      const right = this.parseAddSub();
+      this.countNode();
+      left = { type: 'BinaryOp', operator: op, left, right };
+    }
+    return left;
   }
 
   private parseAddSub(): ExpressionNode {
@@ -199,6 +307,7 @@ class Parser {
     ) {
       const op = this.advance().value;
       const right = this.parseMulDiv();
+      this.countNode();
       left = { type: 'BinaryOp', operator: op, left, right };
     }
     return left;
@@ -212,6 +321,7 @@ class Parser {
     ) {
       const op = this.advance().value;
       const right = this.parsePower();
+      this.countNode();
       left = { type: 'BinaryOp', operator: op, left, right };
     }
     return left;
@@ -221,7 +331,8 @@ class Parser {
     let base = this.parseUnary();
     if (this.current().type === 'operator' && this.current().value === '^') {
       this.advance();
-      const exp = this.parseUnary();
+      const exp = this.parsePower();
+      this.countNode();
       base = { type: 'BinaryOp', operator: '^', left: base, right: exp };
     }
     return base;
@@ -237,6 +348,7 @@ class Parser {
       if (operand.type === 'NumberLiteral' && op === '-') {
         return { type: 'NumberLiteral', value: -operand.value };
       }
+      this.countNode();
       return { type: 'UnaryOp', operator: op, operand };
     }
     return this.parsePrimary();
@@ -247,6 +359,7 @@ class Parser {
 
     if (tok.type === 'number') {
       this.advance();
+      this.countNode();
       return { type: 'NumberLiteral', value: parseFloat(tok.value) };
     }
 
@@ -254,15 +367,9 @@ class Parser {
       const name = tok.value;
       this.advance();
 
-      if (name === 'e' || name === 'pi') {
+      if (name === 'e' || name === 'pi' || name === 'π') {
+        this.countNode();
         return { type: 'Variable', name };
-      }
-
-      if (KNOWN_FUNCTIONS.has(name)) {
-        this.expect('lparen');
-        const arg = this.parseExpression();
-        this.expect('rparen');
-        return { type: 'FunctionCall', name, arg };
       }
 
       if (MULTI_ARG_FUNCTIONS.has(name)) {
@@ -273,9 +380,23 @@ class Parser {
           args.push(this.parseExpression());
         }
         this.expect('rparen');
+        const expected = MULTI_ARG_REQUIRED_ARGS.get(name);
+        if (expected !== undefined && args.length !== expected) {
+          throw new Error(`${name}() expects ${expected} arguments, got ${args.length}`);
+        }
+        this.countNode();
         return { type: 'FunctionCallMultiArg', name, args };
       }
 
+      if (KNOWN_FUNCTIONS.has(name)) {
+        this.expect('lparen');
+        const arg = this.parseExpression();
+        this.expect('rparen');
+        this.countNode();
+        return { type: 'FunctionCall', name, arg };
+      }
+
+      this.countNode();
       return { type: 'Variable', name };
     }
 
@@ -296,6 +417,10 @@ const astCache = new Map<string, ExpressionNode>();
 export function parse(expression: string): ExpressionNode {
   const cached = astCache.get(expression);
   if (cached) return cached;
+  if (astCache.size > 100) {
+    const firstKey = astCache.keys().next().value;
+    if (firstKey !== undefined) astCache.delete(firstKey);
+  }
   const ast = parser.parse(expression);
   astCache.set(expression, ast);
   return ast;

@@ -9,17 +9,24 @@ import {
   inject,
   input,
   effect,
+  PLATFORM_ID,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { PLATFORM_ID } from '@angular/core';
 import { SolidScene } from './solid-scene';
-import { generateRevolutionMesh } from './solid-geometry';
+import { generateRevolutionMeshMulti } from './solid-geometry';
 import type { RotationAxis } from '../../models/calculator.models';
+import type { SolidRegion } from '../../engine/calculus';
 
 @Component({
   selector: 'app-solid-3d',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<canvas #threeCanvas class="solid-3d-canvas"></canvas>`,
+  template: `<canvas
+    #threeCanvas
+    class="solid-3d-canvas"
+    tabindex="0"
+    aria-label="3D solid view"
+    (keydown)="onKeyDown($event)"
+  ></canvas>`,
   styles: [
     `
       :host {
@@ -41,9 +48,8 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('threeCanvas');
 
-  fn = input<((x: number) => number) | null>(null);
-  a = input(0);
-  b = input(3);
+  functions = input<Array<(x: number) => number>>([]);
+  regions = input<SolidRegion[]>([]);
   axis = input<RotationAxis>({ type: 'x', value: 0 });
   color = input('#00ff88');
   visible = input(false);
@@ -53,14 +59,39 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
   private lastMouse = { x: 0, y: 0 };
   private resizeObserver: ResizeObserver | null = null;
 
+  private onMouseDown = (e: MouseEvent) => {
+    this.isDragging = true;
+    this.lastMouse = { x: e.clientX, y: e.clientY };
+  };
+  private onMouseMove = (e: MouseEvent) => {
+    if (!this.isDragging || !this.scene) return;
+    const dx = e.clientX - this.lastMouse.x;
+    const dy = e.clientY - this.lastMouse.y;
+    this.scene.rotateCamera(dx, dy);
+    this.scene.render();
+    this.lastMouse = { x: e.clientX, y: e.clientY };
+  };
+  private onMouseUp = () => {
+    this.isDragging = false;
+  };
+  private onMouseLeave = () => {
+    this.isDragging = false;
+  };
+  private onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    this.scene?.zoomCamera(e.deltaY);
+    this.scene?.render();
+  };
+
   constructor() {
-    effect(() => {
-      const _ = this.fn();
-      const _a = this.a();
-      const _b = this.b();
-      const _axis = this.axis();
-      const _color = this.color();
-      this.updateGeometry();
+    this.ngZone.runOutsideAngular(() => {
+      effect(() => {
+        const _fns = this.functions();
+        const _regions = this.regions();
+        const _axis = this.axis();
+        const _color = this.color();
+        this.updateGeometry();
+      });
     });
   }
 
@@ -88,33 +119,11 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
       this.resizeObserver.observe(parent);
     }
 
-    canvas.addEventListener('mousedown', (e: MouseEvent) => {
-      this.isDragging = true;
-      this.lastMouse = { x: e.clientX, y: e.clientY };
-    });
-    canvas.addEventListener('mousemove', (e: MouseEvent) => {
-      if (!this.isDragging || !this.scene) return;
-      const dx = e.clientX - this.lastMouse.x;
-      const dy = e.clientY - this.lastMouse.y;
-      this.scene.rotateCamera(dx, dy);
-      this.scene.render();
-      this.lastMouse = { x: e.clientX, y: e.clientY };
-    });
-    canvas.addEventListener('mouseup', () => {
-      this.isDragging = false;
-    });
-    canvas.addEventListener('mouseleave', () => {
-      this.isDragging = false;
-    });
-    canvas.addEventListener(
-      'wheel',
-      (e: WheelEvent) => {
-        e.preventDefault();
-        this.scene?.zoomCamera(e.deltaY);
-        this.scene?.render();
-      },
-      { passive: false },
-    );
+    canvas.addEventListener('mousedown', this.onMouseDown);
+    canvas.addEventListener('mousemove', this.onMouseMove);
+    canvas.addEventListener('mouseup', this.onMouseUp);
+    canvas.addEventListener('mouseleave', this.onMouseLeave);
+    canvas.addEventListener('wheel', this.onWheel, { passive: false });
 
     this.ngZone.runOutsideAngular(() => {
       this.updateGeometry();
@@ -123,14 +132,55 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateGeometry(): void {
-    if (!this.scene || !this.fn()) return;
-    const geo = generateRevolutionMesh(this.fn()!, this.a(), this.b(), this.axis());
-    this.scene.updateMesh(geo, this.color());
+    if (!this.scene) return;
+    const fns = this.functions();
+    const regs = this.regions();
+    if (fns.length === 0 || regs.length === 0) return;
+    const meshes = generateRevolutionMeshMulti(fns, regs, this.axis());
+    this.scene.updateMesh(meshes, this.color());
     this.scene.render();
   }
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    const canvas = this.canvasRef()?.nativeElement;
+    if (canvas) {
+      canvas.removeEventListener('mousedown', this.onMouseDown);
+      canvas.removeEventListener('mousemove', this.onMouseMove);
+      canvas.removeEventListener('mouseup', this.onMouseUp);
+      canvas.removeEventListener('mouseleave', this.onMouseLeave);
+      canvas.removeEventListener('wheel', this.onWheel);
+    }
     this.scene?.dispose();
+  }
+
+  onKeyDown(event: KeyboardEvent): void {
+    if (!this.scene) return;
+    switch (event.key) {
+      case '+':
+      case '=':
+        this.scene.zoomCamera(-50);
+        break;
+      case '-':
+      case '_':
+        this.scene.zoomCamera(50);
+        break;
+      case 'ArrowLeft':
+        this.scene.rotateCamera(-20, 0);
+        break;
+      case 'ArrowRight':
+        this.scene.rotateCamera(20, 0);
+        break;
+      case 'ArrowUp':
+        this.scene.rotateCamera(0, 20);
+        break;
+      case 'ArrowDown':
+        this.scene.rotateCamera(0, -20);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    this.scene.render();
   }
 }

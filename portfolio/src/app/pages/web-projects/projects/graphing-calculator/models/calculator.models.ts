@@ -1,6 +1,6 @@
 import type { ExpressionNode } from '../engine/parser';
 
-export type RotationAxisType = 'x' | 'y' | 'custom';
+type RotationAxisType = 'x' | 'y' | 'custom';
 
 export interface RotationAxis {
   type: RotationAxisType;
@@ -8,6 +8,7 @@ export interface RotationAxis {
 }
 
 export type CurveMode = 'explicit' | 'implicit' | 'parametric' | 'polar';
+export type OverlapMode = 'pairwise' | 'all';
 
 export interface MathExpression {
   raw: string;
@@ -17,13 +18,11 @@ export interface MathExpression {
   mode: CurveMode;
   paramX?: ExpressionNode | null;
   paramY?: ExpressionNode | null;
-}
-
-export interface PlotRange {
-  xMin: number;
-  xMax: number;
-  yMin: number;
-  yMax: number;
+  tMin?: string;
+  tMax?: string;
+  thetaMin?: string;
+  thetaMax?: string;
+  inequalityOp?: '>' | '<' | '>=' | '<=';
 }
 
 export interface IntegralResult {
@@ -32,17 +31,15 @@ export interface IntegralResult {
 }
 
 export interface SolidConfig {
-  fnIndex: number;
+  functionIndices: number[];
   a: number;
   b: number;
   axis: RotationAxis;
-}
-
-export interface BoundedAreaConfig {
-  fnIndexUpper: number;
-  fnIndexLower: number;
-  a: number;
-  b: number;
+  overlapMode: OverlapMode;
+  tMin?: string;
+  tMax?: string;
+  thetaMin?: string;
+  thetaMax?: string;
 }
 
 export interface MultiFunctionAreaConfig {
@@ -50,9 +47,7 @@ export interface MultiFunctionAreaConfig {
   a: number;
   b: number;
   autoDetectIntersections: boolean;
+  overlapMode: OverlapMode;
 }
 
-export interface Point2D {
-  x: number;
-  y: number;
-}
+export type ConicType = 'circle' | 'ellipse' | 'parabola' | 'hyperbola';

@@ -5,8 +5,8 @@
   transform: translateY(-50%);
   width: 4px;
   height: 180px;
-  background-color: #1a1a2e;
-  z-index: 9999;
+  background-color: var(--color-border);
+  z-index: var(--z-nav);
   overflow: hidden;
 }
 
@@ -14,7 +14,7 @@
   width: 100%;
   background: var(--color-primary);
   transition: height 0.1s ease-out;
-  box-shadow: 0 0 6px rgba(0, 255, 136, 0.4);
+  box-shadow: 0 0 6px var(--color-glow-15);
 }
 
 @media (max-width: 768px) {

@@ -145,8 +145,8 @@
 .web-projects-card:hover {
   border-color: var(--color-primary);
   box-shadow:
-    0 0 20px rgba(0, 255, 136, 0.1),
-    4px 4px 0 rgba(0, 255, 136, 0.2);
+    0 0 20px var(--color-glow-10),
+    4px 4px 0 var(--color-glow-20);
 }
 
 .web-projects-card .project-title {

@@ -48,7 +48,7 @@ No lint scripts are defined. Angular CLI's `ng build` and `ng test` perform Type
 - Build output path: `portfolio/dist/portfolio/browser`
 - Prerender enabled, SSR disabled (despite `@angular/ssr` being in devDependencies)
 - Base href: `/`
-- Initial bundle: ~293 kB (budget: 500 kB warning, 1 MB error)
+- Initial bundle: ~303 kB (budget: 500 kB warning, 1 MB error)
 - Component CSS budget: 4 kB warning, 8 kB error
 
 ## Code conventions
@@ -60,7 +60,7 @@ No lint scripts are defined. Angular CLI's `ng build` and `ng test` perform Type
 - `isPlatformBrowser` guards in all browser-dependent components
 - Styles: component-level CSS files (not SCSS), global styles in `src/styles.css`
 - Shared card styles extracted to `src/app/shared/styles/cards.css`
-- External: Font Awesome loaded via CDN in `index.html`
+- Inline SVG icons via `<app-icon>` component (no external icon library)
 
 ## Skills (mandatory for new features)
 
@@ -69,6 +69,8 @@ When implementing new pages or features, load these skills at the start of the s
 - `angular-best-practices` — OnPush, signals, `isPlatformBrowser`, `viewChild()` without `.required`, `NgZone.runOutsideAngular()` for canvas
 - `web-design-guidelines` — ARIA landmarks, keyboard access, focus-visible, skip links, `prefers-reduced-motion`
 - `frontend-design` — Consistent pixel-glitch aesthetic, CSS variables, terminal-card style
+- `playwright-cli` — Browser testing, e2e verification of UI changes
+- `graphify` — Codebase knowledge graph for understanding file relationships and architecture
 
 ### Canvas/rendering skills (mandatory for Canvas-heavy projects)
 
@@ -82,12 +84,14 @@ Inconsistent — mixed English naming with and without `Component` suffix:
 
 **Without suffix:** `Navbar`, `SocialButtons`, `ProgressBar`, `Eye`, `LoadingScreen`, `HeroSection`, `AboutMe`, `ProjectsSection`
 
-**With suffix:** `NotFoundComponent`, `WebProjectsComponent`, `GraphingCalculatorComponent`, `CellularAutomataComponent`, `PortfolioComponent`
+**With suffix:** `NotFoundComponent`, `WebProjectsComponent`, `GraphingCalculatorComponent`, `PortfolioComponent`
 
 ## Key shared files
 
 - `src/app/shared/data/portfolio.data.ts` — All portfolio data (NAV_LINKS, SOCIAL_NETWORKS, SKILLS, COURSES, EDUCATION, SOFT_SKILLS, PROJECTS, WEB_PROJECTS)
 - `src/app/shared/models/portfolio.models.ts` — All interfaces (NavLink, SocialNetwork, SkillCategory, Course, Education, Project, WebProject)
+- `src/app/shared/icons/icon-data.ts` — SVG icon definitions for inline rendering
+- `src/app/shared/icons/icon.component.ts` — `<app-icon name="...">` component replacing Font Awesome
 - `src/app/shared/directives/reveal-on-scroll.directive.ts` — Shared IntersectionObserver directive for scroll-reveal animations
 - `src/app/shared/styles/cards.css` — Shared terminal card and project card styles
 - `src/app/shared/animations/animations.css` — All keyframes and `prefers-reduced-motion` media query
@@ -97,7 +101,6 @@ Inconsistent — mixed English naming with and without `Component` suffix:
 - Portfolio page at `''` (root) — loads `PortfolioComponent` directly (not via redirect, for GitHub Pages compatibility)
 - Web Projects at `web-projects` — lazy-loaded `WebProjectsComponent`
 - Calculator at `web-projects/calculator` — lazy-loaded `GraphingCalculatorComponent`
-- Cellular Automata at `web-projects/cellular-automata` — lazy-loaded `CellularAutomataComponent`
 - 404 at `**` — lazy-loaded `NotFoundComponent`
 - Server routes: all prerendered (`RenderMode.Prerender`)
 - Navbar uses native `scrollIntoView` + `href="#section"` for section navigation (not Angular router fragments)
@@ -109,31 +112,21 @@ Located at `src/app/pages/web-projects/projects/graphing-calculator/`:
 - `engine/parser.ts` — Lexer + recursive descent parser with AST caching
 - `engine/evaluator.ts` — AST evaluator (uses cached parser)
 - `engine/integrator.ts` — Simpson's rule numerical integration
-- `engine/calculus.ts` — Derivatives, solid volume/surface area, area between curves
+- `engine/calculus.ts` — Derivatives, multi-function solid volume/surface area (washer/shell methods)
+- `engine/intersection-finder.ts` — Multi-function intersection detection
+- `engine/area-splitter.ts` — Region computation for multi-function areas
 - `canvas/viewport.ts` — World-to-screen coordinate transforms, zoom/pan
 - `canvas/grid-renderer.ts` — Axis grid with nice step calculation
 - `canvas/graph-renderer.ts` — Function curves, integral areas, crosshair
 - `canvas/solid-renderer.ts` — Solid of revolution cross-section visualization
+- `canvas/solid-3d/solid-3d.component.ts` — WebGL 3D solid viewer component
+- `canvas/solid-3d/solid-scene.ts` — Three.js scene management and disposal
+- `canvas/solid-3d/solid-geometry.ts` — Revolution mesh generation
 - `canvas/utils.ts` — Shared `tryEval` safe evaluation utility
 - `utils/color.ts` — Function color palette
 - `models/calculator.models.ts` — TypeScript interfaces
 
 Keyboard access: `+`/`-` zoom, arrow keys pan, `R` reset.
-
-## Cellular Automata Explorer
-
-Located at `src/app/pages/web-projects/projects/cellular-automata/`:
-
-- `engine/game-of-life.ts` — Grid state, step (B3/S23), presets (glider, pulsar, Gosper glider gun)
-- `engine/rule-110.ts` — 1D cellular automaton, Rule 110 (binary 01101110)
-- `engine/langtons-ant.ts` — Ant state, direction, grid, step logic (white→turn right, black→turn left)
-- `canvas/automata-renderer.ts` — Canvas drawing for all three automata
-- `canvas/grid-utils.ts` — Cell size, coordinate transforms
-- `models/automata.models.ts` — TypeScript interfaces (AutomataType, GridState, Rule110State, AntState, RenderConfig)
-
-Keyboard access: `Space` step, `R` reset, `+`/`-` zoom, `P` play/pause, `1`/`2`/`3` switch automata.
-
-Full implementation prompt: `CELLULAR_AUTOMATA_PROMPT.md`
 
 ## graphify
 

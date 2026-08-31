@@ -5,7 +5,7 @@ import {
   inject,
   OnInit,
   OnDestroy,
-  ViewChild,
+  viewChild,
   AfterViewChecked,
 } from '@angular/core';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
@@ -30,7 +30,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewChecked {
   isAppPage = signal(true);
   private needsReobserve = false;
 
-  @ViewChild(Navbar) navbar?: Navbar;
+  navbar = viewChild(Navbar);
 
   ngOnInit() {
     this.updateState(this.router.url);
@@ -48,7 +48,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewChecked {
   ngAfterViewChecked() {
     if (this.needsReobserve) {
       this.needsReobserve = false;
-      this.navbar?.reobserve();
+      this.navbar()?.reobserve();
     }
   }
 

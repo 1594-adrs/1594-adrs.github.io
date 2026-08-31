@@ -1,0 +1,72 @@
+<div class="conic-assistant">
+  <div class="conic-header">
+    <span class="conic-title">&gt; conic_assistant</span>
+    <button class="icon-btn danger" (click)="onClose()" title="Close">×</button>
+  </div>
+
+  <div class="conic-tabs">
+    @for (tab of tabs; track tab.key) {
+      <button
+        class="conic-tab"
+        [class.active]="activeTab() === tab.key"
+        (click)="setTab(tab.key)"
+      >
+        {{ tab.label }}
+      </button>
+    }
+  </div>
+
+  <div class="conic-params">
+    <label class="param-field">
+      h =
+      <input type="number" [value]="params().h" (change)="updateParamH($event)" step="0.5" />
+    </label>
+    <label class="param-field">
+      k =
+      <input type="number" [value]="params().k" (change)="updateParamK($event)" step="0.5" />
+    </label>
+
+    @if (activeTab() === 'circle' || activeTab() === 'ellipse' || activeTab() === 'hyperbola') {
+      <label class="param-field">
+        a =
+        <input type="number" [value]="params().a" (change)="updateParamA($event)" step="0.5" min="0.1" />
+      </label>
+    }
+    @if (activeTab() === 'ellipse' || activeTab() === 'hyperbola') {
+      <label class="param-field">
+        b =
+        <input type="number" [value]="params().b" (change)="updateParamB($event)" step="0.5" min="0.1" />
+      </label>
+    }
+    @if (activeTab() === 'parabola') {
+      <label class="param-field">
+        p =
+        <input type="number" [value]="params().p" (change)="updateParamP($event)" step="0.5" />
+      </label>
+      <label class="param-field">
+        <select [value]="params().orientation" (change)="updateOrientation($event)">
+          <option value="vertical">Vertical</option>
+          <option value="horizontal">Horizontal</option>
+        </select>
+      </label>
+    }
+  </div>
+
+  <div class="conic-equation">
+    <span class="equation-label">Equation:</span>
+    <span class="equation-text">{{ equation() }}</span>
+  </div>
+
+  <div class="conic-properties">
+    @for (prop of properties(); track prop.label) {
+      <div class="prop-row">
+        <span class="prop-label">{{ prop.label }}</span>
+        <span class="prop-value">{{ prop.value }}</span>
+      </div>
+    }
+  </div>
+
+  <button class="t-btn conic-add-btn" (click)="onAddGraph()">
+    + Add to graph
+  </button>
+</div>

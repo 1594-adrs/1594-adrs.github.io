@@ -135,7 +135,7 @@
 }
 
 .course-item:hover {
-  background: rgba(0, 255, 136, 0.05);
+  background: var(--color-glow-10);
   border-color: var(--color-primary);
 }
 

@@ -1,10 +1,65 @@
 .keyboard {
   display: flex;
   flex-direction: column;
+  background: #0a0a0f;
+  border-top: 1px solid #1a1a2e;
+}
+
+.keyboard-tabs {
+  display: flex;
+  border-bottom: 1px solid #1a1a2e;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.keyboard-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #555;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+  font-family: inherit;
+}
+
+.tab-btn:hover {
+  color: #888;
+}
+
+.tab-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.tab-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tab-name {
+  font-size: 8px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.keyboard-body {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
-  padding: 6px;
-  background: var(--color-bg-card);
-  border-top: 1px solid var(--color-border);
+  padding: 4px;
 }
 
 .keyboard-row {
@@ -15,49 +70,71 @@
 .key {
   flex: 1;
   min-width: 0;
-  height: 32px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-dark);
-  color: var(--color-text-muted);
-  font-family: var(--font-family-display);
-  font-size: 0.6rem;
-  letter-spacing: var(--letter-spacing-terminal);
+  height: 30px;
+  border: 1px solid #1a1a2e;
+  background: #0d0d15;
+  color: #666;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
   cursor: pointer;
-  transition: all 0.1s;
+  transition:
+    background-color 0.1s,
+    border-color 0.1s,
+    color 0.1s;
   padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  position: relative;
 }
 
 .key:hover {
-  border-color: var(--color-primary);
-  color: var(--color-text);
+  border-color: #333;
+  color: #ccc;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .key:active {
-  background: rgba(0, 255, 136, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.key-preview {
+  position: absolute;
+  top: -1px;
+  right: 2px;
+  font-size: 7px;
+  color: #444;
+}
+
+.key-label {
+  font-size: inherit;
 }
 
 .key-function {
   color: var(--color-primary);
-  border-color: rgba(0, 255, 136, 0.2);
+  border-color: rgba(0, 255, 136, 0.12);
 }
 
 .key-function:hover {
-  background: rgba(0, 255, 136, 0.08);
+  background: rgba(0, 255, 136, 0.06);
+  border-color: rgba(0, 255, 136, 0.2);
 }
 
 .key-constant {
   color: var(--color-secondary, #00ccff);
-  border-color: rgba(0, 204, 255, 0.2);
+  border-color: rgba(0, 204, 255, 0.12);
 }
 
 .key-constant:hover {
-  background: rgba(0, 204, 255, 0.08);
+  background: rgba(0, 204, 255, 0.06);
+  border-color: rgba(0, 204, 255, 0.2);
 }
 
 .key-special {
-  color: var(--color-text-subtle);
+  color: #555;
 }
 
 .key-special:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
 }

@@ -32,7 +32,7 @@
   background: var(--color-corruption);
 }
 .card-dot:nth-child(2) {
-  background: #ffaa00;
+  background: var(--color-warning);
 }
 .card-dot:nth-child(3) {
   background: var(--color-primary);
@@ -98,7 +98,7 @@
     border-color 0.15s;
 }
 .tech-badge:hover {
-  background: rgba(0, 255, 136, 0.1);
+  background: var(--color-glow-10);
   border-color: var(--color-primary);
 }
 .project-links {

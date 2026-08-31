@@ -1,20 +1,38 @@
 <div class="keyboard">
-  @for (row of rows; track $index) {
-    <div class="keyboard-row">
-      @for (key of row; track key.label) {
-        <button
-          class="key"
-          [class.key-function]="key.category === 'function'"
-          [class.key-operator]="key.category === 'operator'"
-          [class.key-constant]="key.category === 'constant'"
-          [class.key-special]="key.category === 'special'"
-          [style.width]="key.width ? key.width * 100 + '%' : ''"
-          (click)="onKey(key)"
-          type="button"
-        >
-          {{ key.label }}
-        </button>
-      }
-    </div>
-  }
+  <div class="keyboard-tabs">
+    @for (tab of tabs; track tab.name; let i = $index) {
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === i"
+        (click)="setTab(i)"
+        type="button"
+      >
+        <span class="tab-icon">{{ tab.icon }}</span>
+        <span class="tab-name">{{ tab.name }}</span>
+      </button>
+    }
+  </div>
+  <div class="keyboard-body">
+    @for (row of rows; track $index) {
+      <div class="keyboard-row">
+        @for (key of row; track key.label) {
+          <button
+            class="key"
+            [class.key-function]="key.category === 'function'"
+            [class.key-operator]="key.category === 'operator'"
+            [class.key-constant]="key.category === 'constant'"
+            [class.key-special]="key.category === 'special'"
+            [style.width]="key.width ? key.width * 100 + '%' : ''"
+            (click)="onKey(key)"
+            type="button"
+          >
+            @if (key.preview) {
+              <span class="key-preview">{{ key.preview }}</span>
+            }
+            <span class="key-label">{{ key.label }}</span>
+          </button>
+        }
+      </div>
+    }
+  </div>
 </div>

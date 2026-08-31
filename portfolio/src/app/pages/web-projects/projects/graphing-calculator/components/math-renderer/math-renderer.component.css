@@ -1,0 +1,100 @@
+.math-display {
+  font-family: 'Cambria Math', 'Latin Modern Math', 'Times New Roman', serif;
+  font-size: var(--math-font-size, 16px);
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.fraction {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0 3px;
+  position: relative;
+}
+
+.fraction .numerator,
+.fraction .denominator {
+  font-size: 0.85em;
+  padding: 0 4px;
+}
+
+.numerator {
+  border-bottom: 1.5px solid currentColor;
+}
+
+.fraction-line {
+  display: block;
+  width: 100%;
+  height: 0;
+}
+
+.superscript {
+  font-size: 0.65em;
+  vertical-align: super;
+  line-height: 0;
+  margin-left: 1px;
+  position: relative;
+  top: -0.4em;
+}
+
+.radical {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.radical-sign {
+  font-size: 1.1em;
+  margin-right: 0;
+  align-self: stretch;
+}
+
+.vinculum-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.vinculum {
+  border-top: 1.5px solid currentColor;
+  width: 100%;
+  margin-top: 0.2em;
+}
+
+.radical-inner {
+  display: inline-block;
+  padding: 0 2px;
+}
+
+.function {
+  font-style: normal;
+  font-family: 'Cambria Math', serif;
+  font-weight: normal;
+}
+
+.variable {
+  font-style: italic;
+}
+
+.constant {
+  font-style: normal;
+  font-weight: normal;
+}
+
+.number {
+  font-style: normal;
+}
+
+.operator {
+  font-style: normal;
+  margin: 0 2px;
+  color: var(--color-text-muted, #999);
+}
+
+.paren {
+  font-style: normal;
+}
