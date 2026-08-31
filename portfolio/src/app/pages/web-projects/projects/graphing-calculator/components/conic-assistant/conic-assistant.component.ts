@@ -175,7 +175,14 @@ export class ConicAssistantComponent {
         const C = -2 * b2 * h;
         const D = -2 * a2 * k;
         const E = b2 * h * h + a2 * k * k - a2 * b2;
-        let expr = A + '*x^2+' + B + '*y^2';
+        let expr = '';
+        if (A === 1) expr += 'x^2';
+        else if (A === -1) expr += '-x^2';
+        else expr += A + '*x^2';
+        if (B === 1) expr += '+y^2';
+        else if (B === -1) expr += '-y^2';
+        else if (B > 0) expr += '+' + B + '*y^2';
+        else expr += B + '*y^2';
         if (C !== 0) expr += (C > 0 ? '+' : '') + C + '*x';
         if (D !== 0) expr += (D > 0 ? '+' : '') + D + '*y';
         if (E !== 0) expr += (E > 0 ? '+' : '') + E;
@@ -183,9 +190,25 @@ export class ConicAssistantComponent {
       }
       case 'parabola':
         if (p.orientation === 'vertical') {
-          return `(x${h !== 0 ? '-' + h : ''})^2=${4 * p.p}*(y${k !== 0 ? '-' + k : ''})`;
+          const C = -2 * h;
+          const D = -4 * p.p;
+          const F = h * h + 4 * p.p * k;
+          let pExpr = 'x^2';
+          if (C !== 0) pExpr += (C > 0 ? '+' : '') + C + '*x';
+          if (D !== 0) pExpr += (D > 0 ? '+' : '') + D + '*y';
+          if (F !== 0) pExpr += (F > 0 ? '+' : '') + F;
+          return pExpr + '=0';
         }
-        return `(y${k !== 0 ? '-' + k : ''})^2=${4 * p.p}*(x${h !== 0 ? '-' + h : ''})`;
+        {
+          const C = -2 * k;
+          const D = -4 * p.p;
+          const F = k * k + 4 * p.p * h;
+          let pExpr = 'y^2';
+          if (C !== 0) pExpr += (C > 0 ? '+' : '') + C + '*y';
+          if (D !== 0) pExpr += (D > 0 ? '+' : '') + D + '*x';
+          if (F !== 0) pExpr += (F > 0 ? '+' : '') + F;
+          return pExpr + '=0';
+        }
       case 'hyperbola': {
         const a2 = p.a * p.a;
         const b2 = p.b * p.b;
@@ -194,7 +217,14 @@ export class ConicAssistantComponent {
         const C = -2 * b2 * h;
         const D = 2 * a2 * k;
         const E = b2 * h * h - a2 * k * k - a2 * b2;
-        let expr = A + '*x^2' + (B > 0 ? '+' : '') + B + '*y^2';
+        let expr = '';
+        if (A === 1) expr += 'x^2';
+        else if (A === -1) expr += '-x^2';
+        else expr += A + '*x^2';
+        if (B === 1) expr += '+y^2';
+        else if (B === -1) expr += '-y^2';
+        else if (B > 0) expr += '+' + B + '*y^2';
+        else expr += B + '*y^2';
         if (C !== 0) expr += (C > 0 ? '+' : '') + C + '*x';
         if (D !== 0) expr += (D > 0 ? '+' : '') + D + '*y';
         if (E !== 0) expr += (E > 0 ? '+' : '') + E;

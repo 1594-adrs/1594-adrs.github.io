@@ -568,20 +568,28 @@ export function drawGhostReflection(
     ctx.stroke();
 
     ctx.beginPath();
+    let fillStarted = false;
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) continue;
+      if (isNaN(y)) { fillStarted = false; continue; }
       const reflectedY = 2 * k - y;
       const [sx, sy] = viewport.worldToScreen(x, reflectedY, width, height);
-      if (i === 0) ctx.moveTo(sx, axisY);
-      ctx.lineTo(sx, sy);
+      if (!fillStarted) {
+        ctx.moveTo(sx, axisY);
+        ctx.lineTo(sx, sy);
+        fillStarted = true;
+      } else {
+        ctx.lineTo(sx, sy);
+      }
     }
-    const [endSx] = viewport.worldToScreen(b, k, width, height);
-    ctx.lineTo(endSx, axisY);
-    ctx.closePath();
-    ctx.fillStyle = color + '10';
-    ctx.fill();
+    if (fillStarted) {
+      const [endSx] = viewport.worldToScreen(b, k, width, height);
+      ctx.lineTo(endSx, axisY);
+      ctx.closePath();
+      ctx.fillStyle = color + '10';
+      ctx.fill();
+    }
   } else {
     const [axisX] = viewport.worldToScreen(k, 0, width, height);
 
@@ -598,20 +606,30 @@ export function drawGhostReflection(
     ctx.stroke();
 
     ctx.beginPath();
+    let fillStarted = false;
+    let lastReflectedY = k;
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) continue;
+      if (isNaN(y)) { fillStarted = false; continue; }
       const reflectedX = 2 * k - x;
+      lastReflectedY = y;
       const [sx, sy] = viewport.worldToScreen(reflectedX, y, width, height);
-      if (i === 0) ctx.moveTo(axisX, sy);
-      ctx.lineTo(sx, sy);
+      if (!fillStarted) {
+        ctx.moveTo(axisX, sy);
+        ctx.lineTo(sx, sy);
+        fillStarted = true;
+      } else {
+        ctx.lineTo(sx, sy);
+      }
     }
-    const [, endSy] = viewport.worldToScreen(k, fn(b), width, height);
-    ctx.lineTo(axisX, endSy);
-    ctx.closePath();
-    ctx.fillStyle = color + '10';
-    ctx.fill();
+    if (fillStarted) {
+      const [, endSy] = viewport.worldToScreen(k, lastReflectedY, width, height);
+      ctx.lineTo(axisX, endSy);
+      ctx.closePath();
+      ctx.fillStyle = color + '10';
+      ctx.fill();
+    }
   }
 
   ctx.setLineDash([]);

@@ -202,6 +202,12 @@ function analyzePower(node: ExpressionNode): Coefficients | null {
     return { x2: 0, y2: 0, xy: 0, x: 0, y: 0, constant: val };
   }
 
+  if (node.left.type === 'UnaryOp' && node.left.operator === '-' &&
+      node.left.operand.type === 'NumberLiteral') {
+    const val = node.left.operand.value * node.left.operand.value;
+    return { x2: 0, y2: 0, xy: 0, x: 0, y: 0, constant: val };
+  }
+
   if (node.left.type !== 'Variable') return null;
 
   if (node.left.name === 'x') {

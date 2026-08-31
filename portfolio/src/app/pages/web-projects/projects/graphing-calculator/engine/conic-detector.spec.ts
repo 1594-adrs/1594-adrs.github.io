@@ -185,6 +185,33 @@ describe('conic-detector', () => {
     expect(domain![0].b).toBeCloseTo(2, 5);
   });
 
+  it('should detect circle from (-2)^2 expression x^2+y^2=(-2)^2', () => {
+    const ast = parseEquation('x^2+y^2=(-2)^2');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('circle');
+    expect(result!.radius).toBeCloseTo(2, 5);
+    expect(result!.center).toEqual({ x: 0, y: 0 });
+  });
+
+  it('should detect shifted parabola from expanded form x^2-4*x-4*y+8=0', () => {
+    const ast = parseEquation('x^2-4*x-4*y+8=0');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('parabola');
+    expect(result!.center!.x).toBeCloseTo(2, 5);
+    expect(result!.center!.y).toBeCloseTo(1, 5);
+  });
+
+  it('should detect unshifted parabola from expanded form x^2-4*y=0', () => {
+    const ast = parseEquation('x^2-4*y=0');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('parabola');
+    expect(result!.center!.x).toBeCloseTo(0, 5);
+    expect(result!.center!.y).toBeCloseTo(0, 5);
+  });
+
   describe('detectConicDomain', () => {
     it('should return domain for circle x²+y²-4=0', () => {
       const ast = parseEquation('x^2+y^2-4=0');
