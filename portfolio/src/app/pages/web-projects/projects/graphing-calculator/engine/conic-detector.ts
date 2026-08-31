@@ -1,7 +1,7 @@
 import type { ExpressionNode } from './parser';
 import type { ConicType } from '../models/calculator.models';
 
-interface ConicInfo {
+export interface ConicInfo {
   type: ConicType;
   center?: { x: number; y: number };
   radius?: number;
@@ -153,9 +153,15 @@ function analyzeProduct(node: ExpressionNode): Coefficients | null {
 
 function analyzeQuotient(node: ExpressionNode): Coefficients | null {
   if (node.type !== 'BinaryOp' || node.operator !== '/') return null;
-  if (node.right.type !== 'NumberLiteral') return null;
-  const divisor = node.right.value;
-  if (divisor === 0) return null;
+
+  let divisor: number | null = null;
+  if (node.right.type === 'NumberLiteral') {
+    divisor = node.right.value;
+  } else {
+    divisor = evaluateConstantExpr(node.right);
+  }
+
+  if (divisor === null || divisor === 0) return null;
   const factor = 1 / divisor;
   const inner = extractCoeffs(node.left);
   return {
@@ -164,10 +170,38 @@ function analyzeQuotient(node: ExpressionNode): Coefficients | null {
   };
 }
 
+function evaluateConstantExpr(node: ExpressionNode): number | null {
+  if (node.type === 'NumberLiteral') return node.value;
+  if (node.type === 'UnaryOp' && node.operator === '-') {
+    const v = evaluateConstantExpr(node.operand);
+    return v !== null ? -v : null;
+  }
+  if (node.type === 'BinaryOp') {
+    const l = evaluateConstantExpr(node.left);
+    const r = evaluateConstantExpr(node.right);
+    if (l === null || r === null) return null;
+    switch (node.operator) {
+      case '+': return l + r;
+      case '-': return l - r;
+      case '*': return l * r;
+      case '/': return r !== 0 ? l / r : null;
+      case '^': return Math.pow(l, r);
+      default: return null;
+    }
+  }
+  return null;
+}
+
 function analyzePower(node: ExpressionNode): Coefficients | null {
   if (node.type !== 'BinaryOp' || node.operator !== '^') return null;
   if (node.right.type !== 'NumberLiteral') return null;
   if (node.right.value !== 2) return null;
+
+  if (node.left.type === 'NumberLiteral') {
+    const val = node.left.value * node.left.value;
+    return { x2: 0, y2: 0, xy: 0, x: 0, y: 0, constant: val };
+  }
+
   if (node.left.type !== 'Variable') return null;
 
   if (node.left.name === 'x') {
@@ -367,6 +401,48 @@ function formatHyperbolaVertical(cx: number, cy: number, a: number, b: number): 
   const h = cx === 0 ? 'x' : `(x - ${fmt(cx)})`;
   const k = cy === 0 ? 'y' : `(y - ${fmt(cy)})`;
   return `${k}²/${fmt(a)}² - ${h}²/${fmt(b)}² = 1`;
+}
+
+export interface ConicDomainRange {
+  a: number;
+  b: number;
+}
+
+export function detectConicDomain(ast: ExpressionNode): ConicDomainRange[] | null {
+  const conic = detectConic(ast);
+  if (!conic) return null;
+
+  const cx = conic.center?.x ?? 0;
+
+  if (conic.type === 'circle') {
+    const r = conic.radius ?? 0;
+    if (r <= 0) return null;
+    return [{ a: cx - r, b: cx + r }];
+  }
+
+  if (conic.type === 'ellipse') {
+    const { a, b } = conic;
+    if (!a || !b || a <= 0 || b <= 0) return null;
+    const rx = conic.isVertical ? b : a;
+    return [{ a: cx - rx, b: cx + rx }];
+  }
+
+  if (conic.type === 'parabola') {
+    return null;
+  }
+
+  if (conic.type === 'hyperbola') {
+    if (conic.isVertical) return null;
+    const { a } = conic;
+    if (!a || a <= 0) return null;
+    const span = Math.max(10 * a, 50);
+    return [
+      { a: cx - span, b: cx - a },
+      { a: cx + a, b: cx + span },
+    ];
+  }
+
+  return null;
 }
 
 function fmt(v: number): string {

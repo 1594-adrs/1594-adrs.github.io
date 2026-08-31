@@ -85,7 +85,7 @@ export function drawSolidCrossSectionSingle(
         }
 
         ctx.closePath();
-        ctx.fillStyle = color + '18';
+        ctx.fillStyle = color + '35';
         ctx.fill();
       }
 
@@ -115,6 +115,8 @@ export function drawSolidCrossSectionSingle(
       if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
+
+    drawGhostReflection(ctx, viewport, fn, a, b, axis, width, height, color);
 
     drawHorizontalBoundaryCap(ctx, viewport, fn, a, k, width, height, color);
     drawHorizontalBoundaryCap(ctx, viewport, fn, b, k, width, height, color);
@@ -149,7 +151,7 @@ export function drawSolidCrossSectionSingle(
           ctx.lineTo(sx, sy);
         }
         ctx.closePath();
-        ctx.fillStyle = color + '18';
+        ctx.fillStyle = color + '35';
         ctx.fill();
       }
 
@@ -178,6 +180,8 @@ export function drawSolidCrossSectionSingle(
       if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
+
+    drawGhostReflection(ctx, viewport, fn, a, b, axis, width, height, color);
 
     drawVerticalBoundaryCap(ctx, viewport, fn, a, k, width, height, color);
     drawVerticalBoundaryCap(ctx, viewport, fn, b, k, width, height, color);
@@ -279,7 +283,7 @@ function drawHorizontalMulti(
         }
 
         ctx.closePath();
-        ctx.fillStyle = color + '15';
+        ctx.fillStyle = color + '35';
         ctx.fill();
       }
     }
@@ -321,6 +325,7 @@ function drawHorizontalMulti(
       if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
+    drawGhostReflection(ctx, viewport, topFn, region.a, region.b, { type: 'x', value: k }, width, height, topColor);
 
     if (region.bottomFunctionIndex !== region.topFunctionIndex) {
       ctx.strokeStyle = botColor + '80';
@@ -335,6 +340,7 @@ function drawHorizontalMulti(
         if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
       }
       ctx.stroke();
+      drawGhostReflection(ctx, viewport, botFn, region.a, region.b, { type: 'x', value: k }, width, height, botColor);
     }
   }
 
@@ -426,7 +432,7 @@ function drawVerticalMulti(
           ctx.lineTo(sx, sy);
         }
         ctx.closePath();
-        ctx.fillStyle = color + '15';
+        ctx.fillStyle = color + '35';
         ctx.fill();
       }
     }
@@ -468,6 +474,7 @@ function drawVerticalMulti(
       if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
+    drawGhostReflection(ctx, viewport, topFn, region.a, region.b, { type: 'y', value: k }, width, height, topColor);
 
     if (region.bottomFunctionIndex !== region.topFunctionIndex) {
       ctx.strokeStyle = botColor + '80';
@@ -482,6 +489,7 @@ function drawVerticalMulti(
         if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
       }
       ctx.stroke();
+      drawGhostReflection(ctx, viewport, botFn, region.a, region.b, { type: 'y', value: k }, width, height, botColor);
     }
   }
 
@@ -515,6 +523,99 @@ function drawVerticalMulti(
   } else {
     drawEdgeIndicator(ctx, viewport, k, width, height, functionColors[0] ?? '#00ff88', 'x');
   }
+}
+
+// ===== GHOST REFLECTION =====
+
+export function drawGhostReflection(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  fn: (x: number) => number,
+  a: number,
+  b: number,
+  axis: RotationAxis,
+  width: number,
+  height: number,
+  color: string,
+): void {
+  const steps = Math.min(500, Math.max(100, Math.abs(b - a) * 20));
+  const h = (b - a) / steps;
+  const k = axis.value;
+  const isHorizontal = axis.type === 'x';
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, width, height);
+  ctx.clip();
+
+  ctx.strokeStyle = color + '40';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+
+  if (isHorizontal) {
+    const [, axisY] = viewport.worldToScreen(0, k, width, height);
+
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = a + i * h;
+      const y = tryEval(fn, x);
+      if (isNaN(y)) { started = false; continue; }
+      const reflectedY = 2 * k - y;
+      const [sx, sy] = viewport.worldToScreen(x, reflectedY, width, height);
+      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const x = a + i * h;
+      const y = tryEval(fn, x);
+      if (isNaN(y)) continue;
+      const reflectedY = 2 * k - y;
+      const [sx, sy] = viewport.worldToScreen(x, reflectedY, width, height);
+      if (i === 0) ctx.moveTo(sx, axisY);
+      ctx.lineTo(sx, sy);
+    }
+    const [endSx] = viewport.worldToScreen(b, k, width, height);
+    ctx.lineTo(endSx, axisY);
+    ctx.closePath();
+    ctx.fillStyle = color + '10';
+    ctx.fill();
+  } else {
+    const [axisX] = viewport.worldToScreen(k, 0, width, height);
+
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = a + i * h;
+      const y = tryEval(fn, x);
+      if (isNaN(y)) { started = false; continue; }
+      const reflectedX = 2 * k - x;
+      const [sx, sy] = viewport.worldToScreen(reflectedX, y, width, height);
+      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const x = a + i * h;
+      const y = tryEval(fn, x);
+      if (isNaN(y)) continue;
+      const reflectedX = 2 * k - x;
+      const [sx, sy] = viewport.worldToScreen(reflectedX, y, width, height);
+      if (i === 0) ctx.moveTo(axisX, sy);
+      ctx.lineTo(sx, sy);
+    }
+    const [, endSy] = viewport.worldToScreen(k, fn(b), width, height);
+    ctx.lineTo(axisX, endSy);
+    ctx.closePath();
+    ctx.fillStyle = color + '10';
+    ctx.fill();
+  }
+
+  ctx.setLineDash([]);
+  ctx.restore();
 }
 
 // ===== BOUNDARY CAPS =====

@@ -205,12 +205,21 @@ export function solidVolumeMulti(
 
   for (const region of regions) {
     if (region.b - region.a < 1e-12) continue;
-    const factor = axis.type === 'x' ? Math.PI : 2 * Math.PI;
-    const integrand =
-      axis.type === 'x'
-        ? makeIntegrandVolumeH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
-        : makeIntegrandVolumeV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
-    total += factor * integrate(integrand, region.a, region.b);
+    if (region.topFunctionIndex === region.bottomFunctionIndex) {
+      const fn = functions[region.topFunctionIndex];
+      if (axis.type === 'x') {
+        total += Math.PI * integrate((x) => Math.pow(fn(x) - k, 2), region.a, region.b);
+      } else {
+        total += 2 * Math.PI * integrate((x) => Math.abs(x - k) * Math.abs(fn(x)), region.a, region.b);
+      }
+    } else {
+      const factor = axis.type === 'x' ? Math.PI : 2 * Math.PI;
+      const integrand =
+        axis.type === 'x'
+          ? makeIntegrandVolumeH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
+          : makeIntegrandVolumeV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+      total += factor * integrate(integrand, region.a, region.b);
+    }
   }
 
   return clampResult(total);
@@ -228,27 +237,44 @@ export function solidSurfaceAreaMulti(
   for (const region of regions) {
     if (region.b - region.a < 1e-12) continue;
 
-    const outerIntegrand =
-      axis.type === 'x'
-        ? makeIntegrandSurfaceOuterH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
-        : makeIntegrandSurfaceOuterV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
-    total += 2 * Math.PI * integrate(outerIntegrand, region.a, region.b);
+    if (region.topFunctionIndex === region.bottomFunctionIndex) {
+      const fn = functions[region.topFunctionIndex];
+      if (axis.type === 'x') {
+        total += 2 * Math.PI * integrate(
+          (x) => Math.abs(fn(x) - k) * Math.sqrt(1 + Math.pow(derivative(fn, x), 2)),
+          region.a, region.b,
+        );
+      } else {
+        total += 2 * Math.PI * integrate(
+          (x) => Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(fn, x), 2)),
+          region.a, region.b,
+        );
+      }
+    } else {
+      const outerIntegrand =
+        axis.type === 'x'
+          ? makeIntegrandSurfaceOuterH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
+          : makeIntegrandSurfaceOuterV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+      total += 2 * Math.PI * integrate(outerIntegrand, region.a, region.b);
 
-    const innerIntegrand =
-      axis.type === 'x'
-        ? makeIntegrandSurfaceInnerH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
-        : makeIntegrandSurfaceInnerV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
-    total += 2 * Math.PI * integrate(innerIntegrand, region.a, region.b);
+      const innerIntegrand =
+        axis.type === 'x'
+          ? makeIntegrandSurfaceInnerH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
+          : makeIntegrandSurfaceInnerV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+      total += 2 * Math.PI * integrate(innerIntegrand, region.a, region.b);
+    }
   }
 
   if (regions.length > 0) {
     const first = regions[0];
     const last = regions[regions.length - 1];
-    const capFn =
-      axis.type === 'x'
-        ? computeCapAreaH.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k)
-        : computeCapAreaV.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k);
-    total += capFn(first.a) + capFn(last.b);
+    if (first.topFunctionIndex !== first.bottomFunctionIndex) {
+      const capFn =
+        axis.type === 'x'
+          ? computeCapAreaH.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k)
+          : computeCapAreaV.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k);
+      total += capFn(first.a) + capFn(last.b);
+    }
   }
 
   return clampResult(total);

@@ -83,4 +83,30 @@ describe('GraphingCalculatorComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.sidebar')).toBeTruthy();
   });
+
+  it('should produce single branch for conic in solidEvalFns', () => {
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    const comp = fixture.componentInstance;
+    comp.addFunction();
+    comp.updateExpression(1, 'x^2+y^2-4=0');
+    comp.activateSolid();
+    const sol = comp.activeSolid();
+    expect(sol).not.toBeNull();
+    const evalFns = comp.solidEvalFns();
+    expect(evalFns.length).toBe(1);
+    expect(evalFns[0](0)).toBeCloseTo(2, 5);
+    expect(evalFns[0](2)).toBeCloseTo(0, 5);
+  });
+
+  it('should create conic region with top===bottom for disk method', () => {
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    const comp = fixture.componentInstance;
+    comp.addFunction();
+    comp.updateExpression(1, 'x^2+y^2-4=0');
+    comp.activateSolid();
+    const regions = comp.solidRegions();
+    expect(regions.length).toBe(1);
+    expect(regions[0].topFunctionIndex).toBe(0);
+    expect(regions[0].bottomFunctionIndex).toBe(0);
+  });
 });
