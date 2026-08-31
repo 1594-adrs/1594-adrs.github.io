@@ -1,40 +1,7 @@
 import { Viewport } from './viewport';
 import type { RotationAxis } from '../models/calculator.models';
 import type { SolidRegion } from '../engine/calculus';
-import { tryEval } from './utils';
-
-function findAxisCrossings(
-  fn: (x: number) => number,
-  a: number,
-  b: number,
-  k: number,
-  steps = 200,
-): number[] {
-  const h = (b - a) / steps;
-  const crossings: number[] = [];
-  const EPS = 1e-12;
-  let prevDiff = NaN;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const y = tryEval(fn, x);
-    if (isNaN(y)) {
-      prevDiff = NaN;
-      continue;
-    }
-    const diff = y - k;
-    if (Math.abs(diff) < EPS) {
-      crossings.push(x);
-      prevDiff = diff;
-      continue;
-    }
-    if (isFinite(prevDiff) && Math.abs(prevDiff) >= EPS && prevDiff * diff < 0) {
-      const t = prevDiff / (prevDiff - diff);
-      crossings.push(a + (i - 1) * h + t * h);
-    }
-    prevDiff = diff;
-  }
-  return crossings;
-}
+import { tryEval, findAxisCrossings } from './utils';
 
 function buildCurveSegments(
   fn: (x: number) => number,
@@ -275,32 +242,46 @@ function drawHorizontalMulti(
       const topFn = functions[region.topFunctionIndex];
       const botFn = functions[region.bottomFunctionIndex];
       const color = functionColors[region.topFunctionIndex] ?? '#00ff88';
-      const regionSteps = Math.max(50, Math.abs(region.b - region.a) * 20);
-      const ih = (region.b - region.a) / regionSteps;
 
-      ctx.beginPath();
-      const [startSx] = viewport.worldToScreen(region.a, k, width, height);
-      ctx.moveTo(startSx, axisY);
+      const topCrossings = findAxisCrossings(topFn, region.a, region.b, k);
+      const botCrossings = findAxisCrossings(botFn, region.a, region.b, k);
+      const allCrossings = [...new Set([...topCrossings, ...botCrossings])]
+        .filter((x) => x > region.a + 1e-12 && x < region.b - 1e-12)
+        .sort((x, y) => x - y);
 
-      for (let i = 0; i <= regionSteps; i++) {
-        const x = region.a + i * ih;
-        const y = tryEval(topFn, x);
-        if (isNaN(y)) continue;
-        const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-        ctx.lineTo(sx, sy);
+      const boundaries = [region.a, ...allCrossings, region.b];
+
+      for (let si = 0; si < boundaries.length - 1; si++) {
+        const ra = boundaries[si];
+        const rb = boundaries[si + 1];
+        if (rb - ra < 1e-12) continue;
+        const regionSteps = Math.max(50, Math.abs(rb - ra) * 20);
+        const ih = (rb - ra) / regionSteps;
+
+        ctx.beginPath();
+        const [startSx] = viewport.worldToScreen(ra, k, width, height);
+        ctx.moveTo(startSx, axisY);
+
+        for (let i = 0; i <= regionSteps; i++) {
+          const x = ra + i * ih;
+          const y = tryEval(topFn, x);
+          if (isNaN(y)) continue;
+          const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+          ctx.lineTo(sx, sy);
+        }
+
+        for (let i = regionSteps; i >= 0; i--) {
+          const x = ra + i * ih;
+          const y = tryEval(botFn, x);
+          if (isNaN(y)) continue;
+          const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+          ctx.lineTo(sx, sy);
+        }
+
+        ctx.closePath();
+        ctx.fillStyle = color + '15';
+        ctx.fill();
       }
-
-      for (let i = regionSteps; i >= 0; i--) {
-        const x = region.a + i * ih;
-        const y = tryEval(botFn, x);
-        if (isNaN(y)) continue;
-        const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-        ctx.lineTo(sx, sy);
-      }
-
-      ctx.closePath();
-      ctx.fillStyle = color + '15';
-      ctx.fill();
     }
 
     ctx.restore();
@@ -414,25 +395,40 @@ function drawVerticalMulti(
       const topFn = functions[region.topFunctionIndex];
       const botFn = functions[region.bottomFunctionIndex];
       const color = functionColors[region.topFunctionIndex] ?? '#00ff88';
-      const topSegs = buildCurveSegments(topFn, region.a, region.b, Math.max(50, Math.abs(region.b - region.a) * 20));
-      const botSegs = buildCurveSegments(botFn, region.a, region.b, Math.max(50, Math.abs(region.b - region.a) * 20));
-      const topPts = topSegs.flat();
-      const botPts = botSegs.flat();
-      if (topPts.length < 2 || botPts.length < 2) continue;
 
-      ctx.beginPath();
-      for (let i = 0; i < topPts.length; i++) {
-        const [sx, sy] = viewport.worldToScreen(topPts[i].x, topPts[i].y, width, height);
-        if (i === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
+      const topCrossings = findAxisCrossings(topFn, region.a, region.b, k);
+      const botCrossings = findAxisCrossings(botFn, region.a, region.b, k);
+      const allCrossings = [...new Set([...topCrossings, ...botCrossings])]
+        .filter((x) => x > region.a + 1e-12 && x < region.b - 1e-12)
+        .sort((x, y) => x - y);
+
+      const boundaries = [region.a, ...allCrossings, region.b];
+
+      for (let si = 0; si < boundaries.length - 1; si++) {
+        const ra = boundaries[si];
+        const rb = boundaries[si + 1];
+        if (rb - ra < 1e-12) continue;
+        const subSteps = Math.max(50, Math.abs(rb - ra) * 20);
+        const topSegs = buildCurveSegments(topFn, ra, rb, subSteps);
+        const botSegs = buildCurveSegments(botFn, ra, rb, subSteps);
+        const topPts = topSegs.flat();
+        const botPts = botSegs.flat();
+        if (topPts.length < 2 || botPts.length < 2) continue;
+
+        ctx.beginPath();
+        for (let i = 0; i < topPts.length; i++) {
+          const [sx, sy] = viewport.worldToScreen(topPts[i].x, topPts[i].y, width, height);
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        }
+        for (let i = botPts.length - 1; i >= 0; i--) {
+          const [sx, sy] = viewport.worldToScreen(botPts[i].x, botPts[i].y, width, height);
+          ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color + '15';
+        ctx.fill();
       }
-      for (let i = botPts.length - 1; i >= 0; i--) {
-        const [sx, sy] = viewport.worldToScreen(botPts[i].x, botPts[i].y, width, height);
-        ctx.lineTo(sx, sy);
-      }
-      ctx.closePath();
-      ctx.fillStyle = color + '15';
-      ctx.fill();
     }
 
     ctx.restore();

@@ -111,10 +111,10 @@ export function generateRevolutionMeshMulti(
     const capCenter = vertices.length / 3;
     const topY = tryEvalFn(topFn, region.a);
     if (axis.type === 'x') {
-      vertices.push(region.a, topY, 0);
+      vertices.push(region.a, k, 0);
       normals.push(-1, 0, 0);
     } else {
-      vertices.push(k + (region.a - k), topY, 0);
+      vertices.push(region.a, k, 0);
       normals.push(0, 0, -1);
     }
     for (let j = 0; j <= segments; j++) {
@@ -157,10 +157,10 @@ export function generateRevolutionMeshMulti(
     const botCapCenter = vertices.length / 3;
     const topYb = tryEvalFn(topFn, region.b);
     if (axis.type === 'x') {
-      vertices.push(region.b, topYb, 0);
+      vertices.push(region.b, k, 0);
       normals.push(1, 0, 0);
     } else {
-      vertices.push(k + (region.b - k), topYb, 0);
+      vertices.push(region.b, k, 0);
       normals.push(0, 0, 1);
     }
     for (let j = 0; j <= segments; j++) {

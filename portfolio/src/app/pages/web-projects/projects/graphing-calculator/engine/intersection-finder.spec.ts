@@ -63,6 +63,33 @@ describe('findIntersections', () => {
     expect(result[0].y).toBeCloseTo(4, 1);
   });
 
+  it('should find domain-boundary intersection: x^2 vs sqrt(x) on non-aligned viewport', () => {
+    const fns = [(x: number) => x * x, (x: number) => Math.sqrt(x)];
+    const result = findIntersections(fns, -0.5, 2.5);
+    const at0 = result.find((p) => Math.abs(p.x) < 0.02);
+    const at1 = result.find((p) => Math.abs(p.x - 1) < 0.02);
+    expect(at0).toBeDefined();
+    expect(at0!.y).toBeCloseTo(0, 2);
+    expect(at1).toBeDefined();
+    expect(at1!.y).toBeCloseTo(1, 2);
+  });
+
+  it('should find domain-boundary intersection: sqrt(x) vs 0.5', () => {
+    const fns = [(x: number) => Math.sqrt(x), (_x: number) => 0.5];
+    const result = findIntersections(fns, -1, 3);
+    const match = result.find((p) => Math.abs(p.x - 0.25) < 0.02);
+    expect(match).toBeDefined();
+    expect(match!.y).toBeCloseTo(0.5, 2);
+  });
+
+  it('should find domain-boundary intersection: ln(x) vs x-1', () => {
+    const fns = [(x: number) => Math.log(x), (x: number) => x - 1];
+    const result = findIntersections(fns, -2, 3);
+    const at1 = result.find((p) => Math.abs(p.x - 1) < 0.02);
+    expect(at1).toBeDefined();
+    expect(at1!.y).toBeCloseTo(0, 2);
+  });
+
   it('should return sorted by x', () => {
     const fns = [Math.sin, Math.cos];
     const result = findIntersections(fns, 0, 4 * PI);

@@ -49,6 +49,7 @@ import {
   solidSurfaceAreaMulti,
 } from './engine/calculus';
 import { findIntersections } from './engine/intersection-finder';
+import { findAxisCrossings } from './canvas/utils';
 import { computeAreaRegions, computeRevolutionRegions } from './engine/area-splitter';
 import { FUNCTION_COLORS } from './utils/color';
 import { OnscreenKeyboardComponent } from './keyboard/onscreen-keyboard.component';
@@ -568,18 +569,20 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       let a = this.viewport.xMin;
       let b = this.viewport.xMax;
 
-      if (evalFns.length >= 2) {
-        const intersections = findIntersections(evalFns, this.viewport.xMin, this.viewport.xMax);
-        if (intersections.length >= 2) {
-          a = intersections[0].x;
-          b = intersections[intersections.length - 1].x;
-        } else if (intersections.length === 1) {
-          a = intersections[0].x;
-          b = this.viewport.xMax;
+      if (evalFns.length === 1) {
+        const crossings = findAxisCrossings(evalFns[0], a, b, 0);
+        if (crossings.length >= 2) {
+          const sorted = [...crossings].sort((x, y) => Math.abs(x) - Math.abs(y));
+          a = Math.min(sorted[0], sorted[1]);
+          b = Math.max(sorted[0], sorted[1]);
         }
-      } else if (evalFns.length === 1) {
-        a = this.viewport.xMin;
-        b = this.viewport.xMax;
+      } else if (evalFns.length >= 2) {
+        const intersections = findIntersections(evalFns, a, b);
+        if (intersections.length >= 2) {
+          const sorted = [...intersections].sort((p, q) => Math.abs(p.x) - Math.abs(q.x));
+          a = Math.min(sorted[0].x, sorted[1].x);
+          b = Math.max(sorted[0].x, sorted[1].x);
+        }
       }
 
       this.activeSolid.set({
