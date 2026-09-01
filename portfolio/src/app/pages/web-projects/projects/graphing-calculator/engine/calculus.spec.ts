@@ -175,4 +175,55 @@ describe('calculus', () => {
       expect(vol).toBeGreaterThan(0);
     });
   });
+
+  describe('solidVolumeMulti disk method (topIdx === bottomIdx)', () => {
+    it('should compute sphere volume for upper semicircle around y=0 (disk method)', () => {
+      const r = 2;
+      const upper = (x: number) => {
+        const d = r * r - x * x;
+        return d >= 0 ? Math.sqrt(d) : NaN;
+      };
+      const fns = [upper];
+      const regions: SolidRegion[] = [{ a: -r, b: r, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 0 });
+      const expected = (4 / 3) * PI * r * r * r;
+      expect(vol).toBeCloseTo(expected, 0);
+    });
+
+    it('should compute cylinder volume when top===bottom (disk method)', () => {
+      const fns = [(x: number) => 1];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 0 });
+      expect(vol).toBeCloseTo(Math.PI, 2);
+    });
+
+    it('should compute cone volume using disk method with single function', () => {
+      const fns = [(x: number) => x];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
+      const vol = solidVolumeMulti(fns, regions, { type: 'x', value: 0 });
+      expect(vol).toBeCloseTo(PI / 3, 2);
+    });
+  });
+
+  describe('solidSurfaceAreaMulti disk method (topIdx === bottomIdx)', () => {
+    it('should compute sphere surface area for upper semicircle', () => {
+      const r = 2;
+      const upper = (x: number) => {
+        const d = r * r - x * x;
+        return d >= 0 ? Math.sqrt(d) : NaN;
+      };
+      const fns = [upper];
+      const regions: SolidRegion[] = [{ a: -r, b: r, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
+      const sa = solidSurfaceAreaMulti(fns, regions, { type: 'x', value: 0 });
+      const expected = 4 * PI * r * r;
+      expect(sa).toBeCloseTo(expected, 0);
+    });
+
+    it('should compute cylinder surface area (disk method, single function)', () => {
+      const fns = [(x: number) => 1];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
+      const sa = solidSurfaceAreaMulti(fns, regions, { type: 'x', value: 0 });
+      expect(sa).toBeCloseTo(2 * PI, 0);
+    });
+  });
 });

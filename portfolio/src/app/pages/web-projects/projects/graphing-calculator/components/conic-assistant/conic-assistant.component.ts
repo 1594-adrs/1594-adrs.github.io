@@ -96,23 +96,40 @@ export class ConicAssistantComponent {
     const p = this.params();
     const h = p.h;
     const k = p.k;
+    const PI = Math.PI;
     switch (this.activeTab()) {
       case 'circle':
         return [
           { label: 'Center', value: `(${h}, ${k})` },
           { label: 'Radius', value: `${p.a}` },
-          { label: 'Area', value: `${(Math.PI * p.a * p.a).toFixed(4)}` },
-          { label: 'Circumference', value: `${(2 * Math.PI * p.a).toFixed(4)}` },
+          { label: 'Area', value: `${(PI * p.a * p.a).toFixed(4)}` },
+          { label: 'Circumference', value: `${(2 * PI * p.a).toFixed(4)}` },
+          { label: 'Rev. Volume (x-axis)', value: `${((4 / 3) * PI * p.a * p.a * p.a).toFixed(4)}` },
+          { label: 'Rev. Surface (x-axis)', value: `${(4 * PI * p.a * p.a).toFixed(4)}` },
         ];
       case 'ellipse': {
         const c = Math.sqrt(Math.abs(p.a * p.a - p.b * p.b));
         const ecc = p.a > p.b ? c / p.a : c / p.b;
+        const rx = p.a;
+        const ry = p.b;
+        const revVol = (4 / 3) * PI * rx * ry * ry;
+        let revSA: string;
+        if (Math.abs(ecc) < 1e-10) {
+          revSA = `${(4 * PI * rx * rx).toFixed(4)}`;
+        } else if (rx > ry) {
+          revSA = `${(2 * PI * ry * ry + 2 * PI * rx * ry / ecc * Math.asin(ecc)).toFixed(4)}`;
+        } else {
+          const e2 = Math.sqrt(1 - (rx * rx) / (ry * ry));
+          revSA = `${(2 * PI * rx * rx + 2 * PI * ry * ry / e2 * Math.asin(e2)).toFixed(4)}`;
+        }
         return [
           { label: 'Center', value: `(${h}, ${k})` },
           { label: 'Semi-axes', value: `a=${p.a}, b=${p.b}` },
           { label: 'Focal dist (c)', value: `${c.toFixed(4)}` },
           { label: 'Eccentricity', value: `${ecc.toFixed(4)}` },
-          { label: 'Area', value: `${(Math.PI * p.a * p.b).toFixed(4)}` },
+          { label: 'Area', value: `${(PI * p.a * p.b).toFixed(4)}` },
+          { label: 'Rev. Volume (x-axis)', value: revVol.toFixed(4) },
+          { label: 'Rev. Surface (x-axis)', value: revSA },
         ];
       }
       case 'parabola':
@@ -140,17 +157,79 @@ export class ConicAssistantComponent {
     const h = p.h;
     const k = p.k;
     switch (this.activeTab()) {
-      case 'circle':
-        return `(x${h !== 0 ? '-' + h : ''})^2+(y${k !== 0 ? '-' + k : ''})^2=${p.a}^2`;
-      case 'ellipse':
-        return `(x${h !== 0 ? '-' + h : ''})^2/${p.a}^2+(y${k !== 0 ? '-' + k : ''})^2/${p.b}^2=1`;
+      case 'circle': {
+        const D = -2 * h;
+        const E = -2 * k;
+        const F = h * h + k * k - p.a * p.a;
+        let expr = 'x^2+y^2';
+        if (D !== 0) expr += (D > 0 ? '+' : '') + D + '*x';
+        if (E !== 0) expr += (E > 0 ? '+' : '') + E + '*y';
+        if (F !== 0) expr += (F > 0 ? '+' : '') + F;
+        return expr + '=0';
+      }
+      case 'ellipse': {
+        const a2 = p.a * p.a;
+        const b2 = p.b * p.b;
+        const A = b2;
+        const B = a2;
+        const C = -2 * b2 * h;
+        const D = -2 * a2 * k;
+        const E = b2 * h * h + a2 * k * k - a2 * b2;
+        let expr = '';
+        if (A === 1) expr += 'x^2';
+        else if (A === -1) expr += '-x^2';
+        else expr += A + '*x^2';
+        if (B === 1) expr += '+y^2';
+        else if (B === -1) expr += '-y^2';
+        else if (B > 0) expr += '+' + B + '*y^2';
+        else expr += B + '*y^2';
+        if (C !== 0) expr += (C > 0 ? '+' : '') + C + '*x';
+        if (D !== 0) expr += (D > 0 ? '+' : '') + D + '*y';
+        if (E !== 0) expr += (E > 0 ? '+' : '') + E;
+        return expr + '=0';
+      }
       case 'parabola':
         if (p.orientation === 'vertical') {
-          return `(x${h !== 0 ? '-' + h : ''})^2=${4 * p.p}*(y${k !== 0 ? '-' + k : ''})`;
+          const C = -2 * h;
+          const D = -4 * p.p;
+          const F = h * h + 4 * p.p * k;
+          let pExpr = 'x^2';
+          if (C !== 0) pExpr += (C > 0 ? '+' : '') + C + '*x';
+          if (D !== 0) pExpr += (D > 0 ? '+' : '') + D + '*y';
+          if (F !== 0) pExpr += (F > 0 ? '+' : '') + F;
+          return pExpr + '=0';
         }
-        return `(y${k !== 0 ? '-' + k : ''})^2=${4 * p.p}*(x${h !== 0 ? '-' + h : ''})`;
-      case 'hyperbola':
-        return `(x${h !== 0 ? '-' + h : ''})^2/${p.a}^2-(y${k !== 0 ? '-' + k : ''})^2/${p.b}^2=1`;
+        {
+          const C = -2 * k;
+          const D = -4 * p.p;
+          const F = k * k + 4 * p.p * h;
+          let pExpr = 'y^2';
+          if (C !== 0) pExpr += (C > 0 ? '+' : '') + C + '*y';
+          if (D !== 0) pExpr += (D > 0 ? '+' : '') + D + '*x';
+          if (F !== 0) pExpr += (F > 0 ? '+' : '') + F;
+          return pExpr + '=0';
+        }
+      case 'hyperbola': {
+        const a2 = p.a * p.a;
+        const b2 = p.b * p.b;
+        const A = b2;
+        const B = -a2;
+        const C = -2 * b2 * h;
+        const D = 2 * a2 * k;
+        const E = b2 * h * h - a2 * k * k - a2 * b2;
+        let expr = '';
+        if (A === 1) expr += 'x^2';
+        else if (A === -1) expr += '-x^2';
+        else expr += A + '*x^2';
+        if (B === 1) expr += '+y^2';
+        else if (B === -1) expr += '-y^2';
+        else if (B > 0) expr += '+' + B + '*y^2';
+        else expr += B + '*y^2';
+        if (C !== 0) expr += (C > 0 ? '+' : '') + C + '*x';
+        if (D !== 0) expr += (D > 0 ? '+' : '') + D + '*y';
+        if (E !== 0) expr += (E > 0 ? '+' : '') + E;
+        return expr + '=0';
+      }
     }
   });
 

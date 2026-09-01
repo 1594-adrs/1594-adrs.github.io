@@ -1,7 +1,7 @@
 import type { ExpressionNode } from './parser';
 import { detectConic } from './conic-detector';
 
-interface ExplicitBranch {
+export interface ExplicitBranch {
   fn: (x: number) => number | null;
   label: string;
 }

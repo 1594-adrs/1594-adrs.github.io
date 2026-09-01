@@ -33,12 +33,14 @@ import {
 } from './canvas/graph-renderer';
 import { drawImplicitCurve } from './canvas/implicit-renderer';
 import { solveConicForY } from './engine/conic-solver';
+import { detectConicDomain } from './engine/conic-detector';
 import { detectAsymptotes } from './engine/asymptote-detector';
 import {
   drawSolidCrossSectionSingle,
   drawSolidCrossSectionMulti,
 } from './canvas/solid-renderer';
 import { parse } from './engine/parser';
+import type { ExpressionNode } from './engine/parser';
 import { evalExpression, evalConstantExpression } from './engine/evaluator';
 import { integrate } from './engine/integrator';
 import {
@@ -210,6 +212,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       });
   });
 
+  solidRenderFns = computed<Array<(x: number) => number>>(() => {
+    return this.solidEvalFns();
+  });
+
   solidFnColors = computed<string[]>(() => {
     const sol = this.activeSolid();
     if (!sol) return [];
@@ -273,7 +279,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     }
     const sol = this.activeSolid();
     if (sol) {
-      const evalFns = this.solidEvalFns();
+      const evalFns = this.solidRenderFns();
       const regions = this.solidRegions();
       const axisLabel =
         sol.axis.type === 'x' && sol.axis.value === 0
@@ -439,6 +445,13 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             }
           }
           try {
+            if (raw.includes('=')) {
+              const eqIdx = raw.indexOf('=');
+              const lhs = parse(raw.substring(0, eqIdx));
+              const rhs = parse(raw.substring(eqIdx + 1));
+              const ast: ExpressionNode = { type: 'BinaryOp', operator: '=', left: lhs, right: rhs };
+              return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
+            }
             const ast = parse(raw);
             return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
           } catch {
@@ -558,25 +571,34 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         .filter((x) => x.f.visible && (x.f.ast || x.f.mode === 'implicit'));
       const indices = visibles.slice(0, Math.min(2, visibles.length)).map((x) => x.i);
 
-      const evalFns = indices
-        .map((i) => this.functions()[i])
-        .filter(
-          (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
-            !!e?.ast && e.visible && this.canUseWithTools(e),
-        )
-        .map((e) => (x: number) => evalExpression(e.ast!, x));
-
       let a = this.viewport.xMin;
       let b = this.viewport.xMax;
 
-      if (evalFns.length === 1) {
-        const crossings = findAxisCrossings(evalFns[0], a, b, 0);
-        if (crossings.length >= 2) {
-          const sorted = [...crossings].sort((x, y) => Math.abs(x) - Math.abs(y));
-          a = Math.min(sorted[0], sorted[1]);
-          b = Math.max(sorted[0], sorted[1]);
+      if (indices.length === 1) {
+        const expr = this.functions()[indices[0]];
+        if (expr?.mode === 'implicit' && expr.ast) {
+          const domain = detectConicDomain(expr.ast);
+          if (domain) {
+            a = domain[0].a;
+            b = domain[0].b;
+          }
+        } else if (expr?.ast) {
+          const evalFn = (x: number) => evalExpression(expr.ast!, x);
+          const crossings = findAxisCrossings(evalFn, a, b, 0);
+          if (crossings.length >= 2) {
+            const sorted = [...crossings].sort((x, y) => Math.abs(x) - Math.abs(y));
+            a = Math.min(sorted[0], sorted[1]);
+            b = Math.max(sorted[0], sorted[1]);
+          }
         }
-      } else if (evalFns.length >= 2) {
+      } else if (indices.length >= 2) {
+        const evalFns = indices
+          .map((i) => this.functions()[i])
+          .filter(
+            (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
+              !!e?.ast && e.visible && this.canUseWithTools(e),
+          )
+          .map((e) => (x: number) => evalExpression(e.ast!, x));
         const intersections = findIntersections(evalFns, a, b);
         if (intersections.length >= 2) {
           const sorted = [...intersections].sort((p, q) => Math.abs(p.x) - Math.abs(q.x));
@@ -666,10 +688,52 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           : this.functions().length === 1
             ? [0]
             : [];
+
+      let a = -2;
+      let b = 2;
+
+      if (indices.length === 1) {
+        const expr = this.functions()[indices[0]];
+        if (expr?.mode === 'implicit' && expr.ast) {
+          const domain = detectConicDomain(expr.ast);
+          if (domain) {
+            a = domain[0].a;
+            b = domain[0].b;
+          }
+        }
+      } else if (indices.length >= 2) {
+        const au = this.angleUnit();
+        const fns = indices
+          .map((i) => this.functions()[i])
+          .filter(
+            (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
+              !!e?.ast && e.visible && this.canUseWithTools(e),
+          );
+        if (fns.length >= 2) {
+          const evalFns = fns.map((f) => {
+            if (f.mode === 'explicit') {
+              return (x: number) => evalExpression(f.ast, x, undefined, au);
+            }
+            const branches = solveConicForY(f.ast);
+            if (branches && branches.length > 0) {
+              const branchFn = branches[0].fn;
+              return (x: number) => branchFn(x) ?? NaN;
+            }
+            return (x: number) => evalExpression(f.ast, x, undefined, au);
+          });
+          const intersections = findIntersections(evalFns, a, b);
+          if (intersections.length >= 2) {
+            const sorted = [...intersections].sort((p, q) => Math.abs(p.x) - Math.abs(q.x));
+            a = Math.min(sorted[0].x, sorted[1].x);
+            b = Math.max(sorted[0].x, sorted[1].x);
+          }
+        }
+      }
+
       this.activeMultiArea.set({
         functionIndices: indices,
-        a: -2,
-        b: 2,
+        a,
+        b,
         autoDetectIntersections: true,
         overlapMode: 'pairwise',
       });
@@ -1180,7 +1244,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     const sol = this.activeSolid();
     if (sol) {
-      const evalFns = this.solidEvalFns();
+      const evalFns = this.solidRenderFns();
       const regions = this.solidRegions();
       if (evalFns.length === 1 && regions.length > 0) {
         const expr = this.functions()[sol.functionIndices[0]];
