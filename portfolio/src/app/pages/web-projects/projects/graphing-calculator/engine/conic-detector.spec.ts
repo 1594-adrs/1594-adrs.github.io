@@ -212,6 +212,21 @@ describe('conic-detector', () => {
     expect(result!.center!.y).toBeCloseTo(0, 5);
   });
 
+  it('should detect hyperbola from -x^2+y^2-4=0', () => {
+    const ast = parseEquation('-x^2+y^2-4=0');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('hyperbola');
+  });
+
+  it('should detect hyperbola from x^2-y^2-1=0 via unary minus form', () => {
+    const ast = parseEquation('-x^2+y^2-1=0');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('hyperbola');
+    expect(result!.eccentricity).toBeGreaterThan(1);
+  });
+
   describe('detectConicDomain', () => {
     it('should return domain for circle x²+y²-4=0', () => {
       const ast = parseEquation('x^2+y^2-4=0');

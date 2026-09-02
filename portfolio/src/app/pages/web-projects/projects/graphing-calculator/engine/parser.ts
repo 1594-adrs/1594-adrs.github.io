@@ -314,13 +314,13 @@ class Parser {
   }
 
   private parseMulDiv(): ExpressionNode {
-    let left = this.parsePower();
+    let left = this.parseUnary();
     while (
       this.current().type === 'operator' &&
       (this.current().value === '*' || this.current().value === '/')
     ) {
       const op = this.advance().value;
-      const right = this.parsePower();
+      const right = this.parseUnary();
       this.countNode();
       left = { type: 'BinaryOp', operator: op, left, right };
     }
@@ -328,10 +328,10 @@ class Parser {
   }
 
   private parsePower(): ExpressionNode {
-    let base = this.parseUnary();
+    let base = this.parsePrimary();
     if (this.current().type === 'operator' && this.current().value === '^') {
       this.advance();
-      const exp = this.parsePower();
+      const exp = this.parseUnary();
       this.countNode();
       base = { type: 'BinaryOp', operator: '^', left: base, right: exp };
     }
@@ -351,7 +351,7 @@ class Parser {
       this.countNode();
       return { type: 'UnaryOp', operator: op, operand };
     }
-    return this.parsePrimary();
+    return this.parsePower();
   }
 
   private parsePrimary(): ExpressionNode {

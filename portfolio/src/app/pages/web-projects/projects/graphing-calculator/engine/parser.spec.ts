@@ -363,6 +363,48 @@ describe('parser', () => {
     });
   });
 
+  describe('unary minus precedence over exponentiation', () => {
+    it('should parse -x^2 as -(x^2), not (-x)^2', () => {
+      const ast = parse('-x^2');
+      expect(ast.type).toBe('UnaryOp');
+      if (ast.type === 'UnaryOp') {
+        expect(ast.operator).toBe('-');
+        expect(ast.operand.type).toBe('BinaryOp');
+      }
+    });
+
+    it('should evaluate -x^2 to -9 at x=3', () => {
+      const ast = parse('-x^2');
+      expect(evaluate(ast, { x: 3 })).toBeCloseTo(-9, 5);
+    });
+
+    it('should evaluate -2^3 to -8', () => {
+      const ast = parse('-2^3');
+      expect(evaluate(ast, {})).toBeCloseTo(-8, 5);
+    });
+
+    it('should evaluate -2^2 to -4', () => {
+      const ast = parse('-2^2');
+      expect(evaluate(ast, {})).toBeCloseTo(-4, 5);
+    });
+
+    it('should evaluate -x^2+y^2-4 correctly', () => {
+      const ast = parse('-x^2+y^2-4');
+      expect(evaluate(ast, { x: 0, y: 3 })).toBeCloseTo(5, 5);
+      expect(evaluate(ast, { x: 3, y: 0 })).toBeCloseTo(-13, 5);
+    });
+
+    it('should parse (-x)^2 with parentheses forcing unary first', () => {
+      const ast = parse('(-x)^2');
+      expect(evaluate(ast, { x: 3 })).toBeCloseTo(9, 5);
+    });
+
+    it('should parse --x as double negation', () => {
+      const ast = parse('--x');
+      expect(evaluate(ast, { x: 5 })).toBeCloseTo(5, 5);
+    });
+  });
+
   describe('complexity limit', () => {
     it('should throw on expression exceeding 500 nodes', () => {
       const expr = Array(251).fill('1+').join('') + '1';
