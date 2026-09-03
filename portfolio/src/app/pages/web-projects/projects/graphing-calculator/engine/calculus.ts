@@ -144,26 +144,32 @@ function makeIntegrandSurfaceInnerH(
 function makeIntegrandSurfaceOuterV(
   functions: Array<(x: number) => number>,
   topIdx: number,
-  _bottomIdx: number,
+  bottomIdx: number,
   _k: number,
 ): (x: number) => number {
   return (x: number) => {
     const topVal = functions[topIdx](x);
-    if (!isFinite(topVal)) return 0;
-    return Math.abs(x - _k) * Math.sqrt(1 + Math.pow(derivative(functions[topIdx], x), 2));
+    const botVal = functions[bottomIdx](x);
+    if (!isFinite(topVal) || !isFinite(botVal)) return 0;
+    const isOuter = Math.abs(topVal) >= Math.abs(botVal);
+    const outerFn = isOuter ? functions[topIdx] : functions[bottomIdx];
+    return Math.abs(x - _k) * Math.sqrt(1 + Math.pow(derivative(outerFn, x), 2));
   };
 }
 
 function makeIntegrandSurfaceInnerV(
   functions: Array<(x: number) => number>,
-  _topIdx: number,
+  topIdx: number,
   bottomIdx: number,
   k: number,
 ): (x: number) => number {
   return (x: number) => {
+    const topVal = functions[topIdx](x);
     const botVal = functions[bottomIdx](x);
-    if (!isFinite(botVal)) return 0;
-    return Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(functions[bottomIdx], x), 2));
+    if (!isFinite(topVal) || !isFinite(botVal)) return 0;
+    const isInner = Math.abs(topVal) < Math.abs(botVal);
+    const innerFn = isInner ? functions[topIdx] : functions[bottomIdx];
+    return Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(innerFn, x), 2));
   };
 }
 
@@ -191,7 +197,8 @@ function computeCapAreaV(
   const topY = functions[topIdx](wx);
   const botY = functions[bottomIdx](wx);
   if (!isFinite(topY) || !isFinite(botY)) return 0;
-  return 2 * Math.PI * Math.abs(wx - k) * Math.abs(topY - botY);
+  const { outerR, innerR } = outerInnerR(topY, botY, k);
+  return Math.PI * (outerR * outerR - innerR * innerR);
 }
 
 export function solidVolumeMulti(

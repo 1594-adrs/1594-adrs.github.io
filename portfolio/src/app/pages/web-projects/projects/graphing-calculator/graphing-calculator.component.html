@@ -358,7 +358,7 @@
     @if (show3DSolid() && hasSolidData()) {
       <div class="solid-3d-container">
         <app-solid-3d
-          [functions]="solidRenderFns()"
+          [functions]="solidEvalFns()"
           [regions]="solidRegions()"
           [axis]="activeSolid()!.axis"
           [color]="solidFnColors()[0]"

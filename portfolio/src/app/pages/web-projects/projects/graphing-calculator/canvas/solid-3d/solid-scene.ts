@@ -151,13 +151,14 @@ export class SolidScene {
     this.renderer.render(this.scene, this.camera);
   }
 
+  private readonly _spherical = new Spherical();
+
   rotateCamera(deltaX: number, deltaY: number): void {
-    const spherical = new Spherical();
-    spherical.setFromVector3(this.camera.position);
-    spherical.theta -= deltaX * 0.01;
-    spherical.phi -= deltaY * 0.01;
-    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-    this.camera.position.setFromSpherical(spherical);
+    this._spherical.setFromVector3(this.camera.position);
+    this._spherical.theta -= deltaX * 0.01;
+    this._spherical.phi -= deltaY * 0.01;
+    this._spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this._spherical.phi));
+    this.camera.position.setFromSpherical(this._spherical);
     this.camera.lookAt(0, 0, 0);
   }
 

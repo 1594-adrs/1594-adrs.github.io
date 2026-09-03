@@ -416,7 +416,11 @@ const astCache = new Map<string, ExpressionNode>();
 
 export function parse(expression: string): ExpressionNode {
   const cached = astCache.get(expression);
-  if (cached) return cached;
+  if (cached) {
+    astCache.delete(expression);
+    astCache.set(expression, cached);
+    return cached;
+  }
   if (astCache.size > 100) {
     const firstKey = astCache.keys().next().value;
     if (firstKey !== undefined) astCache.delete(firstKey);

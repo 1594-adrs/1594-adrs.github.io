@@ -527,7 +527,7 @@ function drawVerticalMulti(
 
 // ===== GHOST REFLECTION =====
 
-export function drawGhostReflection(
+function drawGhostReflection(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
   fn: (x: number) => number,

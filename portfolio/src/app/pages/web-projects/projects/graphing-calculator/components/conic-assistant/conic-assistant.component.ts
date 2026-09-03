@@ -78,17 +78,30 @@ export class ConicAssistantComponent {
     const h = p.h;
     const k = p.k;
     switch (this.activeTab()) {
-      case 'circle':
-        return `(x${h !== 0 ? ' - ' + h : ''})² + (y${k !== 0 ? ' - ' + k : ''})² = ${p.a}²`;
-      case 'ellipse':
-        return `(x${h !== 0 ? ' - ' + h : ''})²/${p.a}² + (y${k !== 0 ? ' - ' + k : ''})²/${p.b}² = 1`;
+      case 'circle': {
+        const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+        const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+        return `${xPart} + ${yPart} = ${p.a}²`;
+      }
+      case 'ellipse': {
+        const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+        const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+        return `${xPart}/${p.a}² + ${yPart}/${p.b}² = 1`;
+      }
       case 'parabola':
         if (p.orientation === 'vertical') {
-          return `(x${h !== 0 ? ' - ' + h : ''})² = ${4 * p.p}(y${k !== 0 ? ' - ' + k : ''})`;
+          const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+          return `${xPart} = ${4 * p.p}(y${k !== 0 ? ' - ' + k : ''})`;
         }
-        return `(y${k !== 0 ? ' - ' + k : ''})² = ${4 * p.p}(x${h !== 0 ? ' - ' + h : ''})`;
-      case 'hyperbola':
-        return `(x${h !== 0 ? ' - ' + h : ''})²/${p.a}² - (y${k !== 0 ? ' - ' + k : ''})²/${p.b}² = 1`;
+        {
+          const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+          return `${yPart} = ${4 * p.p}(x${h !== 0 ? ' - ' + h : ''})`;
+        }
+      case 'hyperbola': {
+        const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+        const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+        return `${xPart}/${p.a}² - ${yPart}/${p.b}² = 1`;
+      }
     }
   });
 

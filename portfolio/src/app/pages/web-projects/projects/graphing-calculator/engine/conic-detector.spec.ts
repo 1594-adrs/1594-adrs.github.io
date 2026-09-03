@@ -227,6 +227,31 @@ describe('conic-detector', () => {
     expect(result!.eccentricity).toBeGreaterThan(1);
   });
 
+  it('should detect circle from (x-2)^2+(y-3)^2=4', () => {
+    const ast = parseEquation('(x-2)^2+(y-3)^2=4');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('circle');
+    expect(result!.center).toEqual({ x: 2, y: 3 });
+    expect(result!.radius).toBeCloseTo(2, 5);
+  });
+
+  it('should detect ellipse from (x-1)^2/4+(y+2)^2/9=1', () => {
+    const ast = parseEquation('(x-1)^2/4+(y+2)^2/9=1');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('ellipse');
+  });
+
+  it('should detect circle from (x+3)^2+(y-1)^2=9', () => {
+    const ast = parseEquation('(x+3)^2+(y-1)^2=9');
+    const result = detectConic(ast);
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('circle');
+    expect(result!.center).toEqual({ x: -3, y: 1 });
+    expect(result!.radius).toBeCloseTo(3, 5);
+  });
+
   describe('detectConicDomain', () => {
     it('should return domain for circle x²+y²-4=0', () => {
       const ast = parseEquation('x^2+y^2-4=0');

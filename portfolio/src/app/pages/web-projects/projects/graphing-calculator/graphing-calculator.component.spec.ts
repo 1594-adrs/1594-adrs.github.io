@@ -109,4 +109,51 @@ describe('GraphingCalculatorComponent', () => {
     expect(regions[0].topFunctionIndex).toBe(0);
     expect(regions[0].bottomFunctionIndex).toBe(0);
   });
+
+  describe('detectMode', () => {
+    it('should detect cos(t),sin(t) as parametric', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('cos(t),sin(t)')).toBe('parametric');
+    });
+
+    it('should detect t,t^2 as parametric', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('t,t^2')).toBe('parametric');
+    });
+
+    it('should detect x=cos(t),y=sin(t) as parametric', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('x=cos(t),y=sin(t)')).toBe('parametric');
+    });
+
+    it('should NOT detect x*y=t as parametric', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('x*y=t')).not.toBe('parametric');
+    });
+
+    it('should NOT detect x=y*t as parametric', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('x=y*t')).not.toBe('parametric');
+    });
+
+    it('should NOT detect sin(x)+cos(t) as parametric', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('sin(x)+cos(t)')).not.toBe('parametric');
+    });
+
+    it('should detect min(x,1)+t as explicit (comma inside parens)', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('min(x,1)+t')).toBe('explicit');
+    });
+
+    it('should detect x^2+y^2=1 as implicit', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('x^2+y^2=1')).toBe('implicit');
+    });
+
+    it('should detect y=x^2 as explicit', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('y=x^2')).toBe('explicit');
+    });
+  });
 });

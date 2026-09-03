@@ -208,14 +208,33 @@ function analyzePower(node: ExpressionNode): Coefficients | null {
     return { x2: 0, y2: 0, xy: 0, x: 0, y: 0, constant: val };
   }
 
-  if (node.left.type !== 'Variable') return null;
+  if (node.left.type === 'Variable') {
+    if (node.left.name === 'x') {
+      return { x2: 1, y2: 0, xy: 0, x: 0, y: 0, constant: 0 };
+    }
+    if (node.left.name === 'y') {
+      return { x2: 0, y2: 1, xy: 0, x: 0, y: 0, constant: 0 };
+    }
+    return null;
+  }
 
-  if (node.left.name === 'x') {
-    return { x2: 1, y2: 0, xy: 0, x: 0, y: 0, constant: 0 };
+  if (node.left.type === 'BinaryOp' &&
+      (node.left.operator === '+' || node.left.operator === '-') &&
+      node.left.left.type === 'Variable' &&
+      node.left.right.type === 'NumberLiteral') {
+    const varName = node.left.left.name;
+    const c = node.left.right.value;
+    const sign = node.left.operator === '+' ? 1 : -1;
+    const linearCoeff = 2 * sign * c;
+    const constCoeff = c * c;
+    if (varName === 'x') {
+      return { x2: 1, y2: 0, xy: 0, x: linearCoeff, y: 0, constant: constCoeff };
+    }
+    if (varName === 'y') {
+      return { x2: 0, y2: 1, xy: 0, x: 0, y: linearCoeff, constant: constCoeff };
+    }
   }
-  if (node.left.name === 'y') {
-    return { x2: 0, y2: 1, xy: 0, x: 0, y: 0, constant: 0 };
-  }
+
   return null;
 }
 
@@ -387,13 +406,15 @@ function formatEllipse(cx: number, cy: number, a: number, b: number): string {
 
 function formatParabolaVertical(h: number, k: number, p: number): string {
   const x = h === 0 ? 'x²' : `(x - ${fmt(h)})²`;
-  const rhs = `4·${fmt(Math.abs(p))}·(y - ${fmt(k)})`;
+  const sign = p < 0 ? '-' : '';
+  const rhs = `${sign}4·${fmt(Math.abs(p))}·(y - ${fmt(k)})`;
   return `${x} = ${rhs}`;
 }
 
 function formatParabolaHorizontal(h: number, k: number, p: number): string {
   const y = k === 0 ? 'y²' : `(y - ${fmt(k)})²`;
-  const rhs = `4·${fmt(Math.abs(p))}·(x - ${fmt(h)})`;
+  const sign = p < 0 ? '-' : '';
+  const rhs = `${sign}4·${fmt(Math.abs(p))}·(x - ${fmt(h)})`;
   return `${y} = ${rhs}`;
 }
 

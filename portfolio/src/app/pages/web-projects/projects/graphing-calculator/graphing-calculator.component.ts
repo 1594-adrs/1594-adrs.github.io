@@ -41,7 +41,7 @@ import {
 } from './canvas/solid-renderer';
 import { parse } from './engine/parser';
 import type { ExpressionNode } from './engine/parser';
-import { evalExpression, evalConstantExpression } from './engine/evaluator';
+import { evalExpression, evaluate, evalConstantExpression } from './engine/evaluator';
 import { integrate } from './engine/integrator';
 import {
   solidVolumeSingle,
@@ -153,8 +153,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           return (x: number) => evalExpression(e.ast!, x, undefined, au);
         }
         if (e.mode === 'parametric' && e.paramX && e.paramY) {
-          const evalX = (t: number) => evalExpression(e.paramX!, t, undefined, au);
-          const evalY = (t: number) => evalExpression(e.paramY!, t, undefined, au);
+          const evalX = (tVal: number) => evaluate(e.paramX!, { x: tVal, t: tVal }, au);
+          const evalY = (tVal: number) => evaluate(e.paramY!, { x: tVal, t: tVal }, au);
           const tMin = this.evalRange(e.tMin, 0);
           const tMax = this.evalRange(e.tMax, 2 * Math.PI);
           const N = 500;
@@ -210,10 +210,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
         return (x: number) => NaN;
       });
-  });
-
-  solidRenderFns = computed<Array<(x: number) => number>>(() => {
-    return this.solidEvalFns();
   });
 
   solidFnColors = computed<string[]>(() => {
@@ -279,7 +275,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     }
     const sol = this.activeSolid();
     if (sol) {
-      const evalFns = this.solidRenderFns();
+      const evalFns = this.solidEvalFns();
       const regions = this.solidRegions();
       const axisLabel =
         sol.axis.type === 'x' && sol.axis.value === 0
@@ -423,6 +419,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       fns.map((fn, i) => {
         if (i !== index) return fn;
         const mode = this.detectMode(raw);
+        const effectiveRaw = mode === 'explicit' ? this.stripYEquals(raw) : raw;
         if (mode === 'implicit') {
           const inequalityMatch = raw.match(/(.*?)(>=|<=|>|<)(.*)/);
           if (inequalityMatch) {
@@ -461,9 +458,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (mode === 'parametric') {
           const parts = raw.split(',');
           if (parts.length === 2) {
+            const xExpr = parts[0].trim().replace(/^[xX]\s*=\s*/, '');
+            const yExpr = parts[1].trim().replace(/^[yY]\s*=\s*/, '');
             try {
-              const paramX = parse(parts[0].trim());
-              const paramY = parse(parts[1].trim());
+              const paramX = parse(xExpr);
+              const paramY = parse(yExpr);
               return { ...fn, raw, ast: null, mode, paramX, paramY, inequalityOp: undefined };
             } catch {
               return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
@@ -481,7 +480,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           }
         }
         try {
-          const ast = parse(raw);
+          const ast = parse(effectiveRaw);
           return { ...fn, raw, ast, mode: 'explicit', paramX: null, paramY: null, inequalityOp: undefined };
         } catch {
           return { ...fn, raw, ast: null, mode: 'explicit', paramX: null, paramY: null, inequalityOp: undefined };
@@ -521,12 +520,27 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   private detectMode(raw: string): CurveMode {
     const trimmed = raw.trim();
+
     if (/^r\s*=/i.test(trimmed)) return 'polar';
     if (/[<>]=?/.test(trimmed)) return 'implicit';
-    if (/^[^a-zA-Z]*[xy]\s*[,)].*t/.test(trimmed) || /t\s*[,)].*[xy]/.test(trimmed))
-      return 'parametric';
+    if (this.hasTopLevelComma(trimmed)) return 'parametric';
     if (/[=]/.test(trimmed) && !/^[yY]\s*=/.test(trimmed)) return 'implicit';
     return 'explicit';
+  }
+
+  private hasTopLevelComma(raw: string): boolean {
+    let depth = 0;
+    let commaCount = 0;
+    for (const ch of raw) {
+      if (ch === '(' || ch === '[' || ch === '{') depth++;
+      else if (ch === ')' || ch === ']' || ch === '}') depth--;
+      else if (ch === ',' && depth === 0) commaCount++;
+    }
+    return commaCount === 1;
+  }
+
+  private stripYEquals(raw: string): string {
+    return raw.trim().replace(/^[yY]\s*=\s*/, '');
   }
 
   updateIntegralA(value: string): void {
@@ -1167,8 +1181,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
       } else if (fn.mode === 'parametric') {
         if (!fn.paramX || !fn.paramY) continue;
-        const evalX = (t: number) => evalExpression(fn.paramX!, t, undefined, au);
-        const evalY = (t: number) => evalExpression(fn.paramY!, t, undefined, au);
+        const evalX = (tVal: number) => evaluate(fn.paramX!, { x: tVal, t: tVal }, au);
+        const evalY = (tVal: number) => evaluate(fn.paramY!, { x: tVal, t: tVal }, au);
         const tMin = this.evalRange(fn.tMin, 0);
         const tMax = this.evalRange(fn.tMax, 2 * Math.PI);
         drawParametric(ctx, this.viewport, evalX, evalY, tMin, tMax, fn.color, w, h);
@@ -1244,7 +1258,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     const sol = this.activeSolid();
     if (sol) {
-      const evalFns = this.solidRenderFns();
+      const evalFns = this.solidEvalFns();
       const regions = this.solidRegions();
       if (evalFns.length === 1 && regions.length > 0) {
         const expr = this.functions()[sol.functionIndices[0]];

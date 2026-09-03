@@ -73,6 +73,12 @@ describe('integrator', () => {
     const result = integrate((x) => x, 0, 10);
     expect(result).toBeCloseTo(50, 2);
   });
+
+  it('should compute integral of 1/(1+x^2) from 0 to 10 closer to atan(10) with Richardson', () => {
+    const expected = Math.atan(10);
+    const result = integrate((x) => 1 / (1 + x * x), 0, 10);
+    expect(result).toBeCloseTo(expected, 3);
+  });
 });
 
 describe('computeIntegralPoints', () => {

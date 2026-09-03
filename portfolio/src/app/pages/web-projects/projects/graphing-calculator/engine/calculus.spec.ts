@@ -226,4 +226,36 @@ describe('calculus', () => {
       expect(sa).toBeCloseTo(2 * PI, 0);
     });
   });
+
+  describe('solidSurfaceAreaMulti vertical axis', () => {
+    it('should compute correct surface area for vertical axis with two functions', () => {
+      const f1 = (x: number) => 2 + x;
+      const f2 = (x: number) => 1 - x;
+      const result = solidSurfaceAreaMulti(
+        [f1, f2],
+        [{ a: -1, b: 2, topFunctionIndex: 0, bottomFunctionIndex: 1 }],
+        { type: 'y', value: 0.5 },
+      );
+      expect(result).toBeGreaterThan(0);
+      expect(isFinite(result)).toBe(true);
+    });
+
+    it('should compute vertical axis surface area with same function (disk method)', () => {
+      const fns = [(x: number) => x + 1];
+      const regions: SolidRegion[] = [{ a: 0, b: 2, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
+      const sa = solidSurfaceAreaMulti(fns, regions, { type: 'y', value: 0 });
+      expect(sa).toBeGreaterThan(0);
+      expect(isFinite(sa)).toBe(true);
+    });
+  });
+
+  describe('solidSurfaceAreaMulti cap area vertical axis', () => {
+    it('should compute cap area for vertical axis as washer (same as horizontal when symmetric)', () => {
+      const fns = [(x: number) => 1, (x: number) => 0];
+      const regions: SolidRegion[] = [{ a: 0, b: 1, topFunctionIndex: 0, bottomFunctionIndex: 1 }];
+      const sa = solidSurfaceAreaMulti(fns, regions, { type: 'y', value: 0 });
+      expect(sa).toBeGreaterThan(0);
+      expect(isFinite(sa)).toBe(true);
+    });
+  });
 });
