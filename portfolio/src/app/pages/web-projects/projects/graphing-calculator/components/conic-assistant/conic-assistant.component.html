@@ -6,11 +6,7 @@
 
   <div class="conic-tabs">
     @for (tab of tabs; track tab.key) {
-      <button
-        class="conic-tab"
-        [class.active]="activeTab() === tab.key"
-        (click)="setTab(tab.key)"
-      >
+      <button class="conic-tab" [class.active]="activeTab() === tab.key" (click)="setTab(tab.key)">
         {{ tab.label }}
       </button>
     }
@@ -29,13 +25,25 @@
     @if (activeTab() === 'circle' || activeTab() === 'ellipse' || activeTab() === 'hyperbola') {
       <label class="param-field">
         a =
-        <input type="number" [value]="params().a" (change)="updateParamA($event)" step="0.5" min="0.1" />
+        <input
+          type="number"
+          [value]="params().a"
+          (change)="updateParamA($event)"
+          step="0.5"
+          min="0.1"
+        />
       </label>
     }
     @if (activeTab() === 'ellipse' || activeTab() === 'hyperbola') {
       <label class="param-field">
         b =
-        <input type="number" [value]="params().b" (change)="updateParamB($event)" step="0.5" min="0.1" />
+        <input
+          type="number"
+          [value]="params().b"
+          (change)="updateParamB($event)"
+          step="0.5"
+          min="0.1"
+        />
       </label>
     }
     @if (activeTab() === 'parabola') {
@@ -66,7 +74,5 @@
     }
   </div>
 
-  <button class="t-btn conic-add-btn" (click)="onAddGraph()">
-    + Add to graph
-  </button>
+  <button class="t-btn conic-add-btn" (click)="onAddGraph()">+ Add to graph</button>
 </div>

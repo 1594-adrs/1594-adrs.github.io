@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { tryEval, findAxisCrossings } from './utils';
 
-const CLAMP = 1e8;
+const CLAMP = 1e15;
 
 describe('tryEval', () => {
   it('should return the normal value', () => {

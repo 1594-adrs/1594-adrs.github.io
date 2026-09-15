@@ -363,6 +363,120 @@ describe('parser', () => {
     });
   });
 
+  describe('unary minus precedence over exponentiation', () => {
+    it('should parse -x^2 as -(x^2), not (-x)^2', () => {
+      const ast = parse('-x^2');
+      expect(ast.type).toBe('UnaryOp');
+      if (ast.type === 'UnaryOp') {
+        expect(ast.operator).toBe('-');
+        expect(ast.operand.type).toBe('BinaryOp');
+      }
+    });
+
+    it('should evaluate -x^2 to -9 at x=3', () => {
+      const ast = parse('-x^2');
+      expect(evaluate(ast, { x: 3 })).toBeCloseTo(-9, 5);
+    });
+
+    it('should evaluate -2^3 to -8', () => {
+      const ast = parse('-2^3');
+      expect(evaluate(ast, {})).toBeCloseTo(-8, 5);
+    });
+
+    it('should evaluate -2^2 to -4', () => {
+      const ast = parse('-2^2');
+      expect(evaluate(ast, {})).toBeCloseTo(-4, 5);
+    });
+
+    it('should evaluate -x^2+y^2-4 correctly', () => {
+      const ast = parse('-x^2+y^2-4');
+      expect(evaluate(ast, { x: 0, y: 3 })).toBeCloseTo(5, 5);
+      expect(evaluate(ast, { x: 3, y: 0 })).toBeCloseTo(-13, 5);
+    });
+
+    it('should parse (-x)^2 with parentheses forcing unary first', () => {
+      const ast = parse('(-x)^2');
+      expect(evaluate(ast, { x: 3 })).toBeCloseTo(9, 5);
+    });
+
+    it('should parse --x as double negation', () => {
+      const ast = parse('--x');
+      expect(evaluate(ast, { x: 5 })).toBeCloseTo(5, 5);
+    });
+  });
+
+  describe('PoweredFunctionCall (sin^2(x) notation)', () => {
+    it('should parse sin^2(x) as PoweredFunctionCall', () => {
+      const ast = parse('sin^2(x)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('sin');
+        expect(ast.arg.type).toBe('Variable');
+        expect(ast.power.type).toBe('NumberLiteral');
+        expect((ast.power as any).value).toBe(2);
+      }
+    });
+
+    it('should parse cos^2(x) as PoweredFunctionCall', () => {
+      const ast = parse('cos^2(x)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('cos');
+        expect((ast.power as any).value).toBe(2);
+      }
+    });
+
+    it('should parse tan^3(x) as PoweredFunctionCall with power 3', () => {
+      const ast = parse('tan^3(x)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('tan');
+        expect((ast.power as any).value).toBe(3);
+      }
+    });
+
+    it('should evaluate sin^2(x) correctly', () => {
+      const ast = parse('sin^2(x)');
+      expect(evaluate(ast, { x: 0 })).toBeCloseTo(0, 10);
+      expect(evaluate(ast, { x: Math.PI / 2 })).toBeCloseTo(1, 10);
+      expect(evaluate(ast, { x: Math.PI })).toBeCloseTo(0, 10);
+    });
+
+    it('should evaluate cos^2(x) correctly', () => {
+      const ast = parse('cos^2(x)');
+      expect(evaluate(ast, { x: 0 })).toBeCloseTo(1, 10);
+      expect(evaluate(ast, { x: Math.PI / 2 })).toBeCloseTo(0, 10);
+      expect(evaluate(ast, { x: Math.PI })).toBeCloseTo(1, 10);
+    });
+
+    it('should evaluate sin^2(x) + cos^2(x) = 1', () => {
+      const ast = parse('sin^2(x) + cos^2(x)');
+      for (const x of [0, 0.5, 1, 2, 3, Math.PI / 4, Math.PI / 2]) {
+        expect(evaluate(ast, { x })).toBeCloseTo(1, 10);
+      }
+    });
+
+    it('should still support sin(x)^2 notation (power after parens)', () => {
+      const ast = parse('sin(x)^2');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('sin');
+        expect((ast.power as any).value).toBe(2);
+      }
+      expect(evaluate(ast, { x: Math.PI / 2 })).toBeCloseTo(1, 10);
+    });
+
+    it('should parse sin^2(2x) with complex argument', () => {
+      const ast = parse('sin^2(2x)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('sin');
+        expect(ast.arg.type).toBe('BinaryOp');
+      }
+      expect(evaluate(ast, { x: Math.PI / 4 })).toBeCloseTo(1, 10);
+    });
+  });
+
   describe('complexity limit', () => {
     it('should throw on expression exceeding 500 nodes', () => {
       const expr = Array(251).fill('1+').join('') + '1';

@@ -67,7 +67,9 @@
             >
               {{ fn.visible ? '◉' : '○' }}
             </button>
-            <button class="action-btn delete" (click)="removeFunction($index)" title="Remove">×</button>
+            <button class="action-btn delete" (click)="removeFunction($index)" title="Remove">
+              ×
+            </button>
           </div>
         </div>
         @if (fn.mode === 'parametric') {
@@ -134,21 +136,24 @@
         <button class="t-btn" (click)="activateSolid()" [class.active]="activeSolid()">
           ↻ solid_rev
         </button>
-        <button
-          class="t-btn"
-          (click)="activateMultiArea()"
-          [class.active]="activeMultiArea()"
-        >
+        <button class="t-btn" (click)="activateMultiArea()" [class.active]="activeMultiArea()">
           ▲ area
         </button>
-        <button class="t-btn" (click)="showConicAssistant.set(!showConicAssistant())" [class.active]="showConicAssistant()">
+        <button
+          class="t-btn"
+          (click)="showConicAssistant.set(!showConicAssistant())"
+          [class.active]="showConicAssistant()"
+        >
           ◇ conics
         </button>
       </div>
     </div>
 
     @if (showConicAssistant()) {
-      <app-conic-assistant (addGraph)="addConicToGraph($event)" (close)="showConicAssistant.set(false)" />
+      <app-conic-assistant
+        (addGraph)="addConicToGraph($event)"
+        (close)="showConicAssistant.set(false)"
+      />
     }
 
     @if (activeIntegral()) {
@@ -327,7 +332,8 @@
           @for (r of evalResults(); track r.fnIndex) {
             <span class="eval-row">
               <span class="eval-dot" [style.background]="r.color"></span>
-              f{{ r.fnIndex + 1 }}({{ evalPoint() }}) = <span class="eval-value">{{ r.value }}</span>
+              f{{ r.fnIndex + 1 }}({{ evalPoint() }}) =
+              <span class="eval-value">{{ r.value }}</span>
             </span>
           }
         </div>
@@ -358,7 +364,7 @@
     @if (show3DSolid() && hasSolidData()) {
       <div class="solid-3d-container">
         <app-solid-3d
-          [functions]="solidRenderFns()"
+          [functions]="solidEvalFns()"
           [regions]="solidRegions()"
           [axis]="activeSolid()!.axis"
           [color]="solidFnColors()[0]"
@@ -373,6 +379,10 @@
         (wheel)="onCanvasWheel($event)"
         (mousedown)="onCanvasMouseDown($event)"
         (mouseup)="onCanvasMouseUp()"
+        (touchstart)="onCanvasTouchStart($event)"
+        (touchmove)="onCanvasTouchMove($event)"
+        (touchend)="onCanvasTouchEnd($event)"
+        (touchcancel)="onCanvasTouchEnd($event)"
       ></canvas>
     }
     @if (showCanvasControls() && !show3DSolid()) {

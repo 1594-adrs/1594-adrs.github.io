@@ -42,11 +42,7 @@ function extractCoeffs(ast: ExpressionNode): Coefficients {
   return coeffs;
 }
 
-function collectTerms(
-  node: ExpressionNode,
-  coeffs: Coefficients,
-  sign: number,
-): void {
+function collectTerms(node: ExpressionNode, coeffs: Coefficients, sign: number): void {
   if (node.type === 'BinaryOp') {
     if (node.operator === '+') {
       collectTerms(node.left, coeffs, sign);
@@ -136,15 +132,23 @@ function analyzeProduct(node: ExpressionNode): Coefficients | null {
   if (l.type === 'NumberLiteral') {
     const inner = extractCoeffs(r);
     return {
-      x2: l.value * inner.x2, y2: l.value * inner.y2, xy: l.value * inner.xy,
-      x: l.value * inner.x, y: l.value * inner.y, constant: l.value * inner.constant,
+      x2: l.value * inner.x2,
+      y2: l.value * inner.y2,
+      xy: l.value * inner.xy,
+      x: l.value * inner.x,
+      y: l.value * inner.y,
+      constant: l.value * inner.constant,
     };
   }
   if (r.type === 'NumberLiteral') {
     const inner = extractCoeffs(l);
     return {
-      x2: r.value * inner.x2, y2: r.value * inner.y2, xy: r.value * inner.xy,
-      x: r.value * inner.x, y: r.value * inner.y, constant: r.value * inner.constant,
+      x2: r.value * inner.x2,
+      y2: r.value * inner.y2,
+      xy: r.value * inner.xy,
+      x: r.value * inner.x,
+      y: r.value * inner.y,
+      constant: r.value * inner.constant,
     };
   }
 
@@ -165,8 +169,12 @@ function analyzeQuotient(node: ExpressionNode): Coefficients | null {
   const factor = 1 / divisor;
   const inner = extractCoeffs(node.left);
   return {
-    x2: factor * inner.x2, y2: factor * inner.y2, xy: factor * inner.xy,
-    x: factor * inner.x, y: factor * inner.y, constant: factor * inner.constant,
+    x2: factor * inner.x2,
+    y2: factor * inner.y2,
+    xy: factor * inner.xy,
+    x: factor * inner.x,
+    y: factor * inner.y,
+    constant: factor * inner.constant,
   };
 }
 
@@ -181,12 +189,18 @@ function evaluateConstantExpr(node: ExpressionNode): number | null {
     const r = evaluateConstantExpr(node.right);
     if (l === null || r === null) return null;
     switch (node.operator) {
-      case '+': return l + r;
-      case '-': return l - r;
-      case '*': return l * r;
-      case '/': return r !== 0 ? l / r : null;
-      case '^': return Math.pow(l, r);
-      default: return null;
+      case '+':
+        return l + r;
+      case '-':
+        return l - r;
+      case '*':
+        return l * r;
+      case '/':
+        return r !== 0 ? l / r : null;
+      case '^':
+        return Math.pow(l, r);
+      default:
+        return null;
     }
   }
   return null;
@@ -202,20 +216,44 @@ function analyzePower(node: ExpressionNode): Coefficients | null {
     return { x2: 0, y2: 0, xy: 0, x: 0, y: 0, constant: val };
   }
 
-  if (node.left.type === 'UnaryOp' && node.left.operator === '-' &&
-      node.left.operand.type === 'NumberLiteral') {
+  if (
+    node.left.type === 'UnaryOp' &&
+    node.left.operator === '-' &&
+    node.left.operand.type === 'NumberLiteral'
+  ) {
     const val = node.left.operand.value * node.left.operand.value;
     return { x2: 0, y2: 0, xy: 0, x: 0, y: 0, constant: val };
   }
 
-  if (node.left.type !== 'Variable') return null;
+  if (node.left.type === 'Variable') {
+    if (node.left.name === 'x') {
+      return { x2: 1, y2: 0, xy: 0, x: 0, y: 0, constant: 0 };
+    }
+    if (node.left.name === 'y') {
+      return { x2: 0, y2: 1, xy: 0, x: 0, y: 0, constant: 0 };
+    }
+    return null;
+  }
 
-  if (node.left.name === 'x') {
-    return { x2: 1, y2: 0, xy: 0, x: 0, y: 0, constant: 0 };
+  if (
+    node.left.type === 'BinaryOp' &&
+    (node.left.operator === '+' || node.left.operator === '-') &&
+    node.left.left.type === 'Variable' &&
+    node.left.right.type === 'NumberLiteral'
+  ) {
+    const varName = node.left.left.name;
+    const c = node.left.right.value;
+    const sign = node.left.operator === '+' ? 1 : -1;
+    const linearCoeff = 2 * sign * c;
+    const constCoeff = c * c;
+    if (varName === 'x') {
+      return { x2: 1, y2: 0, xy: 0, x: linearCoeff, y: 0, constant: constCoeff };
+    }
+    if (varName === 'y') {
+      return { x2: 0, y2: 1, xy: 0, x: 0, y: linearCoeff, constant: constCoeff };
+    }
   }
-  if (node.left.name === 'y') {
-    return { x2: 0, y2: 1, xy: 0, x: 0, y: 0, constant: 0 };
-  }
+
   return null;
 }
 
@@ -228,7 +266,11 @@ export function detectConic(ast: ExpressionNode): ConicInfo | null {
   let { x2, y2, x, y, constant } = raw;
 
   if (x2 < 0) {
-    x2 = -x2; y2 = -y2; x = -x; y = -y; constant = -constant;
+    x2 = -x2;
+    y2 = -y2;
+    x = -x;
+    y = -y;
+    constant = -constant;
   }
 
   if (Math.abs(x2) < 1e-10 && Math.abs(y2) < 1e-10) {
@@ -269,13 +311,21 @@ export function detectConic(ast: ExpressionNode): ConicInfo | null {
 
     const foci =
       aVal >= bVal
-        ? [{ x: cx + c, y: cy }, { x: cx - c, y: cy }]
-        : [{ x: cx, y: cy + c }, { x: cx, y: cy - c }];
+        ? [
+            { x: cx + c, y: cy },
+            { x: cx - c, y: cy },
+          ]
+        : [
+            { x: cx, y: cy + c },
+            { x: cx, y: cy - c },
+          ];
 
     return {
       type: 'ellipse',
       center: { x: cx, y: cy },
-      a, b, c,
+      a,
+      b,
+      c,
       isVertical: bVal > aVal,
       foci,
       eccentricity: ecc,
@@ -315,9 +365,14 @@ export function detectConic(ast: ExpressionNode): ConicInfo | null {
       return {
         type: 'hyperbola',
         center: { x: cx, y: cy },
-        a, b, c,
+        a,
+        b,
+        c,
         isVertical: true,
-        foci: [{ x: cx, y: cy + c }, { x: cx, y: cy - c }],
+        foci: [
+          { x: cx, y: cy + c },
+          { x: cx, y: cy - c },
+        ],
         eccentricity: ecc,
         asymptotes: [
           `y = ${(a / b).toFixed(4)}(x - ${cx.toFixed(4)}) + ${cy.toFixed(4)}`,
@@ -330,9 +385,14 @@ export function detectConic(ast: ExpressionNode): ConicInfo | null {
     return {
       type: 'hyperbola',
       center: { x: cx, y: cy },
-      a, b, c,
+      a,
+      b,
+      c,
       isVertical: false,
-      foci: [{ x: cx + c, y: cy }, { x: cx - c, y: cy }],
+      foci: [
+        { x: cx + c, y: cy },
+        { x: cx - c, y: cy },
+      ],
       eccentricity: ecc,
       asymptotes: [
         `y = ${(b / a).toFixed(4)}(x - ${cx.toFixed(4)}) + ${cy.toFixed(4)}`,
@@ -387,13 +447,15 @@ function formatEllipse(cx: number, cy: number, a: number, b: number): string {
 
 function formatParabolaVertical(h: number, k: number, p: number): string {
   const x = h === 0 ? 'x²' : `(x - ${fmt(h)})²`;
-  const rhs = `4·${fmt(Math.abs(p))}·(y - ${fmt(k)})`;
+  const sign = p < 0 ? '-' : '';
+  const rhs = `${sign}4·${fmt(Math.abs(p))}·(y - ${fmt(k)})`;
   return `${x} = ${rhs}`;
 }
 
 function formatParabolaHorizontal(h: number, k: number, p: number): string {
   const y = k === 0 ? 'y²' : `(y - ${fmt(k)})²`;
-  const rhs = `4·${fmt(Math.abs(p))}·(x - ${fmt(h)})`;
+  const sign = p < 0 ? '-' : '';
+  const rhs = `${sign}4·${fmt(Math.abs(p))}·(x - ${fmt(h)})`;
   return `${y} = ${rhs}`;
 }
 

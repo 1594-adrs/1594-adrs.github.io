@@ -1,10 +1,4 @@
-import {
-  Component,
-  ChangeDetectionStrategy,
-  signal,
-  output,
-  computed,
-} from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, output, computed } from '@angular/core';
 import type { ConicType } from '../../models/calculator.models';
 
 interface ConicParams {
@@ -78,17 +72,30 @@ export class ConicAssistantComponent {
     const h = p.h;
     const k = p.k;
     switch (this.activeTab()) {
-      case 'circle':
-        return `(x${h !== 0 ? ' - ' + h : ''})² + (y${k !== 0 ? ' - ' + k : ''})² = ${p.a}²`;
-      case 'ellipse':
-        return `(x${h !== 0 ? ' - ' + h : ''})²/${p.a}² + (y${k !== 0 ? ' - ' + k : ''})²/${p.b}² = 1`;
+      case 'circle': {
+        const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+        const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+        return `${xPart} + ${yPart} = ${p.a}²`;
+      }
+      case 'ellipse': {
+        const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+        const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+        return `${xPart}/${p.a}² + ${yPart}/${p.b}² = 1`;
+      }
       case 'parabola':
         if (p.orientation === 'vertical') {
-          return `(x${h !== 0 ? ' - ' + h : ''})² = ${4 * p.p}(y${k !== 0 ? ' - ' + k : ''})`;
+          const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+          return `${xPart} = ${4 * p.p}(y${k !== 0 ? ' - ' + k : ''})`;
         }
-        return `(y${k !== 0 ? ' - ' + k : ''})² = ${4 * p.p}(x${h !== 0 ? ' - ' + h : ''})`;
-      case 'hyperbola':
-        return `(x${h !== 0 ? ' - ' + h : ''})²/${p.a}² - (y${k !== 0 ? ' - ' + k : ''})²/${p.b}² = 1`;
+        {
+          const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+          return `${yPart} = ${4 * p.p}(x${h !== 0 ? ' - ' + h : ''})`;
+        }
+      case 'hyperbola': {
+        const xPart = h === 0 ? 'x²' : `(x - ${h})²`;
+        const yPart = k === 0 ? 'y²' : `(y - ${k})²`;
+        return `${xPart}/${p.a}² - ${yPart}/${p.b}² = 1`;
+      }
     }
   });
 
@@ -104,7 +111,10 @@ export class ConicAssistantComponent {
           { label: 'Radius', value: `${p.a}` },
           { label: 'Area', value: `${(PI * p.a * p.a).toFixed(4)}` },
           { label: 'Circumference', value: `${(2 * PI * p.a).toFixed(4)}` },
-          { label: 'Rev. Volume (x-axis)', value: `${((4 / 3) * PI * p.a * p.a * p.a).toFixed(4)}` },
+          {
+            label: 'Rev. Volume (x-axis)',
+            value: `${((4 / 3) * PI * p.a * p.a * p.a).toFixed(4)}`,
+          },
           { label: 'Rev. Surface (x-axis)', value: `${(4 * PI * p.a * p.a).toFixed(4)}` },
         ];
       case 'ellipse': {
@@ -117,10 +127,10 @@ export class ConicAssistantComponent {
         if (Math.abs(ecc) < 1e-10) {
           revSA = `${(4 * PI * rx * rx).toFixed(4)}`;
         } else if (rx > ry) {
-          revSA = `${(2 * PI * ry * ry + 2 * PI * rx * ry / ecc * Math.asin(ecc)).toFixed(4)}`;
+          revSA = `${(2 * PI * ry * ry + ((2 * PI * rx * ry) / ecc) * Math.asin(ecc)).toFixed(4)}`;
         } else {
           const e2 = Math.sqrt(1 - (rx * rx) / (ry * ry));
-          revSA = `${(2 * PI * rx * rx + 2 * PI * ry * ry / e2 * Math.asin(e2)).toFixed(4)}`;
+          revSA = `${(2 * PI * rx * rx + ((2 * PI * ry * ry) / e2) * Math.asin(e2)).toFixed(4)}`;
         }
         return [
           { label: 'Center', value: `(${h}, ${k})` },
@@ -136,8 +146,14 @@ export class ConicAssistantComponent {
         return [
           { label: 'Vertex', value: `(${h}, ${k})` },
           { label: 'Focal length', value: `${p.p}` },
-          { label: 'Focus', value: p.orientation === 'vertical' ? `(${h}, ${k + p.p})` : `(${h + p.p}, ${k})` },
-          { label: 'Directrix', value: p.orientation === 'vertical' ? `y = ${k - p.p}` : `x = ${h - p.p}` },
+          {
+            label: 'Focus',
+            value: p.orientation === 'vertical' ? `(${h}, ${k + p.p})` : `(${h + p.p}, ${k})`,
+          },
+          {
+            label: 'Directrix',
+            value: p.orientation === 'vertical' ? `y = ${k - p.p}` : `x = ${h - p.p}`,
+          },
         ];
       case 'hyperbola': {
         const c = Math.sqrt(p.a * p.a + p.b * p.b);
@@ -146,7 +162,10 @@ export class ConicAssistantComponent {
           { label: 'Semi-axes', value: `a=${p.a}, b=${p.b}` },
           { label: 'Focal dist (c)', value: `${c.toFixed(4)}` },
           { label: 'Eccentricity', value: `${(c / p.a).toFixed(4)}` },
-          { label: 'Asymptotes', value: `y = ±(${p.b}/${p.a})(x${h !== 0 ? ' - ' + h : ''})${k !== 0 ? ' + ' + k : ''}` },
+          {
+            label: 'Asymptotes',
+            value: `y = ±(${p.b}/${p.a})(x${h !== 0 ? ' - ' + h : ''})${k !== 0 ? ' + ' + k : ''}`,
+          },
         ];
       }
     }

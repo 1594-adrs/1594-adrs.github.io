@@ -97,14 +97,87 @@ function detectHorizontal(
   xMax: number,
   result: Asymptote[],
 ): void {
-  const largeX = Math.max(Math.abs(xMin), Math.abs(xMax)) * 100;
-  const testPoints = [-largeX * 0.8, -largeX * 0.4, largeX * 0.4, largeX * 0.8];
-  const values = testPoints.map((x) => safeEval(fn, x)).filter((v): v is number => v !== null);
+  const baseScale = Math.max(Math.abs(xMin), Math.abs(xMax)) * 100;
+  if (baseScale < 100) return;
 
-  if (values.length < 3) return;
+  const scales = [baseScale * 0.25, baseScale * 0.5, baseScale * 0.75, baseScale, baseScale * 2];
+  const samplesPerScale = 20;
 
-  const avg = values.reduce((a, b) => a + b, 0) / values.length;
-  const maxDev = Math.max(...values.map((v) => Math.abs(v - avg)));
+  const allValues: number[] = [];
+  let directionChanges = 0;
+  let signChanges = 0;
+
+  for (const scale of scales) {
+    let prevY: number | null = null;
+    let prevDirection = 0;
+
+    for (let i = 0; i < samplesPerScale; i++) {
+      const x = scale * (0.05 + 0.9 * (i / (samplesPerScale - 1)));
+      const y = safeEval(fn, x);
+      if (y === null) continue;
+
+      allValues.push(y);
+
+      if (prevY !== null) {
+        if ((prevY > 0 && y < 0) || (prevY < 0 && y > 0)) {
+          signChanges++;
+        }
+        const direction = y > prevY ? 1 : y < prevY ? -1 : 0;
+        if (direction !== 0 && prevDirection !== 0 && direction !== prevDirection) {
+          directionChanges++;
+        }
+        prevDirection = direction;
+      }
+      prevY = y;
+    }
+
+    prevY = null;
+    prevDirection = 0;
+
+    for (let i = 0; i < samplesPerScale; i++) {
+      const x = -scale * (0.05 + 0.9 * (i / (samplesPerScale - 1)));
+      const y = safeEval(fn, x);
+      if (y === null) continue;
+
+      allValues.push(y);
+
+      if (prevY !== null) {
+        if ((prevY > 0 && y < 0) || (prevY < 0 && y > 0)) {
+          signChanges++;
+        }
+        const direction = y > prevY ? 1 : y < prevY ? -1 : 0;
+        if (direction !== 0 && prevDirection !== 0 && direction !== prevDirection) {
+          directionChanges++;
+        }
+        prevDirection = direction;
+      }
+      prevY = y;
+    }
+  }
+
+  if (allValues.length < 20) return;
+
+  const totalSamples = allValues.length;
+  const directionChangeRatio = directionChanges / totalSamples;
+  const signChangeRatio = signChanges / totalSamples;
+
+  const maxVal = Math.max(...allValues);
+  const minVal = Math.min(...allValues);
+  const valueRange = maxVal - minVal;
+
+  if (directionChangeRatio > 0.1 || signChangeRatio > 0.1) {
+    return;
+  }
+
+  if (valueRange > 0.5 && valueRange < 2.5) {
+    const allBounded = allValues.every((v) => Math.abs(v) <= 1.5);
+    if (allBounded && signChanges > 2) {
+      return;
+    }
+  }
+
+  const avg = allValues.reduce((a, b) => a + b, 0) / totalSamples;
+  const maxDev = Math.max(...allValues.map((v) => Math.abs(v - avg)));
 
   if (maxDev < 0.01 && Math.abs(avg) < 1e6) {
     const eq = `y = ${fmtVal(avg)}`;
@@ -135,7 +208,7 @@ function detectOblique(
 
   const yNeg = safeEval(fn, -largeX);
   if (yNeg !== null) {
-    const mNeg = yNeg / (-largeX);
+    const mNeg = yNeg / -largeX;
     if (Math.abs(mNeg - m) > 0.1) return;
   }
 

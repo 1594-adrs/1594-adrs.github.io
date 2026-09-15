@@ -137,11 +137,7 @@ describe('computeRevolutionRegions', () => {
     });
 
     it('should filter out regions where a non-top/bot function crosses top or bot', () => {
-      const fns = [
-        (x: number) => x + 2,
-        (x: number) => x,
-        (x: number) => 1.5,
-      ];
+      const fns = [(x: number) => x + 2, (x: number) => x, (x: number) => 1.5];
       const intersections: IntersectionPoint[] = [];
       const pairwise = computeRevolutionRegions(fns, intersections, 0, 2);
       const allMode = computeRevolutionRegions(fns, intersections, 0, 2, 'all');

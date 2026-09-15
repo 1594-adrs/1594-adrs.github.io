@@ -58,12 +58,16 @@ import {
           <h3>TOOLS</h3>
           <div class="help-grid">
             <span class="key-hint">∫ integral</span><span>Compute definite integral</span>
-            <span class="key-hint">↻ solid_rev_nfn</span><span>Solid of revolution (1+ functions, manual limits)</span>
-            <span class="key-hint">▲ area_nfn</span><span>Area between n curves (manual limits)</span>
+            <span class="key-hint">↻ solid_rev_nfn</span
+            ><span>Solid of revolution (1+ functions, manual limits)</span>
+            <span class="key-hint">▲ area_nfn</span
+            ><span>Area between n curves (manual limits)</span>
           </div>
           <p class="help-note">Limits accept expressions: pi, e/2, sqrt(2), 2*pi</p>
           <p class="help-note">solid_rev_nfn: 1 function → disc method; 2+ → washer method</p>
-          <p class="help-note">overlap mode: "only where ALL overlap" excludes crossings of non-selected functions</p>
+          <p class="help-note">
+            overlap mode: "only where ALL overlap" excludes crossings of non-selected functions
+          </p>
         </div>
 
         <div class="help-section">

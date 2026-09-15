@@ -60,6 +60,11 @@ export const KEYBOARD_TABS: KeyboardTab[] = [
         { label: 'tan', insert: 'tan(', category: 'function' },
       ],
       [
+        { label: 'sin²', insert: 'sin^2(', category: 'function' },
+        { label: 'cos²', insert: 'cos^2(', category: 'function' },
+        { label: 'tan²', insert: 'tan^2(', category: 'function' },
+      ],
+      [
         { label: 'sin⁻¹', insert: 'asin(', category: 'function' },
         { label: 'cos⁻¹', insert: 'acos(', category: 'function' },
         { label: 'tan⁻¹', insert: 'atan(', category: 'function' },

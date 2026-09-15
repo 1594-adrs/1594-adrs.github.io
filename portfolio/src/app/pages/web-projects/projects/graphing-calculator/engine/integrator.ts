@@ -52,6 +52,9 @@ export function integrate(f: (x: number) => number, a: number, b: number, n = 20
     return r1.sum > 0 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
   }
 
+  const richardson = r2.sum + (r2.sum - r1.sum) / 15;
+
+  // Divergence check after extrapolation
   if (Math.abs(r1.sum) > 100) {
     const ratio = Math.abs(r2.sum / r1.sum);
     if (ratio > 1.8 || ratio < 0.5) {
@@ -60,7 +63,7 @@ export function integrate(f: (x: number) => number, a: number, b: number, n = 20
     }
   }
 
-  return r1.sum;
+  return richardson;
 }
 
 export function computeIntegralPoints(

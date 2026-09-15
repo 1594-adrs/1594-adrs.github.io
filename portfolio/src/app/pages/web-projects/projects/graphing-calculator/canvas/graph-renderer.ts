@@ -1,43 +1,90 @@
 import { Viewport } from './viewport';
 import { tryEval } from './utils';
+import { detectAsymptotes } from '../engine/asymptote-detector';
 import type { Asymptote } from '../engine/asymptote-detector';
 
 // Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
 const COLOR_LABEL_BG = '#0a0a0f';
 const COLOR_LABEL_BORDER = '#333355';
 
-export function drawFunction(
+const MAX_Y_CLAMP = 1e6;
+const ASYMPTOTE_EPSILON = 1e-10;
+
+function getVerticalAsymptotes(fn: (x: number) => number, viewport: Viewport): number[] {
+  const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax);
+  return asymptotes
+    .filter((a) => a.type === 'vertical')
+    .map((a) => a.value)
+    .filter((v) => v > viewport.xMin + ASYMPTOTE_EPSILON && v < viewport.xMax - ASYMPTOTE_EPSILON)
+    .sort((a, b) => a - b);
+}
+
+function drawFunctionSegment(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
   fn: (x: number) => number,
-  color: string,
+  xStart: number,
+  xEnd: number,
   width: number,
   height: number,
+  color: string,
+  isNearAsymptoteStart: boolean,
+  isNearAsymptoteEnd: boolean,
 ): void {
+  const [startPx] = viewport.worldToScreen(xStart, 0, width, height);
+  const [endPx] = viewport.worldToScreen(xEnd, 0, width, height);
+
+  const pixelStart = Math.max(0, Math.floor(startPx));
+  const pixelEnd = Math.min(width, Math.ceil(endPx));
+  const pixelWidth = pixelEnd - pixelStart;
+
+  if (pixelWidth < 1) return;
+
+  const samples = Math.max(200, pixelWidth * 4);
+  const dx = (xEnd - xStart) / samples;
+
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  const pixelStep = 1;
-  const maxY = viewport.yMax + (viewport.yMax - viewport.yMin) * 0.1;
-  const minY = viewport.yMin - (viewport.yMax - viewport.yMin) * 0.1;
-
   ctx.beginPath();
   let drawing = false;
+  let prevSy: number | null = null;
+  let prevPx: number | null = null;
 
-  for (let px = 0; px <= width; px += pixelStep) {
-    const [wx] = viewport.screenToWorld(px, 0, width, height);
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    let wx: number;
+
+    if (isNearAsymptoteStart && isNearAsymptoteEnd) {
+      wx = xStart + t * (xEnd - xStart);
+    } else if (isNearAsymptoteStart) {
+      wx = xStart + Math.pow(t, 0.3) * (xEnd - xStart);
+    } else if (isNearAsymptoteEnd) {
+      wx = xStart + Math.pow(t, 3) * (xEnd - xStart);
+    } else {
+      wx = xStart + t * (xEnd - xStart);
+    }
+
+    const [px] = viewport.worldToScreen(wx, 0, width, height);
+
+    if (px < 0 || px > width) continue;
+
     let wy: number;
     try {
       wy = fn(wx);
     } catch {
       drawing = false;
+      prevSy = null;
+      prevPx = null;
       continue;
     }
 
-    if (!isFinite(wy) || wy > maxY || wy < minY) {
+    if (!isFinite(wy) || Math.abs(wy) > MAX_Y_CLAMP) {
       drawing = false;
+      prevSy = null;
+      prevPx = null;
       continue;
     }
 
@@ -47,10 +94,78 @@ export function drawFunction(
       ctx.moveTo(px, sy);
       drawing = true;
     } else {
-      ctx.lineTo(px, sy);
+      if (prevSy !== null && prevPx !== null) {
+        const dy = Math.abs(sy - prevSy);
+        const dpx = Math.abs(px - prevPx);
+        if (dpx > 0 && dy / dpx > height * 0.5) {
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(px, sy);
+        } else {
+          ctx.lineTo(px, sy);
+        }
+      } else {
+        ctx.lineTo(px, sy);
+      }
     }
+    prevSy = sy;
+    prevPx = px;
   }
   ctx.stroke();
+}
+
+export function drawFunction(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  fn: (x: number) => number,
+  color: string,
+  width: number,
+  height: number,
+): void {
+  const asymptotes = getVerticalAsymptotes(fn, viewport);
+
+  const segments: Array<{
+    start: number;
+    end: number;
+    nearStart: boolean;
+    nearEnd: boolean;
+  }> = [];
+  let prevX = viewport.xMin;
+
+  for (const ax of asymptotes) {
+    if (ax > prevX + ASYMPTOTE_EPSILON) {
+      segments.push({
+        start: prevX,
+        end: ax - ASYMPTOTE_EPSILON,
+        nearStart: false,
+        nearEnd: true,
+      });
+    }
+    prevX = ax + ASYMPTOTE_EPSILON;
+  }
+  if (prevX < viewport.xMax - ASYMPTOTE_EPSILON) {
+    segments.push({
+      start: prevX,
+      end: viewport.xMax,
+      nearStart: false,
+      nearEnd: false,
+    });
+  }
+
+  for (const seg of segments) {
+    drawFunctionSegment(
+      ctx,
+      viewport,
+      fn,
+      seg.start,
+      seg.end,
+      width,
+      height,
+      color,
+      seg.nearStart,
+      seg.nearEnd,
+    );
+  }
 }
 
 export function drawIntegralArea(
