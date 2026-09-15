@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, ViewEncapsulation, input } from '@angular/core';
-import type { ExpressionNode, BinaryOp } from '../../engine/parser';
+import type { ExpressionNode, BinaryOp, PoweredFunctionCall } from '../../engine/parser';
 
 @Component({
   selector: 'app-math-renderer',
@@ -38,7 +38,30 @@ export class MathRendererComponent {
         return `<span class="function">${node.name}</span><span class="paren">(</span>${this.renderNode(node.arg)}<span class="paren">)</span>`;
       case 'FunctionCallMultiArg':
         return this.renderMultiArg(node);
+      case 'PoweredFunctionCall':
+        return this.renderPoweredFunctionCall(node);
     }
+  }
+
+  private renderPoweredFunctionCall(node: PoweredFunctionCall): string {
+    const arg = this.renderNode(node.arg);
+    const power = this.renderNode(node.power);
+
+    const powerNum = this.extractNumber(node.power);
+    let superscript: string;
+    if (powerNum === 2) superscript = '²';
+    else if (powerNum === 3) superscript = '³';
+    else superscript = `<span class="superscript">${power}</span>`;
+
+    return `<span class="function">${node.name}${superscript}</span><span class="paren">(</span>${arg}<span class="paren">)</span>`;
+  }
+
+  private extractNumber(node: ExpressionNode): number | null {
+    if (node.type === 'NumberLiteral') return node.value;
+    if (node.type === 'UnaryOp' && node.operator === '-' && node.operand.type === 'NumberLiteral') {
+      return -node.operand.value;
+    }
+    return null;
   }
 
   private renderSqrt(arg: ExpressionNode): string {

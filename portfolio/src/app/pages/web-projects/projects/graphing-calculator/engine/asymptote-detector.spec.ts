@@ -30,4 +30,44 @@ describe('asymptote-detector', () => {
     const vertical = result.filter((a) => a.type === 'vertical');
     expect(vertical.length).toBeGreaterThan(0);
   });
+
+  it('should NOT detect horizontal asymptote for sin(x) (oscillating)', () => {
+    const fn = (x: number) => Math.sin(x);
+    // Test with various viewport bounds to ensure no false positives
+    const viewports = [
+      [-10, 10],
+      [-100, 100],
+      [-1000, 1000],
+      [0, 2 * Math.PI],
+      [-2 * Math.PI, 2 * Math.PI],
+    ];
+    for (const [xMin, xMax] of viewports) {
+      const result = detectAsymptotes(fn, xMin, xMax);
+      const horizontal = result.filter((a) => a.type === 'horizontal');
+      expect(horizontal.length).toBe(0);
+    }
+  });
+
+  it('should NOT detect horizontal asymptote for cos(x) (oscillating)', () => {
+    const fn = (x: number) => Math.cos(x);
+    const viewports = [
+      [-10, 10],
+      [-100, 100],
+      [-1000, 1000],
+      [0, 2 * Math.PI],
+      [-2 * Math.PI, 2 * Math.PI],
+    ];
+    for (const [xMin, xMax] of viewports) {
+      const result = detectAsymptotes(fn, xMin, xMax);
+      const horizontal = result.filter((a) => a.type === 'horizontal');
+      expect(horizontal.length).toBe(0);
+    }
+  });
+
+  it('should NOT detect horizontal asymptote for sin(x) + 0.1x (slowly growing oscillation)', () => {
+    const fn = (x: number) => Math.sin(x) + 0.1 * x;
+    const result = detectAsymptotes(fn, -100, 100);
+    const horizontal = result.filter((a) => a.type === 'horizontal');
+    expect(horizontal.length).toBe(0);
+  });
 });

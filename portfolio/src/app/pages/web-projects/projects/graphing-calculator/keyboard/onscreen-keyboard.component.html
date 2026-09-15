@@ -1,12 +1,7 @@
 <div class="keyboard">
   <div class="keyboard-tabs">
     @for (tab of tabs; track tab.name; let i = $index) {
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === i"
-        (click)="setTab(i)"
-        type="button"
-      >
+      <button class="tab-btn" [class.active]="activeTab() === i" (click)="setTab(i)" type="button">
         <span class="tab-icon">{{ tab.icon }}</span>
         <span class="tab-name">{{ tab.name }}</span>
       </button>

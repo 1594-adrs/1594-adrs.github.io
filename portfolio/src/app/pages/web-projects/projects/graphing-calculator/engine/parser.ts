@@ -4,7 +4,8 @@ export type ExpressionNode =
   | BinaryOp
   | UnaryOp
   | FunctionCall
-  | FunctionCallMultiArg;
+  | FunctionCallMultiArg
+  | PoweredFunctionCall;
 
 export interface NumberLiteral {
   type: 'NumberLiteral';
@@ -41,14 +42,14 @@ export interface FunctionCallMultiArg {
   args: ExpressionNode[];
 }
 
-type TokenType =
-  | 'number'
-  | 'variable'
-  | 'operator'
-  | 'lparen'
-  | 'rparen'
-  | 'comma'
-  | 'eof';
+export interface PoweredFunctionCall {
+  type: 'PoweredFunctionCall';
+  name: string;
+  arg: ExpressionNode;
+  power: ExpressionNode;
+}
+
+type TokenType = 'number' | 'variable' | 'operator' | 'lparen' | 'rparen' | 'comma' | 'eof';
 
 interface Token {
   type: TokenType;
@@ -87,8 +88,12 @@ const KNOWN_FUNCTIONS = new Set([
 const MULTI_ARG_FUNCTIONS = new Set(['min', 'max', 'mod', 'logb', 'root', 'atan2', 'npr', 'ncr']);
 
 const MULTI_ARG_REQUIRED_ARGS = new Map([
-  ['mod', 2], ['logb', 2], ['root', 2], ['atan2', 2],
-  ['npr', 2], ['ncr', 2],
+  ['mod', 2],
+  ['logb', 2],
+  ['root', 2],
+  ['atan2', 2],
+  ['npr', 2],
+  ['ncr', 2],
 ]);
 
 const MAX_AST_NODES = 500;
@@ -140,7 +145,7 @@ class Lexer {
           this.tokens.push({ type: 'operator', value: '>' });
           this.pos++;
         }
-      } else if (ch === '=' ) {
+      } else if (ch === '=') {
         if (this.pos + 1 < input.length && input[this.pos + 1] === '=') {
           this.tokens.push({ type: 'operator', value: '==' });
           this.pos += 2;
@@ -175,12 +180,18 @@ class Lexer {
         tok.type === 'number' ||
         tok.type === 'rparen' ||
         (tok.type === 'variable' && !isKnownFunction(tok.value));
-      const nextIsValue =
-        next.type === 'variable' ||
-        next.type === 'lparen';
+      const nextIsValue = next.type === 'variable' || next.type === 'lparen';
 
       if (tokIsValue && nextIsValue) {
         if (tok.type === 'variable' && isKnownFunction(tok.value)) continue;
+        if (
+          tok.type === 'number' &&
+          next.type === 'lparen' &&
+          i > 0 &&
+          this.tokens[i - 1].type === 'operator' &&
+          this.tokens[i - 1].value === '^'
+        )
+          continue;
         result.push({ type: 'operator', value: '*' });
       }
     }
@@ -389,11 +400,30 @@ class Parser {
       }
 
       if (KNOWN_FUNCTIONS.has(name)) {
+        if (this.current().type === 'operator' && this.current().value === '^') {
+          this.advance();
+          const power = this.parseUnary();
+          this.expect('lparen');
+          const arg = this.parseExpression();
+          this.expect('rparen');
+          this.countNode();
+          return { type: 'PoweredFunctionCall', name, arg, power };
+        }
+
         this.expect('lparen');
         const arg = this.parseExpression();
         this.expect('rparen');
         this.countNode();
-        return { type: 'FunctionCall', name, arg };
+        let node: ExpressionNode = { type: 'FunctionCall', name, arg };
+
+        if (this.current().type === 'operator' && this.current().value === '^') {
+          this.advance();
+          const power = this.parseUnary();
+          this.countNode();
+          node = { type: 'PoweredFunctionCall', name, arg, power };
+        }
+
+        return node;
       }
 
       this.countNode();

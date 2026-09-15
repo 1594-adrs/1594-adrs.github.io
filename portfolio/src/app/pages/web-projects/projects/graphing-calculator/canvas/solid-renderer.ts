@@ -110,9 +110,15 @@ export function drawSolidCrossSectionSingle(
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) { started = false; continue; }
+      if (isNaN(y)) {
+        started = false;
+        continue;
+      }
       const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      if (!started) {
+        ctx.moveTo(sx, sy);
+        started = true;
+      } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
 
@@ -143,7 +149,12 @@ export function drawSolidCrossSectionSingle(
         const [startSx, startSy] = viewport.worldToScreen(seg[0].x, k, width, height);
         ctx.moveTo(startSx, startSy);
 
-        const [axisEndSx, axisEndSy] = viewport.worldToScreen(seg[seg.length - 1].x, k, width, height);
+        const [axisEndSx, axisEndSy] = viewport.worldToScreen(
+          seg[seg.length - 1].x,
+          k,
+          width,
+          height,
+        );
         ctx.lineTo(axisEndSx, axisEndSy);
 
         for (let i = seg.length - 1; i >= 0; i--) {
@@ -175,9 +186,15 @@ export function drawSolidCrossSectionSingle(
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) { started = false; continue; }
+      if (isNaN(y)) {
+        started = false;
+        continue;
+      }
       const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      if (!started) {
+        ctx.moveTo(sx, sy);
+        started = true;
+      } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
 
@@ -213,9 +230,33 @@ export function drawSolidCrossSectionMulti(
   const k = axis.value;
 
   if (axis.type === 'x') {
-    drawHorizontalMulti(ctx, viewport, functions, functionColors, regions, allA, allB, k, steps, width, height);
+    drawHorizontalMulti(
+      ctx,
+      viewport,
+      functions,
+      functionColors,
+      regions,
+      allA,
+      allB,
+      k,
+      steps,
+      width,
+      height,
+    );
   } else {
-    drawVerticalMulti(ctx, viewport, functions, functionColors, regions, allA, allB, k, steps, width, height);
+    drawVerticalMulti(
+      ctx,
+      viewport,
+      functions,
+      functionColors,
+      regions,
+      allA,
+      allB,
+      k,
+      steps,
+      width,
+      height,
+    );
   }
 }
 
@@ -320,12 +361,28 @@ function drawHorizontalMulti(
     for (let i = 0; i <= rSteps; i++) {
       const x = region.a + i * ih;
       const y = tryEval(topFn, x);
-      if (isNaN(y)) { started = false; continue; }
+      if (isNaN(y)) {
+        started = false;
+        continue;
+      }
       const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      if (!started) {
+        ctx.moveTo(sx, sy);
+        started = true;
+      } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
-    drawGhostReflection(ctx, viewport, topFn, region.a, region.b, { type: 'x', value: k }, width, height, topColor);
+    drawGhostReflection(
+      ctx,
+      viewport,
+      topFn,
+      region.a,
+      region.b,
+      { type: 'x', value: k },
+      width,
+      height,
+      topColor,
+    );
 
     if (region.bottomFunctionIndex !== region.topFunctionIndex) {
       ctx.strokeStyle = botColor + '80';
@@ -335,17 +392,42 @@ function drawHorizontalMulti(
       for (let i = 0; i <= rSteps; i++) {
         const x = region.a + i * ih;
         const y = tryEval(botFn, x);
-        if (isNaN(y)) { started = false; continue; }
+        if (isNaN(y)) {
+          started = false;
+          continue;
+        }
         const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-        if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+        if (!started) {
+          ctx.moveTo(sx, sy);
+          started = true;
+        } else ctx.lineTo(sx, sy);
       }
       ctx.stroke();
-      drawGhostReflection(ctx, viewport, botFn, region.a, region.b, { type: 'x', value: k }, width, height, botColor);
+      drawGhostReflection(
+        ctx,
+        viewport,
+        botFn,
+        region.a,
+        region.b,
+        { type: 'x', value: k },
+        width,
+        height,
+        botColor,
+      );
     }
   }
 
   drawHorizontalBoundaryCapMulti(ctx, viewport, functions, regions[0], a, k, width, height);
-  drawHorizontalBoundaryCapMulti(ctx, viewport, functions, regions[regions.length - 1], b, k, width, height);
+  drawHorizontalBoundaryCapMulti(
+    ctx,
+    viewport,
+    functions,
+    regions[regions.length - 1],
+    b,
+    k,
+    width,
+    height,
+  );
 
   for (let i = 1; i < regions.length; i++) {
     const ix = regions[i].a;
@@ -469,12 +551,28 @@ function drawVerticalMulti(
     for (let i = 0; i <= rSteps; i++) {
       const x = region.a + i * ih;
       const y = tryEval(topFn, x);
-      if (isNaN(y)) { started = false; continue; }
+      if (isNaN(y)) {
+        started = false;
+        continue;
+      }
       const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      if (!started) {
+        ctx.moveTo(sx, sy);
+        started = true;
+      } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
-    drawGhostReflection(ctx, viewport, topFn, region.a, region.b, { type: 'y', value: k }, width, height, topColor);
+    drawGhostReflection(
+      ctx,
+      viewport,
+      topFn,
+      region.a,
+      region.b,
+      { type: 'y', value: k },
+      width,
+      height,
+      topColor,
+    );
 
     if (region.bottomFunctionIndex !== region.topFunctionIndex) {
       ctx.strokeStyle = botColor + '80';
@@ -484,17 +582,42 @@ function drawVerticalMulti(
       for (let i = 0; i <= rSteps; i++) {
         const x = region.a + i * ih;
         const y = tryEval(botFn, x);
-        if (isNaN(y)) { started = false; continue; }
+        if (isNaN(y)) {
+          started = false;
+          continue;
+        }
         const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-        if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+        if (!started) {
+          ctx.moveTo(sx, sy);
+          started = true;
+        } else ctx.lineTo(sx, sy);
       }
       ctx.stroke();
-      drawGhostReflection(ctx, viewport, botFn, region.a, region.b, { type: 'y', value: k }, width, height, botColor);
+      drawGhostReflection(
+        ctx,
+        viewport,
+        botFn,
+        region.a,
+        region.b,
+        { type: 'y', value: k },
+        width,
+        height,
+        botColor,
+      );
     }
   }
 
   drawVerticalBoundaryCapMulti(ctx, viewport, functions, regions[0], a, k, width, height);
-  drawVerticalBoundaryCapMulti(ctx, viewport, functions, regions[regions.length - 1], b, k, width, height);
+  drawVerticalBoundaryCapMulti(
+    ctx,
+    viewport,
+    functions,
+    regions[regions.length - 1],
+    b,
+    k,
+    width,
+    height,
+  );
 
   for (let i = 1; i < regions.length; i++) {
     const ix = regions[i].a;
@@ -560,10 +683,16 @@ function drawGhostReflection(
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) { started = false; continue; }
+      if (isNaN(y)) {
+        started = false;
+        continue;
+      }
       const reflectedY = 2 * k - y;
       const [sx, sy] = viewport.worldToScreen(x, reflectedY, width, height);
-      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      if (!started) {
+        ctx.moveTo(sx, sy);
+        started = true;
+      } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
 
@@ -572,7 +701,10 @@ function drawGhostReflection(
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) { fillStarted = false; continue; }
+      if (isNaN(y)) {
+        fillStarted = false;
+        continue;
+      }
       const reflectedY = 2 * k - y;
       const [sx, sy] = viewport.worldToScreen(x, reflectedY, width, height);
       if (!fillStarted) {
@@ -598,10 +730,16 @@ function drawGhostReflection(
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) { started = false; continue; }
+      if (isNaN(y)) {
+        started = false;
+        continue;
+      }
       const reflectedX = 2 * k - x;
       const [sx, sy] = viewport.worldToScreen(reflectedX, y, width, height);
-      if (!started) { ctx.moveTo(sx, sy); started = true; } else ctx.lineTo(sx, sy);
+      if (!started) {
+        ctx.moveTo(sx, sy);
+        started = true;
+      } else ctx.lineTo(sx, sy);
     }
     ctx.stroke();
 
@@ -611,7 +749,10 @@ function drawGhostReflection(
     for (let i = 0; i <= steps; i++) {
       const x = a + i * h;
       const y = tryEval(fn, x);
-      if (isNaN(y)) { fillStarted = false; continue; }
+      if (isNaN(y)) {
+        fillStarted = false;
+        continue;
+      }
       const reflectedX = 2 * k - x;
       lastReflectedY = y;
       const [sx, sy] = viewport.worldToScreen(reflectedX, y, width, height);

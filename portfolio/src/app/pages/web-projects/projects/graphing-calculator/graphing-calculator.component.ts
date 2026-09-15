@@ -35,10 +35,7 @@ import { drawImplicitCurve } from './canvas/implicit-renderer';
 import { solveConicForY } from './engine/conic-solver';
 import { detectConicDomain } from './engine/conic-detector';
 import { detectAsymptotes } from './engine/asymptote-detector';
-import {
-  drawSolidCrossSectionSingle,
-  drawSolidCrossSectionMulti,
-} from './canvas/solid-renderer';
+import { drawSolidCrossSectionSingle, drawSolidCrossSectionMulti } from './canvas/solid-renderer';
 import { parse } from './engine/parser';
 import type { ExpressionNode } from './engine/parser';
 import { evalExpression, evaluate, evalConstantExpression } from './engine/evaluator';
@@ -79,7 +76,14 @@ function formatValue(v: number): string {
 @Component({
   selector: 'app-graphing-calculator',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, OnscreenKeyboardComponent, Solid3DComponent, HelpModalComponent, MathRendererComponent, ConicAssistantComponent],
+  imports: [
+    RouterLink,
+    OnscreenKeyboardComponent,
+    Solid3DComponent,
+    HelpModalComponent,
+    MathRendererComponent,
+    ConicAssistantComponent,
+  ],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: ['./graphing-calculator.component.css', './results.css'],
 })
@@ -165,7 +169,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
               const px = evalX(t);
               const py = evalY(t);
               if (isFinite(px) && isFinite(py)) pts.push({ x: px, y: py });
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
           return (x: number) => {
             for (let i = 0; i < pts.length - 1; i++) {
@@ -192,7 +198,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             try {
               const r = evalR(theta);
               if (isFinite(r)) pts.push({ x: r * Math.cos(theta), y: r * Math.sin(theta) });
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
           return (x: number) => {
             for (let i = 0; i < pts.length - 1; i++) {
@@ -431,7 +439,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
                 const ast = parse(rhs);
                 return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op };
               } catch {
-                return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: op };
+                return {
+                  ...fn,
+                  raw,
+                  ast: null,
+                  mode,
+                  paramX: null,
+                  paramY: null,
+                  inequalityOp: op,
+                };
               }
             }
             try {
@@ -446,13 +462,26 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
               const eqIdx = raw.indexOf('=');
               const lhs = parse(raw.substring(0, eqIdx));
               const rhs = parse(raw.substring(eqIdx + 1));
-              const ast: ExpressionNode = { type: 'BinaryOp', operator: '=', left: lhs, right: rhs };
+              const ast: ExpressionNode = {
+                type: 'BinaryOp',
+                operator: '=',
+                left: lhs,
+                right: rhs,
+              };
               return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
             }
             const ast = parse(raw);
             return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
           } catch {
-            return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
+            return {
+              ...fn,
+              raw,
+              ast: null,
+              mode,
+              paramX: null,
+              paramY: null,
+              inequalityOp: undefined,
+            };
           }
         }
         if (mode === 'parametric') {
@@ -465,10 +494,26 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
               const paramY = parse(yExpr);
               return { ...fn, raw, ast: null, mode, paramX, paramY, inequalityOp: undefined };
             } catch {
-              return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
+              return {
+                ...fn,
+                raw,
+                ast: null,
+                mode,
+                paramX: null,
+                paramY: null,
+                inequalityOp: undefined,
+              };
             }
           }
-          return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
+          return {
+            ...fn,
+            raw,
+            ast: null,
+            mode,
+            paramX: null,
+            paramY: null,
+            inequalityOp: undefined,
+          };
         }
         if (mode === 'polar') {
           const expr = raw.replace(/^r\s*=\s*/i, '');
@@ -476,14 +521,38 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             const ast = parse(expr);
             return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
           } catch {
-            return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: undefined };
+            return {
+              ...fn,
+              raw,
+              ast: null,
+              mode,
+              paramX: null,
+              paramY: null,
+              inequalityOp: undefined,
+            };
           }
         }
         try {
           const ast = parse(effectiveRaw);
-          return { ...fn, raw, ast, mode: 'explicit', paramX: null, paramY: null, inequalityOp: undefined };
+          return {
+            ...fn,
+            raw,
+            ast,
+            mode: 'explicit',
+            paramX: null,
+            paramY: null,
+            inequalityOp: undefined,
+          };
         } catch {
-          return { ...fn, raw, ast: null, mode: 'explicit', paramX: null, paramY: null, inequalityOp: undefined };
+          return {
+            ...fn,
+            raw,
+            ast: null,
+            mode: 'explicit',
+            paramX: null,
+            paramY: null,
+            inequalityOp: undefined,
+          };
         }
       }),
     );
@@ -504,14 +573,25 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (i !== index) return fn;
         const currentIdx = modes.indexOf(fn.mode);
         const nextMode = modes[(currentIdx + 1) % modes.length];
-        return { ...fn, mode: nextMode, ast: null, paramX: null, paramY: null, inequalityOp: undefined };
+        return {
+          ...fn,
+          mode: nextMode,
+          ast: null,
+          paramX: null,
+          paramY: null,
+          inequalityOp: undefined,
+        };
       }),
     );
     const fn = this.functions()[index];
     if (fn) this.updateExpression(index, fn.raw);
   }
 
-  updateParamRange(index: number, field: 'tMin' | 'tMax' | 'thetaMin' | 'thetaMax', value: string): void {
+  updateParamRange(
+    index: number,
+    field: 'tMin' | 'tMax' | 'thetaMin' | 'thetaMax',
+    value: string,
+  ): void {
     this.functions.update((fns) =>
       fns.map((fn, i) => (i === index ? { ...fn, [field]: value } : fn)),
     );
@@ -697,11 +777,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.activeSolid.set(null);
       this.show3DSolid.set(false);
       const indices =
-        this.functions().length >= 2
-          ? [0, 1]
-          : this.functions().length === 1
-            ? [0]
-            : [];
+        this.functions().length >= 2 ? [0, 1] : this.functions().length === 1 ? [0] : [];
 
       let a = -2;
       let b = 2;
@@ -882,6 +958,85 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.requestRender();
   }
 
+  onCanvasTouchStart(event: TouchEvent): void {
+    event.preventDefault();
+    const canvas = this.canvasRef()?.nativeElement;
+    if (!canvas) return;
+
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      this.isDragging.set(true);
+      this.lastDrag.set({ x, y });
+    } else if (event.touches.length === 2) {
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      const dx = touch2.clientX - touch1.clientX;
+      const dy = touch2.clientY - touch1.clientY;
+      this.lastDrag.set({ x: Math.hypot(dx, dy), y: 0 });
+    }
+  }
+
+  onCanvasTouchMove(event: TouchEvent): void {
+    event.preventDefault();
+    const canvas = this.canvasRef()?.nativeElement;
+    if (!canvas) return;
+
+    if (event.touches.length === 1 && this.isDragging()) {
+      const touch = event.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      const last = this.lastDrag();
+      if (last) {
+        const dx = x - last.x;
+        const dy = y - last.y;
+        this.viewport.pan(dx, dy, canvas.width, canvas.height);
+      }
+      this.lastDrag.set({ x, y });
+      this.requestRender();
+    } else if (event.touches.length === 2) {
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      const dx = touch2.clientX - touch1.clientX;
+      const dy = touch2.clientY - touch1.clientY;
+      const currentDist = Math.hypot(dx, dy);
+      const last = this.lastDrag();
+      const lastDist = last?.x ?? 0;
+      if (lastDist > 0) {
+        const factor = currentDist / lastDist;
+        const centerX = (touch1.clientX + touch2.clientX) / 2;
+        const centerY = (touch1.clientY + touch2.clientY) / 2;
+        const rect = canvas.getBoundingClientRect();
+        const cx = centerX - rect.left;
+        const cy = centerY - rect.top;
+        if (factor > 1.01 || factor < 0.99) {
+          this.viewport.zoom(factor, cx, cy, canvas.width, canvas.height);
+          this.requestRender();
+        }
+      }
+      this.lastDrag.set({ x: currentDist, y: 0 });
+    }
+  }
+
+  onCanvasTouchEnd(event: TouchEvent): void {
+    if (event.touches.length === 0) {
+      this.isDragging.set(false);
+      this.lastDrag.set(null);
+    } else if (event.touches.length === 1) {
+      const canvas = this.canvasRef()?.nativeElement;
+      if (canvas) {
+        const touch = event.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        this.lastDrag.set({ x, y });
+      }
+    }
+  }
+
   resetView(): void {
     this.viewport.reset();
     this.render();
@@ -979,8 +1134,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (!intg) return null;
         let newIdx = intg.fnIndex;
         if (intg.fnIndex === sourceIndex) newIdx = targetIndex;
-        else if (sourceIndex < targetIndex && intg.fnIndex > sourceIndex && intg.fnIndex <= targetIndex) newIdx = intg.fnIndex - 1;
-        else if (sourceIndex > targetIndex && intg.fnIndex >= targetIndex && intg.fnIndex < sourceIndex) newIdx = intg.fnIndex + 1;
+        else if (
+          sourceIndex < targetIndex &&
+          intg.fnIndex > sourceIndex &&
+          intg.fnIndex <= targetIndex
+        )
+          newIdx = intg.fnIndex - 1;
+        else if (
+          sourceIndex > targetIndex &&
+          intg.fnIndex >= targetIndex &&
+          intg.fnIndex < sourceIndex
+        )
+          newIdx = intg.fnIndex + 1;
         return { ...intg, fnIndex: newIdx };
       });
     }

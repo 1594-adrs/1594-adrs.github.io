@@ -50,25 +50,19 @@ export function solidSurfaceAreaSingle(
   const k = axis.value;
   if (axis.type === 'x') {
     return clampResult(
-      2 * Math.PI * integrate(
-        (x) => Math.abs(f(x) - k) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)),
-        a, b,
-      ),
+      2 *
+        Math.PI *
+        integrate((x) => Math.abs(f(x) - k) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)), a, b),
     );
   }
   return clampResult(
-    2 * Math.PI * integrate(
-      (x) => Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)),
-      a, b,
-    ),
+    2 *
+      Math.PI *
+      integrate((x) => Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(f, x), 2)), a, b),
   );
 }
 
-export function areaSingle(
-  f: (x: number) => number,
-  a: number,
-  b: number,
-): number {
+export function areaSingle(f: (x: number) => number, a: number, b: number): number {
   return clampResult(integrate((x) => Math.abs(f(x)), a, b));
 }
 
@@ -217,7 +211,8 @@ export function solidVolumeMulti(
       if (axis.type === 'x') {
         total += Math.PI * integrate((x) => Math.pow(fn(x) - k, 2), region.a, region.b);
       } else {
-        total += 2 * Math.PI * integrate((x) => Math.abs(x - k) * Math.abs(fn(x)), region.a, region.b);
+        total +=
+          2 * Math.PI * integrate((x) => Math.abs(x - k) * Math.abs(fn(x)), region.a, region.b);
       }
     } else {
       const factor = axis.type === 'x' ? Math.PI : 2 * Math.PI;
@@ -247,27 +242,55 @@ export function solidSurfaceAreaMulti(
     if (region.topFunctionIndex === region.bottomFunctionIndex) {
       const fn = functions[region.topFunctionIndex];
       if (axis.type === 'x') {
-        total += 2 * Math.PI * integrate(
-          (x) => Math.abs(fn(x) - k) * Math.sqrt(1 + Math.pow(derivative(fn, x), 2)),
-          region.a, region.b,
-        );
+        total +=
+          2 *
+          Math.PI *
+          integrate(
+            (x) => Math.abs(fn(x) - k) * Math.sqrt(1 + Math.pow(derivative(fn, x), 2)),
+            region.a,
+            region.b,
+          );
       } else {
-        total += 2 * Math.PI * integrate(
-          (x) => Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(fn, x), 2)),
-          region.a, region.b,
-        );
+        total +=
+          2 *
+          Math.PI *
+          integrate(
+            (x) => Math.abs(x - k) * Math.sqrt(1 + Math.pow(derivative(fn, x), 2)),
+            region.a,
+            region.b,
+          );
       }
     } else {
       const outerIntegrand =
         axis.type === 'x'
-          ? makeIntegrandSurfaceOuterH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
-          : makeIntegrandSurfaceOuterV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+          ? makeIntegrandSurfaceOuterH(
+              functions,
+              region.topFunctionIndex,
+              region.bottomFunctionIndex,
+              k,
+            )
+          : makeIntegrandSurfaceOuterV(
+              functions,
+              region.topFunctionIndex,
+              region.bottomFunctionIndex,
+              k,
+            );
       total += 2 * Math.PI * integrate(outerIntegrand, region.a, region.b);
 
       const innerIntegrand =
         axis.type === 'x'
-          ? makeIntegrandSurfaceInnerH(functions, region.topFunctionIndex, region.bottomFunctionIndex, k)
-          : makeIntegrandSurfaceInnerV(functions, region.topFunctionIndex, region.bottomFunctionIndex, k);
+          ? makeIntegrandSurfaceInnerH(
+              functions,
+              region.topFunctionIndex,
+              region.bottomFunctionIndex,
+              k,
+            )
+          : makeIntegrandSurfaceInnerV(
+              functions,
+              region.topFunctionIndex,
+              region.bottomFunctionIndex,
+              k,
+            );
       total += 2 * Math.PI * integrate(innerIntegrand, region.a, region.b);
     }
   }
@@ -278,13 +301,23 @@ export function solidSurfaceAreaMulti(
     if (first.topFunctionIndex !== first.bottomFunctionIndex) {
       const capFn =
         axis.type === 'x'
-          ? computeCapAreaH.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k)
-          : computeCapAreaV.bind(null, functions, first.topFunctionIndex, first.bottomFunctionIndex, k);
+          ? computeCapAreaH.bind(
+              null,
+              functions,
+              first.topFunctionIndex,
+              first.bottomFunctionIndex,
+              k,
+            )
+          : computeCapAreaV.bind(
+              null,
+              functions,
+              first.topFunctionIndex,
+              first.bottomFunctionIndex,
+              k,
+            );
       total += capFn(first.a) + capFn(last.b);
     }
   }
 
   return clampResult(total);
 }
-
-

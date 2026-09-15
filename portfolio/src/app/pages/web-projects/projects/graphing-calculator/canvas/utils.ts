@@ -1,6 +1,6 @@
 // Canvas 2D context does not support CSS variables; these utilities are for canvas rendering only.
 
-const CLAMP = 1e8;
+const CLAMP = 1e15;
 
 export function tryEval(fn: (x: number) => number, x: number): number {
   try {

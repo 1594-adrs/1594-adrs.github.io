@@ -126,7 +126,12 @@ export class SolidScene {
   }
 
   private disposeMeshes(): void {
-    const fields = [this.outerMesh, this.innerMesh, this.innerWire, this.capMesh] as (Mesh | null)[];
+    const fields = [
+      this.outerMesh,
+      this.innerMesh,
+      this.innerWire,
+      this.capMesh,
+    ] as (Mesh | null)[];
     for (const m of fields) {
       if (m) {
         this.scene.remove(m);

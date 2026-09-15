@@ -4,7 +4,7 @@ import { parse } from './parser';
 const CONSTANTS: Record<string, number> = {
   e: Math.E,
   pi: Math.PI,
-  'π': Math.PI,
+  π: Math.PI,
 };
 
 function factorial(n: number): number {
@@ -22,14 +22,8 @@ function gamma(x: number): number {
   x -= 1;
   const g = 7;
   const c = [
-    0.99999999999980993,
-    676.5203681218851,
-    -1259.1392167224028,
-    771.32342877765313,
-    -176.61502916214059,
-    12.507343278686905,
-    -0.13857109526572012,
-    9.9843695780195716e-6,
+    0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+    -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6,
     1.5056327351493116e-7,
   ];
   let a = c[0];
@@ -184,6 +178,24 @@ export function evaluate(
           return tfn(evalNode(node.args[0]), evalNode(node.args[1]));
         }
         throw new Error(`Unknown function: '${node.name}'`);
+      }
+
+      case 'PoweredFunctionCall': {
+        const fn = FUNCTIONS[node.name];
+        if (!fn) throw new Error(`Unknown function: '${node.name}'`);
+        let arg = evalNode(node.arg);
+
+        if (TRIG_FUNCTIONS.has(node.name) && angleUnit === 'deg') {
+          arg = (arg * Math.PI) / 180;
+        }
+
+        const result = fn(arg);
+        const power = evalNode(node.power);
+
+        if (INVERSE_TRIG_FUNCTIONS.has(node.name) && angleUnit === 'deg') {
+          return Math.pow((result * 180) / Math.PI, power);
+        }
+        return Math.pow(result, power);
       }
     }
   }
