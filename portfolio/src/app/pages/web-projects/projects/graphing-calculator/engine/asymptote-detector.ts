@@ -1,3 +1,5 @@
+import type { ExpressionNode } from './parser';
+
 export interface Asymptote {
   type: 'vertical' | 'horizontal' | 'oblique';
   equation: string;
@@ -5,18 +7,170 @@ export interface Asymptote {
   intercept?: number;
 }
 
+export type FunctionCategory =
+  'rational' | 'trigonometric' | 'polynomial' | 'exponential' | 'logarithmic' | 'other';
+
 export function detectAsymptotes(
   fn: (x: number) => number,
   xMin: number,
   xMax: number,
+  ast?: ExpressionNode,
 ): Asymptote[] {
   const asymptotes: Asymptote[] = [];
 
   detectVertical(fn, xMin, xMax, asymptotes);
-  detectHorizontal(fn, xMin, xMax, asymptotes);
-  detectOblique(fn, xMin, xMax, asymptotes);
+
+  if (canHaveHorizontalAsymptote(ast)) {
+    detectHorizontal(fn, xMin, xMax, asymptotes);
+  }
+
+  if (canHaveObliqueAsymptote(ast)) {
+    detectOblique(fn, xMin, xMax, asymptotes);
+  }
 
   return asymptotes;
+}
+
+function categorizeFunction(ast?: ExpressionNode): FunctionCategory {
+  if (!ast) return 'other';
+
+  const trigFunctions = new Set([
+    'sin',
+    'cos',
+    'tan',
+    'sec',
+    'csc',
+    'cot',
+    'asin',
+    'acos',
+    'atan',
+    'sinh',
+    'cosh',
+    'tanh',
+  ]);
+
+  const logExpFunctions = new Set(['log', 'ln', 'exp', 'logb']);
+
+  function hasNodeType(node: ExpressionNode, types: string[]): boolean {
+    if (types.includes(node.type)) return true;
+    if (node.type === 'FunctionCall' || node.type === 'PoweredFunctionCall') {
+      if (trigFunctions.has(node.name)) return true;
+      if (logExpFunctions.has(node.name)) return true;
+      return hasNodeType(node.arg, types);
+    }
+    if (node.type === 'FunctionCallMultiArg') {
+      if (trigFunctions.has(node.name)) return true;
+      if (logExpFunctions.has(node.name)) return true;
+      return node.args.some((arg) => hasNodeType(arg, types));
+    }
+    if (node.type === 'BinaryOp') {
+      return hasNodeType(node.left, types) || hasNodeType(node.right, types);
+    }
+    if (node.type === 'UnaryOp') {
+      return hasNodeType(node.operand, types);
+    }
+    return false;
+  }
+
+  if (hasNodeType(ast, ['FunctionCall', 'FunctionCallMultiArg', 'PoweredFunctionCall'])) {
+    const trigNames = [
+      'sin',
+      'cos',
+      'tan',
+      'sec',
+      'csc',
+      'cot',
+      'asin',
+      'acos',
+      'atan',
+      'sinh',
+      'cosh',
+      'tanh',
+    ];
+    const logExpNames = ['log', 'ln', 'exp', 'logb'];
+    const names = collectFunctionNames(ast);
+    if (names.some((n) => trigNames.includes(n))) return 'trigonometric';
+    if (names.some((n) => logExpNames.includes(n))) return 'exponential';
+  }
+
+  if (hasNodeType(ast, ['BinaryOp'])) {
+    if (hasDivision(ast)) return 'rational';
+  }
+
+  if (isPolynomial(ast)) return 'polynomial';
+
+  return 'other';
+}
+
+function collectFunctionNames(node: ExpressionNode): string[] {
+  const names: string[] = [];
+  function traverse(n: ExpressionNode) {
+    if (
+      n.type === 'FunctionCall' ||
+      n.type === 'FunctionCallMultiArg' ||
+      n.type === 'PoweredFunctionCall'
+    ) {
+      names.push(n.name);
+      if (n.type === 'FunctionCall' || n.type === 'PoweredFunctionCall') traverse(n.arg);
+      else if (n.type === 'FunctionCallMultiArg') n.args.forEach(traverse);
+    } else if (n.type === 'BinaryOp') {
+      traverse(n.left);
+      traverse(n.right);
+    } else if (n.type === 'UnaryOp') {
+      traverse(n.operand);
+    }
+  }
+  traverse(node);
+  return names;
+}
+
+function hasDivision(node: ExpressionNode): boolean {
+  if (node.type === 'BinaryOp' && node.operator === '/') return true;
+  if (node.type === 'BinaryOp') return hasDivision(node.left) || hasDivision(node.right);
+  if (node.type === 'UnaryOp') return hasDivision(node.operand);
+  if (node.type === 'FunctionCall' || node.type === 'PoweredFunctionCall')
+    return hasDivision(node.arg);
+  if (node.type === 'FunctionCallMultiArg') return node.args.some(hasDivision);
+  return false;
+}
+
+function isPolynomial(node: ExpressionNode): boolean {
+  if (node.type === 'NumberLiteral' || node.type === 'Variable') return true;
+  if (node.type === 'BinaryOp') {
+    if (node.operator === '^') {
+      if (
+        node.left.type === 'Variable' &&
+        node.right.type === 'NumberLiteral' &&
+        Number.isInteger(node.right.value) &&
+        node.right.value >= 0
+      ) {
+        return true;
+      }
+      return false;
+    }
+    if (['+', '-', '*'].includes(node.operator)) {
+      return isPolynomial(node.left) && isPolynomial(node.right);
+    }
+    return false;
+  }
+  if (node.type === 'UnaryOp') return isPolynomial(node.operand);
+  if (
+    node.type === 'FunctionCall' ||
+    node.type === 'FunctionCallMultiArg' ||
+    node.type === 'PoweredFunctionCall'
+  )
+    return false;
+  return false;
+}
+
+export function canHaveHorizontalAsymptote(ast?: ExpressionNode): boolean {
+  const category = categorizeFunction(ast);
+  return category === 'rational' || category === 'exponential' || category === 'logarithmic';
+}
+
+export function canHaveObliqueAsymptote(ast?: ExpressionNode): boolean {
+  const category = categorizeFunction(ast);
+  return category === 'rational';
 }
 
 function detectVertical(

@@ -2,6 +2,7 @@ import { Viewport } from './viewport';
 import { tryEval } from './utils';
 import { detectAsymptotes } from '../engine/asymptote-detector';
 import type { Asymptote } from '../engine/asymptote-detector';
+import type { ExpressionNode } from '../engine/parser';
 
 // Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
 const COLOR_LABEL_BG = '#0a0a0f';
@@ -10,8 +11,12 @@ const COLOR_LABEL_BORDER = '#333355';
 const MAX_Y_CLAMP = 1e6;
 const ASYMPTOTE_EPSILON = 1e-10;
 
-function getVerticalAsymptotes(fn: (x: number) => number, viewport: Viewport): number[] {
-  const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax);
+function getVerticalAsymptotes(
+  fn: (x: number) => number,
+  viewport: Viewport,
+  ast?: ExpressionNode,
+): number[] {
+  const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax, ast);
   return asymptotes
     .filter((a) => a.type === 'vertical')
     .map((a) => a.value)
@@ -121,8 +126,9 @@ export function drawFunction(
   color: string,
   width: number,
   height: number,
+  ast?: ExpressionNode,
 ): void {
-  const asymptotes = getVerticalAsymptotes(fn, viewport);
+  const asymptotes = getVerticalAsymptotes(fn, viewport, ast);
 
   const segments: Array<{
     start: number;

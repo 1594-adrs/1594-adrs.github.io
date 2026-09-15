@@ -1360,8 +1360,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       } else {
         if (!fn.ast) continue;
         const evalFn = (x: number) => evalExpression(fn.ast!, x, undefined, au);
-        drawFunction(ctx, this.viewport, evalFn, fn.color, w, h);
-        const asymptotes = detectAsymptotes(evalFn, this.viewport.xMin, this.viewport.xMax);
+        drawFunction(ctx, this.viewport, evalFn, fn.color, w, h, fn.ast);
+        const asymptotes = detectAsymptotes(evalFn, this.viewport.xMin, this.viewport.xMax, fn.ast);
         for (const a of asymptotes) {
           drawAsymptote(ctx, this.viewport, a, w, h);
         }
