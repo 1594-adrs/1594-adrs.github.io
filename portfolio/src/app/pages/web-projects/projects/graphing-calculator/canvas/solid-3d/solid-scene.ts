@@ -17,8 +17,20 @@ import {
   EdgesGeometry,
   LineSegments,
   LineBasicMaterial,
+  LineDashedMaterial,
+  Line,
+  Plane,
+  Vector3,
+  BufferGeometry,
 } from 'three';
 import type { SolidMeshes } from './solid-geometry';
+import type { AxisLine } from '../../engine/solids/solid.types';
+
+/** Normal + constant of a THREE.Plane, kept DOM/three-agnostic at the call site. */
+export interface SweepClip {
+  normal: [number, number, number];
+  constant: number;
+}
 
 function disposeMaterial(material: Material | Material[]): void {
   if (Array.isArray(material)) {
@@ -41,6 +53,13 @@ export class SolidScene {
   private readonly axes: AxesHelper;
   private isDisposed = false;
 
+  // "solids by integration" (spec-driven) pipeline — kept separate from the legacy fields above.
+  private solidPieceMeshes: Mesh[] = [];
+  private sliceMesh: Mesh | null = null;
+  private axisLine: Line | null = null;
+  private readonly clipPlane = new Plane(new Vector3(-1, 0, 0), 0);
+  private clipActive = false;
+
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new Scene();
     this.scene.background = new Color(0x0d0d15);
@@ -52,6 +71,7 @@ export class SolidScene {
     this.renderer = new WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(canvas.width, canvas.height);
+    this.renderer.localClippingEnabled = true;
 
     const ambient = new AmbientLight(0x404040, 0.6);
     this.scene.add(ambient);
@@ -161,6 +181,111 @@ export class SolidScene {
     this.edgeLines = null;
   }
 
+  /** Clears the legacy (functions/regions) meshes, e.g. when a spec-driven solid takes over. */
+  clearLegacyMesh(): void {
+    this.disposeMeshes();
+  }
+
+  /** Clears the spec-driven meshes (solid pieces, slice, axis line), e.g. when spec becomes null. */
+  clearSpecMesh(): void {
+    this.disposeSolidPieces();
+    this.updateSliceMesh(null, '#ffcc00');
+    this.updateAxisLine(null);
+  }
+
+  /** Replaces the spec-driven solid mesh with one Mesh per piece geometry. */
+  updateSolidPieces(geometries: BufferGeometry[], color: string): void {
+    this.disposeSolidPieces();
+    const baseColor = new Color(color);
+    for (const geometry of geometries) {
+      const material = new MeshPhongMaterial({
+        color: baseColor,
+        transparent: true,
+        opacity: 0.5,
+        side: DoubleSide,
+        clippingPlanes: this.clipActive ? [this.clipPlane] : [],
+      });
+      const mesh = new Mesh(geometry, material);
+      this.scene.add(mesh);
+      this.solidPieceMeshes.push(mesh);
+    }
+  }
+
+  /** Updates the color of the existing spec-driven solid pieces without touching geometry. */
+  setSolidColor(color: string): void {
+    const baseColor = new Color(color);
+    for (const mesh of this.solidPieceMeshes) {
+      (mesh.material as MeshPhongMaterial).color.copy(baseColor);
+    }
+  }
+
+  private disposeSolidPieces(): void {
+    for (const mesh of this.solidPieceMeshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as Material).dispose();
+    }
+    this.solidPieceMeshes = [];
+  }
+
+  /**
+   * Sets (or clears) the sweep clipping plane used to reveal only the part of the solid already
+   * swept from a to t. Updates the existing piece materials in place — no mesh regeneration.
+   */
+  setSweepClip(clip: SweepClip | null): void {
+    this.clipActive = clip !== null;
+    if (clip) {
+      this.clipPlane.normal.set(clip.normal[0], clip.normal[1], clip.normal[2]);
+      this.clipPlane.constant = clip.constant;
+    }
+    for (const mesh of this.solidPieceMeshes) {
+      (mesh.material as MeshPhongMaterial).clippingPlanes = this.clipActive ? [this.clipPlane] : [];
+    }
+  }
+
+  /** Shows (or hides, when geometry is null) the representative slice in a highlight color. */
+  updateSliceMesh(geometry: BufferGeometry | null, color: string): void {
+    if (this.sliceMesh) {
+      this.scene.remove(this.sliceMesh);
+      this.sliceMesh.geometry.dispose();
+      (this.sliceMesh.material as Material).dispose();
+      this.sliceMesh = null;
+    }
+    if (!geometry) return;
+    const material = new MeshPhongMaterial({
+      color: new Color(color),
+      transparent: true,
+      opacity: 0.9,
+      side: DoubleSide,
+    });
+    this.sliceMesh = new Mesh(geometry, material);
+    this.scene.add(this.sliceMesh);
+  }
+
+  /** Draws (or clears, when axis is null) the 3D line of revolution. */
+  updateAxisLine(axis: AxisLine | null): void {
+    if (this.axisLine) {
+      this.scene.remove(this.axisLine);
+      this.axisLine.geometry.dispose();
+      (this.axisLine.material as Material).dispose();
+      this.axisLine = null;
+    }
+    if (!axis) return;
+
+    const length = 24;
+    const points =
+      axis.orientation === 'horizontal'
+        ? [new Vector3(-length / 2, axis.value, 0), new Vector3(length / 2, axis.value, 0)]
+        : [new Vector3(axis.value, -length / 2, 0), new Vector3(axis.value, length / 2, 0)];
+
+    const geometry = new BufferGeometry().setFromPoints(points);
+    const material = new LineDashedMaterial({ color: 0xffffff, dashSize: 0.3, gapSize: 0.2 });
+    const line = new Line(geometry, material);
+    line.computeLineDistances();
+    this.scene.add(line);
+    this.axisLine = line;
+  }
+
   render(): void {
     if (this.isDisposed) return;
     this.renderer.render(this.scene, this.camera);
@@ -193,6 +318,17 @@ export class SolidScene {
   dispose(): void {
     this.isDisposed = true;
     this.disposeMeshes();
+    this.disposeSolidPieces();
+    if (this.sliceMesh) {
+      this.sliceMesh.geometry.dispose();
+      (this.sliceMesh.material as Material).dispose();
+      this.sliceMesh = null;
+    }
+    if (this.axisLine) {
+      this.axisLine.geometry.dispose();
+      (this.axisLine.material as Material).dispose();
+      this.axisLine = null;
+    }
     this.grid.geometry.dispose();
     disposeMaterial(this.grid.material);
     this.axes.geometry.dispose();
