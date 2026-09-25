@@ -7,7 +7,7 @@ export interface RotationAxis {
   value: number;
 }
 
-export type CurveMode = 'explicit' | 'implicit' | 'parametric' | 'polar';
+export type CurveMode = 'explicit' | 'explicit-y' | 'implicit' | 'parametric' | 'polar';
 export type OverlapMode = 'pairwise' | 'all';
 
 export interface MathExpression {
@@ -23,6 +23,8 @@ export interface MathExpression {
   thetaMin?: string;
   thetaMax?: string;
   inequalityOp?: '>' | '<' | '>=' | '<=';
+  /** Inline validation message (parse or unknown-variable/function), or null when valid. */
+  error: string | null;
 }
 
 export interface IntegralResult {

@@ -174,6 +174,65 @@ export function drawFunction(
   }
 }
 
+/** Draws x = g(y): samples y across the visible viewport range and plots (g(y), y). */
+export function drawExplicitY(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  fn: (y: number) => number,
+  color: string,
+  width: number,
+  height: number,
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const yMin = viewport.yMin;
+  const yMax = viewport.yMax;
+  const samples = Math.max(200, height * 2);
+  const dy = (yMax - yMin) / samples;
+
+  ctx.beginPath();
+  let drawing = false;
+  let prevSx: number | null = null;
+  let prevSy: number | null = null;
+
+  for (let i = 0; i <= samples; i++) {
+    const y = yMin + i * dy;
+    const x = tryEval(fn, y);
+
+    if (isNaN(x)) {
+      drawing = false;
+      prevSx = null;
+      prevSy = null;
+      continue;
+    }
+
+    const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+
+    if (!drawing) {
+      ctx.moveTo(sx, sy);
+      drawing = true;
+    } else if (prevSx !== null && prevSy !== null) {
+      const dxPix = Math.abs(sx - prevSx);
+      const dyPix = Math.abs(sy - prevSy);
+      if (dyPix > 0 && dxPix / dyPix > width * 0.5) {
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+      } else {
+        ctx.lineTo(sx, sy);
+      }
+    } else {
+      ctx.lineTo(sx, sy);
+    }
+    prevSx = sx;
+    prevSy = sy;
+  }
+  ctx.stroke();
+}
+
 export function drawIntegralArea(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,

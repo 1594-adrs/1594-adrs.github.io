@@ -30,6 +30,7 @@ import {
   drawInequality,
   drawImplicitInequality,
   drawAsymptote,
+  drawExplicitY,
 } from './canvas/graph-renderer';
 import { drawImplicitCurve } from './canvas/implicit-renderer';
 import { solveConicForY } from './engine/conic-solver';
@@ -50,6 +51,7 @@ import {
 import { findIntersections } from './engine/intersection-finder';
 import { findAxisCrossings } from './canvas/utils';
 import { computeAreaRegions, computeRevolutionRegions } from './engine/area-splitter';
+import { detectCurveMode } from './engine/mode-detector';
 import { FUNCTION_COLORS } from './utils/color';
 import { OnscreenKeyboardComponent } from './keyboard/onscreen-keyboard.component';
 import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
@@ -62,6 +64,19 @@ import type {
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
+
+/**
+ * Rewrites the evaluator's "Unknown variable: 'foo'" into a display message.
+ * When `foo` is immediately followed by `(` in the parsed text, the user
+ * likely meant to call an unrecognized function, so the message says so.
+ */
+function formatExpressionError(message: string, exprText: string): string {
+  const match = /^Unknown variable: '([^']+)'$/.exec(message);
+  if (!match) return message;
+  const name = match[1];
+  const followedByParen = new RegExp(`${name}\\s*\\(`).test(exprText);
+  return followedByParen ? `Unknown function or variable '${name}'` : `Unknown variable '${name}'`;
+}
 
 function formatValue(v: number): string {
   if (Number.isNaN(v)) return 'undefined';
@@ -98,7 +113,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
 
   functions = signal<MathExpression[]>([
-    { raw: 'sin(x)', ast: null, color: FUNCTION_COLORS[0], visible: true, mode: 'explicit' },
+    {
+      raw: 'sin(x)',
+      ast: null,
+      color: FUNCTION_COLORS[0],
+      visible: true,
+      mode: 'explicit',
+      error: null,
+    },
   ]);
 
   activeIntegral = signal<{ fnIndex: number; a: number; b: number } | null>(null);
@@ -121,7 +143,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (isNaN(point)) return [];
     const au = this.angleUnit();
     return this.functions()
-      .filter((f) => f.visible && f.ast)
+      .filter((f) => f.visible && f.ast && f.mode !== 'explicit-y')
       .map((f, i) => {
         const realIndex = this.functions().indexOf(f);
         try {
@@ -275,7 +297,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const intg = this.activeIntegral();
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
-      if (expr?.ast && expr.visible) {
+      if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
         const fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
         const result = integrateAdaptive(fn, intg.a, intg.b);
         const value =
@@ -409,6 +431,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         color: FUNCTION_COLORS[idx % FUNCTION_COLORS.length],
         visible: true,
         mode: 'explicit',
+        error: null,
       },
     ]);
   }
@@ -428,12 +451,49 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.requestRender();
   }
 
+  /** Parses a single-expression body, then probes it once at sample values to surface
+   *  reference errors (e.g. a typo'd function name) that only throw at evaluation time. */
+  private parseAndValidate(
+    exprText: string,
+    sampleVars: Record<string, number>,
+  ): { ast: ExpressionNode | null; error: string | null } {
+    if (!exprText.trim()) return { ast: null, error: null };
+    let ast: ExpressionNode;
+    try {
+      ast = parse(exprText);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ast: null, error: formatExpressionError(message, exprText) };
+    }
+    try {
+      evaluate(ast, sampleVars, this.angleUnit());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ast: null, error: formatExpressionError(message, exprText) };
+    }
+    return { ast, error: null };
+  }
+
   updateExpression(index: number, raw: string): void {
     this.functions.update((fns) =>
       fns.map((fn, i) => {
         if (i !== index) return fn;
         const mode = this.detectMode(raw);
         const effectiveRaw = mode === 'explicit' ? this.stripYEquals(raw) : raw;
+        if (mode === 'explicit-y') {
+          const rhs = raw.trim().replace(/^[xX]\s*=\s*/, '');
+          const { ast, error } = this.parseAndValidate(rhs, { y: 1 });
+          return {
+            ...fn,
+            raw,
+            ast,
+            mode,
+            paramX: null,
+            paramY: null,
+            inequalityOp: undefined,
+            error,
+          };
+        }
         if (mode === 'implicit') {
           const inequalityMatch = raw.match(/(.*?)(>=|<=|>|<)(.*)/);
           if (inequalityMatch) {
@@ -441,54 +501,71 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             const op = inequalityMatch[2] as '>' | '<' | '>=' | '<=';
             const rhs = inequalityMatch[3].trim();
             if (/^y$/i.test(lhs)) {
-              try {
-                const ast = parse(rhs);
-                return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op };
-              } catch {
-                return {
-                  ...fn,
-                  raw,
-                  ast: null,
-                  mode,
-                  paramX: null,
-                  paramY: null,
-                  inequalityOp: op,
-                };
-              }
+              const { ast, error } = this.parseAndValidate(rhs, { x: 1 });
+              return {
+                ...fn,
+                raw,
+                ast,
+                mode,
+                paramX: null,
+                paramY: null,
+                inequalityOp: op,
+                error,
+              };
             }
-            try {
-              const ast = parse(`(${lhs})-(${rhs})`);
-              return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op };
-            } catch {
-              return { ...fn, raw, ast: null, mode, paramX: null, paramY: null, inequalityOp: op };
-            }
+            const { ast, error } = this.parseAndValidate(`(${lhs})-(${rhs})`, { x: 1, y: 1 });
+            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op, error };
           }
-          try {
-            if (raw.includes('=')) {
-              const eqIdx = raw.indexOf('=');
-              const lhs = parse(raw.substring(0, eqIdx));
-              const rhs = parse(raw.substring(eqIdx + 1));
+          if (raw.includes('=')) {
+            const eqIdx = raw.indexOf('=');
+            const lhsText = raw.substring(0, eqIdx);
+            const rhsText = raw.substring(eqIdx + 1);
+            try {
+              const lhs = parse(lhsText);
+              const rhs = parse(rhsText);
+              evaluate(lhs, { x: 1, y: 1 }, this.angleUnit());
+              evaluate(rhs, { x: 1, y: 1 }, this.angleUnit());
               const ast: ExpressionNode = {
                 type: 'BinaryOp',
                 operator: '=',
                 left: lhs,
                 right: rhs,
               };
-              return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
+              return {
+                ...fn,
+                raw,
+                ast,
+                mode,
+                paramX: null,
+                paramY: null,
+                inequalityOp: undefined,
+                error: null,
+              };
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              return {
+                ...fn,
+                raw,
+                ast: null,
+                mode,
+                paramX: null,
+                paramY: null,
+                inequalityOp: undefined,
+                error: formatExpressionError(message, raw),
+              };
             }
-            const ast = parse(raw);
-            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
-          } catch {
-            return {
-              ...fn,
-              raw,
-              ast: null,
-              mode,
-              paramX: null,
-              paramY: null,
-              inequalityOp: undefined,
-            };
           }
+          const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 });
+          return {
+            ...fn,
+            raw,
+            ast,
+            mode,
+            paramX: null,
+            paramY: null,
+            inequalityOp: undefined,
+            error,
+          };
         }
         if (mode === 'parametric') {
           const parts = raw.split(',');
@@ -498,8 +575,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             try {
               const paramX = parse(xExpr);
               const paramY = parse(yExpr);
-              return { ...fn, raw, ast: null, mode, paramX, paramY, inequalityOp: undefined };
-            } catch {
+              return {
+                ...fn,
+                raw,
+                ast: null,
+                mode,
+                paramX,
+                paramY,
+                inequalityOp: undefined,
+                error: null,
+              };
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
               return {
                 ...fn,
                 raw,
@@ -508,6 +595,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
                 paramX: null,
                 paramY: null,
                 inequalityOp: undefined,
+                error: formatExpressionError(message, raw),
               };
             }
           }
@@ -519,47 +607,34 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
+            error: null,
           };
         }
         if (mode === 'polar') {
           const expr = raw.replace(/^r\s*=\s*/i, '');
-          try {
-            const ast = parse(expr);
-            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: undefined };
-          } catch {
-            return {
-              ...fn,
-              raw,
-              ast: null,
-              mode,
-              paramX: null,
-              paramY: null,
-              inequalityOp: undefined,
-            };
-          }
-        }
-        try {
-          const ast = parse(effectiveRaw);
+          const { ast, error } = this.parseAndValidate(expr, { x: 1 });
           return {
             ...fn,
             raw,
             ast,
-            mode: 'explicit',
+            mode,
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
-          };
-        } catch {
-          return {
-            ...fn,
-            raw,
-            ast: null,
-            mode: 'explicit',
-            paramX: null,
-            paramY: null,
-            inequalityOp: undefined,
+            error,
           };
         }
+        const { ast, error } = this.parseAndValidate(effectiveRaw, { x: 1 });
+        return {
+          ...fn,
+          raw,
+          ast,
+          mode: 'explicit',
+          paramX: null,
+          paramY: null,
+          inequalityOp: undefined,
+          error,
+        };
       }),
     );
     this.requestRender();
@@ -573,7 +648,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   cycleMode(index: number): void {
-    const modes: CurveMode[] = ['explicit', 'parametric', 'polar', 'implicit'];
+    const modes: CurveMode[] = ['explicit', 'explicit-y', 'parametric', 'polar', 'implicit'];
     this.functions.update((fns) =>
       fns.map((fn, i) => {
         if (i !== index) return fn;
@@ -605,24 +680,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   private detectMode(raw: string): CurveMode {
-    const trimmed = raw.trim();
-
-    if (/^r\s*=/i.test(trimmed)) return 'polar';
-    if (/[<>]=?/.test(trimmed)) return 'implicit';
-    if (this.hasTopLevelComma(trimmed)) return 'parametric';
-    if (/[=]/.test(trimmed) && !/^[yY]\s*=/.test(trimmed)) return 'implicit';
-    return 'explicit';
-  }
-
-  private hasTopLevelComma(raw: string): boolean {
-    let depth = 0;
-    let commaCount = 0;
-    for (const ch of raw) {
-      if (ch === '(' || ch === '[' || ch === '{') depth++;
-      else if (ch === ')' || ch === ']' || ch === '}') depth--;
-      else if (ch === ',' && depth === 0) commaCount++;
-    }
-    return commaCount === 1;
+    return detectCurveMode(raw);
   }
 
   private stripYEquals(raw: string): string {
@@ -668,7 +726,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.activeMultiArea.set(null);
       const visibles = this.functions()
         .map((f, i) => ({ f, i }))
-        .filter((x) => x.f.visible && (x.f.ast || x.f.mode === 'implicit'));
+        .filter(
+          (x) => x.f.visible && x.f.mode !== 'explicit-y' && (x.f.ast || x.f.mode === 'implicit'),
+        );
       const indices = visibles.slice(0, Math.min(2, visibles.length)).map((x) => x.i);
 
       let a = this.viewport.xMin;
@@ -682,7 +742,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             a = domain[0].a;
             b = domain[0].b;
           }
-        } else if (expr?.ast) {
+        } else if (expr?.ast && expr.mode !== 'explicit-y') {
           const evalFn = (x: number) => evalExpression(expr.ast!, x);
           const crossings = findAxisCrossings(evalFn, a, b, 0);
           if (crossings.length >= 2) {
@@ -1180,6 +1240,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         color: FUNCTION_COLORS[idx % FUNCTION_COLORS.length],
         visible: true,
         mode: 'implicit',
+        error: null,
       },
     ]);
     this.updateExpression(idx, expression);
@@ -1367,6 +1428,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const thetaMin = this.evalRange(fn.thetaMin, 0);
         const thetaMax = this.evalRange(fn.thetaMax, 2 * Math.PI);
         drawPolar(ctx, this.viewport, evalR, thetaMin, thetaMax, fn.color, w, h);
+      } else if (fn.mode === 'explicit-y') {
+        if (!fn.ast) continue;
+        const evalG = (y: number) => evaluate(fn.ast!, { y }, au);
+        drawExplicitY(ctx, this.viewport, evalG, fn.color, w, h);
       } else {
         if (!fn.ast) continue;
         const evalFn = (x: number) => evalExpression(fn.ast!, x, undefined, au);
@@ -1381,7 +1446,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const intg = this.activeIntegral();
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
-      if (expr?.ast && expr.visible) {
+      if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
         const fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
         drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, expr.color, w, h);
       }
@@ -1393,7 +1458,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         .map((i) => this.functions()[i])
         .filter(
           (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
-            !!e?.ast && e.visible,
+            !!e?.ast && e.visible && this.canUseWithTools(e),
         );
       if (fns.length >= 2) {
         const evalFns = fns.map((f) => (x: number) => evalExpression(f.ast, x, undefined, au));
@@ -1425,7 +1490,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       }
     } else if (mArea && mArea.functionIndices.length === 1) {
       const expr = this.functions()[mArea.functionIndices[0]];
-      if (expr?.ast && expr.visible) {
+      if (expr?.ast && expr.visible && this.canUseWithTools(expr)) {
         const fn = (x: number) => evalExpression(expr.ast!, x);
         drawIntegralArea(ctx, this.viewport, fn, mArea.a, mArea.b, expr.color, w, h);
       }

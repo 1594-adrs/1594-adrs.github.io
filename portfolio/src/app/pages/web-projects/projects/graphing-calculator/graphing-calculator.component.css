@@ -388,7 +388,8 @@
 .range-field input:focus {
   border-color: var(--color-primary);
 }
-.range-field input.input-error {
+.range-field input.input-error,
+.fn-input.input-error {
   border-color: var(--color-corruption);
 }
 .sidebar-footer {

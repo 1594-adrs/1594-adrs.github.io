@@ -155,5 +155,80 @@ describe('GraphingCalculatorComponent', () => {
       const fixture = TestBed.createComponent(GraphingCalculatorComponent);
       expect((fixture.componentInstance as any).detectMode('y=x^2')).toBe('explicit');
     });
+
+    it('should detect x=y^2 as explicit-y', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('x=y^2')).toBe('explicit-y');
+    });
+
+    it('should keep x=y^2+x as implicit (rhs references x)', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('x=y^2+x')).toBe('implicit');
+    });
+
+    it('should keep a bare x=3 as implicit', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      expect((fixture.componentInstance as any).detectMode('x=3')).toBe('implicit');
+    });
+  });
+
+  describe('explicit-y mode', () => {
+    it('parses x=y^2 with an ast evaluable in y', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'x=y^2');
+      const fn = comp.functions()[0];
+      expect(fn.mode).toBe('explicit-y');
+      expect(fn.ast).not.toBeNull();
+      expect(fn.error).toBeNull();
+    });
+
+    it('is excluded from canUseWithTools', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'x=y^2');
+      expect(comp.canUseWithTools(comp.functions()[0])).toBe(false);
+    });
+
+    it('is excluded from evalResults', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'x=y^2');
+      comp.evalPoint.set('1');
+      expect(comp.evalResults().length).toBe(0);
+    });
+  });
+
+  describe('inline expression errors', () => {
+    it('sets a parse error message and clears the ast', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'sin(x');
+      expect(comp.functions()[0].ast).toBeNull();
+      expect(comp.functions()[0].error).toBeTruthy();
+    });
+
+    it('clears the error once the expression becomes valid again', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'sni(x)');
+      expect(comp.functions()[0].error).toBeTruthy();
+      comp.updateExpression(0, 'sin(x)');
+      expect(comp.functions()[0].error).toBeNull();
+      expect(comp.functions()[0].ast).not.toBeNull();
+    });
+
+    it('maps an unknown identifier followed by "(" to "Unknown function or variable"', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'sni(x)');
+      expect(comp.functions()[0].error).toBe("Unknown function or variable 'sni'");
+    });
+
+    it('starts with no error for the default row', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      expect(comp.functions()[0].error).toBeNull();
+    });
   });
 });

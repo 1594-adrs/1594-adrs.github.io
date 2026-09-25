@@ -55,6 +55,10 @@ import {
             <span class="key-hint">^</span><span>Power (e.g. x^2)</span>
             <span class="key-hint">()</span><span>Grouping</span>
           </div>
+          <p class="help-note">
+            x = g(y): switch a row's mode to "x" to plot a curve as x in terms of y (e.g. x=y^2);
+            integral/area/solid tools don't support these rows yet.
+          </p>
         </div>
 
         <div class="help-section">
