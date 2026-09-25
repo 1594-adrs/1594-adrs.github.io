@@ -18,7 +18,11 @@
           (dragend)="onDragEnd()"
         >
           <div class="fn-gutter">
-            <span class="color-swatch" [style.background]="fn.color"></span>
+            <app-color-picker
+              [color]="fn.color"
+              [label]="'Color for f' + ($index + 1)"
+              (colorChange)="updateColor($index, $event)"
+            />
             <span class="fn-index">{{ $index + 1 }}</span>
           </div>
           <div class="fn-expression">
@@ -94,6 +98,18 @@
             >
               {{ fn.visible ? '◉' : '○' }}
             </button>
+            @if (canShowValueTable(fn)) {
+              <button
+                class="action-btn"
+                (click)="toggleValueTable($index)"
+                [class.active]="tableOpenIndex() === $index"
+                [attr.aria-expanded]="tableOpenIndex() === $index"
+                title="Table of values"
+                [attr.aria-label]="'Table of values for function ' + ($index + 1)"
+              >
+                ⊡
+              </button>
+            }
             <button class="action-btn delete" (click)="removeFunction($index)" title="Remove">
               ×
             </button>
@@ -103,6 +119,14 @@
           <p [id]="'fn-error-' + $index" role="alert" aria-live="polite" class="fn-error">
             {{ fn.error }}
           </p>
+        }
+        @if (tableOpenIndex() === $index && canShowValueTable(fn)) {
+          <app-value-table
+            [expr]="fn"
+            [index]="$index"
+            [angleUnit]="angleUnit()"
+            (close)="tableOpenIndex.set(null)"
+          />
         }
         @if (fn.mode === 'parametric') {
           <div class="range-row">
@@ -318,8 +342,11 @@
       <button class="t-btn" (click)="toggleKeyboard()" [class.active]="showKeyboard()">
         keyboard
       </button>
+      <button class="t-btn" (click)="share()">share</button>
+      <button class="t-btn" (click)="exportPng()">export png</button>
       <button class="t-btn" #helpBtn (click)="showHelp.set(true)">? help</button>
     </div>
+    <p class="sr-only" role="status" aria-live="polite">{{ shareNotice() }}</p>
 
     @if (showKeyboard()) {
       <app-onscreen-keyboard (keyPress)="onKeyPress($event)" (keyAction)="onKeyAction($event)" />

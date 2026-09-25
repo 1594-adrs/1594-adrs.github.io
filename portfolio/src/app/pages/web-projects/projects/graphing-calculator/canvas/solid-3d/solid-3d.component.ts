@@ -155,6 +155,13 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** Renders one fresh frame and returns the underlying canvas, for PNG export. */
+  exportCanvas(): HTMLCanvasElement | null {
+    if (!this.scene) return null;
+    this.scene.render();
+    return this.canvasRef()?.nativeElement ?? null;
+  }
+
   private rebuildSolidMesh(spec: SolidSpec, pieces: SolidPiece[]): void {
     if (!this.scene) return;
     const geometries = buildSolidGeometry(spec, pieces);

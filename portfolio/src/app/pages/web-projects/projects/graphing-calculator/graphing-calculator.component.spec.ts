@@ -70,6 +70,15 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.showSolidTool()).toBe(true);
   });
 
+  it('should update a function expression color', () => {
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    const comp = fixture.componentInstance;
+    const original = comp.functions()[0].color;
+    comp.updateColor(0, '#123456');
+    expect(comp.functions()[0].color).toBe('#123456');
+    expect(comp.functions()[0].color).not.toBe(original);
+  });
+
   it('should render canvas element', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     fixture.detectChanges();

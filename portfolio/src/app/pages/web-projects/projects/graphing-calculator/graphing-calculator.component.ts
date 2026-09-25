@@ -57,8 +57,18 @@ import { OnscreenKeyboardComponent } from './keyboard/onscreen-keyboard.componen
 import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
 import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
 import { SolidPanelComponent } from './components/solid-panel/solid-panel.component';
+import { ValueTable } from './components/value-table/value-table';
+import { ColorPicker } from './components/color-picker/color-picker';
 import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
+import {
+  buildShareHash,
+  extractShareFragment,
+  parseShareState,
+  type ShareState,
+} from './state/share-state';
+import { formatValue } from './utils/format-value';
+import { downloadCanvasAsPng } from './utils/export-png';
 import type {
   MathExpression,
   IntegralResult,
@@ -95,16 +105,6 @@ function roundLimit(v: number): number {
   return Math.round(v * 10000) / 10000;
 }
 
-function formatValue(v: number): string {
-  if (Number.isNaN(v)) return 'undefined';
-  if (v === Number.POSITIVE_INFINITY) return 'inf';
-  if (v === Number.NEGATIVE_INFINITY) return '-inf';
-  if (Math.abs(v) < 1e-10) return '0';
-  if (Math.abs(v) >= 1e12) return v.toExponential(3);
-  if (Math.abs(v) < 0.001) return v.toExponential(3);
-  return v.toFixed(6);
-}
-
 @Component({
   selector: 'app-graphing-calculator',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -116,6 +116,8 @@ function formatValue(v: number): string {
     MathRendererComponent,
     ConicAssistantComponent,
     SolidPanelComponent,
+    ValueTable,
+    ColorPicker,
   ],
   providers: [SolidToolState, GraphInteractionState],
   templateUrl: './graphing-calculator.component.html',
@@ -137,6 +139,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   fnInputs = viewChildren<ElementRef<HTMLInputElement>>('fnInput');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
+  solid3dRef = viewChild(Solid3DComponent);
 
   functions = signal<MathExpression[]>([
     {
@@ -165,6 +168,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   dragIndex = signal<number | null>(null);
   moveAnnouncement = signal<string>('');
   poiAnnouncement = signal<string>('');
+  tableOpenIndex = signal<number | null>(null);
+  shareNotice = signal<string>('');
+  private shareNoticeTimerId: ReturnType<typeof setTimeout> | null = null;
 
   /** Accessible description of what's currently on the canvas, for aria-describedby. */
   canvasDescription = computed(() => {
@@ -331,6 +337,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.titleService.setTitle('Graphing Calculator — Andres Rincon');
     if (!this.isBrowser) return;
+    this.restoreFromShareLink();
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
 
@@ -360,6 +367,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.poiTimer !== null) {
       clearTimeout(this.poiTimer);
       this.poiTimer = null;
+    }
+    if (this.shareNoticeTimerId !== null) {
+      clearTimeout(this.shareNoticeTimerId);
+      this.shareNoticeTimerId = null;
     }
   }
 
@@ -1086,6 +1097,167 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   toggleAngleUnit(): void {
     this.angleUnit.update((u) => (u === 'deg' ? 'rad' : 'deg'));
+  }
+
+  /** Opens/closes the table-of-values panel for a function row (toggles closed if already open). */
+  toggleValueTable(index: number): void {
+    this.tableOpenIndex.update((cur) => (cur === index ? null : index));
+  }
+
+  canShowValueTable(fn: MathExpression): boolean {
+    return fn.visible && (fn.mode === 'explicit' || fn.mode === 'explicit-y') && !!fn.ast;
+  }
+
+  updateColor(index: number, color: string): void {
+    this.functions.update((fns) => fns.map((fn, i) => (i === index ? { ...fn, color } : fn)));
+    this.requestRender();
+  }
+
+  private buildShareState(): ShareState {
+    const active = this.activeIntegral()
+      ? 'integral'
+      : this.showSolidTool()
+        ? 'solid'
+        : this.activeMultiArea()
+          ? 'area'
+          : null;
+    const intg = this.activeIntegral();
+    const area = this.activeMultiArea();
+    const state: ShareState = {
+      v: 1,
+      functions: this.functions().map((f) => ({ raw: f.raw, color: f.color, visible: f.visible })),
+      viewport: {
+        xMin: this.viewport.xMin,
+        xMax: this.viewport.xMax,
+        yMin: this.viewport.yMin,
+        yMax: this.viewport.yMax,
+      },
+      tool: { active },
+    };
+    if (intg) state.tool.integral = { fnIndex: intg.fnIndex, a: intg.a, b: intg.b };
+    if (area) {
+      state.tool.area = {
+        functionIndices: area.functionIndices,
+        a: area.a,
+        b: area.b,
+        overlapMode: area.overlapMode,
+      };
+    }
+    if (this.showSolidTool()) {
+      state.tool.solid = {
+        method: this.solidToolState.method(),
+        curveIndices: this.solidToolState.curveIndices(),
+        a: this.solidToolState.aText(),
+        b: this.solidToolState.bText(),
+        axisValue: this.solidToolState.axisValueText(),
+        shape: this.solidToolState.shape(),
+        heightRatio: this.solidToolState.heightRatioText(),
+      };
+    }
+    return state;
+  }
+
+  /** Copies a shareable URL (current functions/viewport/active tool) to the clipboard. */
+  async share(): Promise<void> {
+    if (!this.isBrowser) return;
+    const hash = buildShareHash(this.buildShareState());
+    const url = `${location.origin}${location.pathname}${location.search}${hash}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        this.copyViaFallbackInput(url);
+      }
+      this.announceShare('Link copied');
+    } catch {
+      this.copyViaFallbackInput(url);
+      this.announceShare('Link copied');
+    }
+  }
+
+  private copyViaFallbackInput(url: string): void {
+    const input = document.createElement('input');
+    input.value = url;
+    input.readOnly = true;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    try {
+      document.execCommand('copy');
+    } catch {
+      /* clipboard unavailable; the input still shows the URL if focus lands there */
+    }
+    document.body.removeChild(input);
+  }
+
+  private announceShare(message: string): void {
+    if (this.shareNoticeTimerId !== null) clearTimeout(this.shareNoticeTimerId);
+    this.shareNotice.set(message);
+    this.shareNoticeTimerId = setTimeout(() => this.shareNotice.set(''), 3000);
+  }
+
+  private restoreFromShareLink(): void {
+    const fragment = extractShareFragment(location.hash);
+    if (!fragment) return;
+    const state = parseShareState(fragment);
+    if (!state) {
+      this.announceShare('Ignored an invalid share link.');
+      return;
+    }
+
+    this.functions.set(
+      state.functions.map((f) => ({
+        raw: f.raw,
+        ast: null,
+        color: f.color,
+        visible: f.visible,
+        mode: 'explicit' as const,
+        error: null,
+      })),
+    );
+    state.functions.forEach((f, i) => this.updateExpression(i, f.raw));
+
+    this.viewport.xMin = state.viewport.xMin;
+    this.viewport.xMax = state.viewport.xMax;
+    this.viewport.yMin = state.viewport.yMin;
+    this.viewport.yMax = state.viewport.yMax;
+
+    const tool = state.tool;
+    if (tool.active === 'integral' && tool.integral) {
+      this.activeIntegral.set(tool.integral);
+    } else if (tool.active === 'area' && tool.area) {
+      this.activeMultiArea.set({
+        functionIndices: tool.area.functionIndices,
+        a: tool.area.a,
+        b: tool.area.b,
+        autoDetectIntersections: true,
+        overlapMode: tool.area.overlapMode,
+      });
+    } else if (tool.active === 'solid' && tool.solid) {
+      this.showSolidTool.set(true);
+      this.solidToolState.setMethod(tool.solid.method);
+      for (const idx of tool.solid.curveIndices) this.solidToolState.toggleCurve(idx);
+      this.solidToolState.setA(tool.solid.a);
+      this.solidToolState.setB(tool.solid.b);
+      this.solidToolState.setAxisValue(tool.solid.axisValue);
+      this.solidToolState.setShape(tool.solid.shape);
+      this.solidToolState.setHeightRatio(tool.solid.heightRatio);
+    }
+
+    this.requestRender();
+  }
+
+  /** Exports the 2D canvas as a PNG, or the 3D view's canvas when it's the one on screen. */
+  exportPng(): void {
+    if (!this.isBrowser) return;
+    if (this.show3DSolid() && this.hasSolidResult()) {
+      const canvas = this.solid3dRef()?.exportCanvas();
+      if (canvas) downloadCanvasAsPng(canvas, 'graph.png');
+      return;
+    }
+    const canvas = this.canvasRef()?.nativeElement;
+    if (canvas) downloadCanvasAsPng(canvas, 'graph.png');
   }
 
   canUseWithTools(fn: MathExpression): boolean {
