@@ -13,7 +13,7 @@ npx ng test --include='src/path/x.spec.ts'  # single spec
 npm run format                              # Prettier: single quotes, 100 cols, angular parser for HTML
 ```
 
-No lint script. Before finishing any code change run `typecheck` + tests. CI (`.github/workflows/deploy.yml`, push to `main`) runs typecheck → test → build → Pages deploy. Budgets: initial bundle 500 kB warn / 1 MB error; component CSS 4 kB warn / 8 kB error.
+No lint script. Before finishing any code change run `typecheck` + tests. CI (`.github/workflows/deploy.yml`, push to `main`) runs typecheck → test → build → Pages deploy. Budgets: initial bundle 500 kB warn / 1 MB error; component CSS 8 kB warn / 10 kB error (per stylesheet, minified).
 
 ## Git
 
