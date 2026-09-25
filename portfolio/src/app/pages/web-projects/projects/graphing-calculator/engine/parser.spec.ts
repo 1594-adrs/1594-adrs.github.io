@@ -483,4 +483,40 @@ describe('parser', () => {
       expect(() => parse(expr)).toThrow('Expression too complex');
     });
   });
+
+  describe('uppercase-E scientific notation', () => {
+    it('should parse 1E-3 as 0.001', () => {
+      const ast = parse('1E-3');
+      expect(ast.type).toBe('NumberLiteral');
+      expect(evaluate(ast, {})).toBeCloseTo(0.001, 12);
+    });
+
+    it('should parse 2.5E4 as 25000', () => {
+      const ast = parse('2.5E4');
+      expect(evaluate(ast, {})).toBe(25000);
+    });
+
+    it('should parse 1E+2 as 100', () => {
+      const ast = parse('1E+2');
+      expect(evaluate(ast, {})).toBe(100);
+    });
+
+    it('should parse .5E1 as 5', () => {
+      const ast = parse('.5E1');
+      expect(evaluate(ast, {})).toBe(5);
+    });
+
+    it('should keep lowercase e as Euler constant: 2e-3 = 2*e - 3', () => {
+      const ast = parse('2e-3');
+      expect(evaluate(ast, {})).toBeCloseTo(2 * Math.E - 3, 10);
+    });
+
+    it('should leave a bare trailing E as an unknown variable (no exponent digits follow)', () => {
+      expect(() => evaluate(parse('5E'), {})).toThrow(/Unknown variable/);
+    });
+
+    it('should leave E followed by a non-digit as an unknown variable', () => {
+      expect(() => evaluate(parse('5E+x'), {})).toThrow();
+    });
+  });
 });

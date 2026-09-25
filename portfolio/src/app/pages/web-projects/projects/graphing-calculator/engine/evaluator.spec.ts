@@ -273,4 +273,52 @@ describe('evalConstantExpression', () => {
       expect(evalExpression('5 != 5', 0)).toBe(0);
     });
   });
+
+  describe('real roots of negative bases', () => {
+    it('(-8)^(1/3) = -2', () => {
+      expect(evalExpression('(-8)^(1/3)', 0)).toBeCloseTo(-2, 9);
+    });
+
+    it('x^(1/3) at x=-8 = -2', () => {
+      expect(evalExpression('x^(1/3)', -8)).toBeCloseTo(-2, 9);
+    });
+
+    it('x^(2/3) at x=-8 = 4', () => {
+      expect(evalExpression('x^(2/3)', -8)).toBeCloseTo(4, 9);
+    });
+
+    it('(-8)^(1/2) is NaN (even denominator, no real root)', () => {
+      expect(evalExpression('(-8)^(1/2)', 0)).toBeNaN();
+    });
+
+    it('root(3, -27) = -3', () => {
+      expect(evalExpression('root(3, -27)', 0)).toBeCloseTo(-3, 9);
+    });
+
+    it('(-2)^0.5 is NaN', () => {
+      expect(evalExpression('(-2)^0.5', 0)).toBeNaN();
+    });
+  });
+
+  describe('scientific notation', () => {
+    it('1E-3 = 0.001', () => {
+      expect(evalConstantExpression('1E-3')).toBeCloseTo(0.001, 12);
+    });
+
+    it('2.5E4 = 25000', () => {
+      expect(evalConstantExpression('2.5E4')).toBe(25000);
+    });
+
+    it('1E+2 = 100', () => {
+      expect(evalConstantExpression('1E+2')).toBe(100);
+    });
+
+    it('.5E1 = 5', () => {
+      expect(evalConstantExpression('.5E1')).toBe(5);
+    });
+
+    it('lowercase e still means Euler constant: 2e-3 = 2*e - 3', () => {
+      expect(evalConstantExpression('2e-3')).toBeCloseTo(2 * Math.E - 3, 10);
+    });
+  });
 });

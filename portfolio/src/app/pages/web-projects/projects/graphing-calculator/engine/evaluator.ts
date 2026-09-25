@@ -63,12 +63,72 @@ const FUNCTIONS: Record<string, (x: number) => number> = {
   gamma,
 };
 
+/**
+ * Approximates `value` as a reduced fraction p/q via continued fractions
+ * (q <= maxDenom), so real odd-root results can be detected for expressions
+ * like `(-8)^(1/3)`. Returns null when no such fraction matches within `tol`.
+ */
+function approximateRational(
+  value: number,
+  maxDenom = 99,
+  tol = 1e-10,
+): { p: number; q: number } | null {
+  if (!isFinite(value)) return null;
+  const sign = value < 0 ? -1 : 1;
+  const target = Math.abs(value);
+
+  let hPrev2 = 0;
+  let hPrev1 = 1;
+  let kPrev2 = 1;
+  let kPrev1 = 0;
+  let x = target;
+
+  for (let i = 0; i < 64; i++) {
+    const a = Math.floor(x);
+    const h = a * hPrev1 + hPrev2;
+    const k = a * kPrev1 + kPrev2;
+    if (k > maxDenom) break;
+
+    hPrev2 = hPrev1;
+    hPrev1 = h;
+    kPrev2 = kPrev1;
+    kPrev1 = k;
+
+    if (k > 0 && Math.abs(target - h / k) <= tol) {
+      return { p: sign * h, q: k };
+    }
+
+    const frac = x - a;
+    if (frac < 1e-15) break;
+    x = 1 / frac;
+  }
+
+  return null;
+}
+
+/**
+ * Real-valued `base ^ exponent`. For a negative base with a non-integer
+ * exponent, approximates the exponent as p/q: an odd denominator has a real
+ * (odd) root, so the result is sign(-1)^p * |base|^exponent; an even
+ * denominator has no real root, so it's NaN (matching Math.pow's default).
+ */
+function signedRealPow(base: number, exponent: number): number {
+  if (base >= 0 || Number.isInteger(exponent)) {
+    return Math.pow(base, exponent);
+  }
+  const rational = approximateRational(exponent);
+  if (!rational) return NaN;
+  if (rational.q % 2 === 0) return NaN;
+  const sign = rational.p % 2 === 0 ? 1 : -1;
+  return sign * Math.pow(Math.abs(base), exponent);
+}
+
 const MULTI_ARG_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   min: (...args) => Math.min(...args),
   max: (...args) => Math.max(...args),
   mod: (...args) => ((args[0] % args[1]) + args[1]) % args[1],
   logb: (base, x) => Math.log(x) / Math.log(base),
-  root: (n, x) => Math.pow(x, 1 / n),
+  root: (n, x) => signedRealPow(x, 1 / n),
   atan2: (y, x) => Math.atan2(y, x),
 };
 
@@ -124,7 +184,7 @@ export function evaluate(
           case '/':
             return left / right;
           case '^':
-            return Math.pow(left, right);
+            return signedRealPow(left, right);
           case '<':
             return left < right ? 1 : 0;
           case '>':

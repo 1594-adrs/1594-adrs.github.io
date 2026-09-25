@@ -218,6 +218,27 @@ class Lexer {
       num += input[this.pos];
       this.pos++;
     }
+
+    // Uppercase-E scientific notation only (e.g. 1E-3, 2.5E4, 1E+2). Lowercase
+    // 'e' is left alone since it means Euler's constant elsewhere in the grammar.
+    if (input[this.pos] === 'E') {
+      let peek = this.pos + 1;
+      let sign = '';
+      if (input[peek] === '+' || input[peek] === '-') {
+        sign = input[peek];
+        peek++;
+      }
+      if (input[peek] >= '0' && input[peek] <= '9') {
+        let exponent = 'E' + sign;
+        this.pos = peek;
+        while (this.pos < input.length && input[this.pos] >= '0' && input[this.pos] <= '9') {
+          exponent += input[this.pos];
+          this.pos++;
+        }
+        num += exponent;
+      }
+    }
+
     return { type: 'number', value: num };
   }
 

@@ -39,7 +39,7 @@ import { drawSolidCrossSectionSingle, drawSolidCrossSectionMulti } from './canva
 import { parse } from './engine/parser';
 import type { ExpressionNode } from './engine/parser';
 import { evalExpression, evaluate, evalConstantExpression } from './engine/evaluator';
-import { integrate } from './engine/integrator';
+import { integrateAdaptive } from './engine/quadrature';
 import {
   solidVolumeSingle,
   solidSurfaceAreaSingle,
@@ -277,8 +277,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const expr = this.functions()[intg.fnIndex];
       if (expr?.ast && expr.visible) {
         const fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
-        const value = integrate(fn, intg.a, intg.b);
-        res.push({ label: `∫ ${expr.raw} dx`, value: formatValue(value) });
+        const result = integrateAdaptive(fn, intg.a, intg.b);
+        const value =
+          result.status === 'divergent'
+            ? 'diverge'
+            : result.status === 'undefined'
+              ? `no definida en x≈${result.badPoint?.toFixed(4) ?? '?'}`
+              : formatValue(result.value);
+        res.push({ label: `∫ ${expr.raw} dx`, value });
       }
     }
     const sol = this.activeSolid();
