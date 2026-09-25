@@ -318,6 +318,44 @@ describe('computeSolid', () => {
     expect(r.exact).toBe('4π/21');
   });
 
+  it('20b: envelope 1/x & -sqrt(1-x^2) on [-1,1] about y=0 -> null volume, divergent (pole at x=0)', () => {
+    // No real crossing (1/x < -sqrt(1-x^2) throughout (-1,0), and 1/x > -sqrt(1-x^2)
+    // throughout (0,1)), so this is a single piece whose envelope midpoint is exactly the
+    // pole of 1/x - a regression case for silently excluding a curve from the envelope
+    // (and reporting a bogus volume of 0) when the probed sample coincides with its pole.
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [curveFromExpr('1/x', 'f1'), curveFromExpr('-sqrt(1-x^2)', 'f2')],
+      a: -1,
+      b: 1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const r = computeSolid(spec);
+    expect(r.pieces.length).toBeGreaterThan(0);
+    expect(r.pieces.some((p) => p.upperIndex === 0 || p.lowerIndex === 0)).toBe(true);
+    expect(r.volume).toBeNull();
+    expect(r.exact).toBeNull();
+    expect(r.issues.some((i) => i.code === 'divergent')).toBe(true);
+  });
+
+  it('formats a near-zero "bad point" as 0, not e.g. -1.862645149230957e-9', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [curveFromExpr('1/x')],
+      a: -1,
+      b: 1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const r = computeSolid(spec);
+    expect(r.volume).toBeNull();
+    const divergent = r.issues.find((i) => i.code === 'divergent');
+    expect(divergent).toBeDefined();
+    expect(divergent!.message).not.toMatch(/e[+-]/);
+    expect(divergent!.message).toContain('x = 0');
+  });
+
   it('21: shell y=x^2 on [0,1] about x=0.5 (axis inside domain) splits into 2 pieces, same volume', () => {
     const spec: SolidSpec = {
       method: 'shell',

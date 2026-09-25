@@ -57,48 +57,81 @@ function interiorBreakpoints(spec: SolidSpec): number[] {
   return dedupeSorted(points.sort((x, y) => x - y));
 }
 
+// Fractions of the piece width probed around its midpoint when picking the sample point for
+// envelopeAt, tried in order until every curve is finite there. This matters when the exact
+// midpoint coincides with a curve's own pole (e.g. spec.a/spec.b symmetric around x=0 for
+// y=1/x): without probing, that curve would look non-finite for the *whole* piece and get
+// silently dropped from the envelope, instead of being recognised as the boundary it is
+// everywhere else in the piece.
+const MID_PROBE_FRACTIONS = [0, 0.02, -0.02, 0.08, -0.08, 0.2, -0.2, 0.35, -0.35, 0.45, -0.45];
+
+function probeMid(pa: number, pb: number, frac: number): number {
+  const width = pb - pa;
+  const t = 0.5 * (pa + pb) + frac * width;
+  return Math.min(pb, Math.max(pa, t));
+}
+
 /**
- * Upper/lower ordering at a piece midpoint. A single curve is ordered
- * against the baseline (ties/non-finite default to "lower", see below); with
- * two or more curves, upperIndex/lowerIndex are the argmax/argmin among the
- * curves' finite values there (an envelope) - non-finite samples don't
- * participate, so a curve that's undefined at the midpoint is simply
- * excluded from that piece's envelope rather than forcing a fallback.
+ * Upper/lower ordering near a piece's midpoint (see MID_PROBE_FRACTIONS). A single curve is
+ * ordered against the baseline (ties/non-finite default to "lower", see below); with two or
+ * more curves, upperIndex/lowerIndex are the argmax/argmin among the curves' finite values
+ * there (an envelope) - a curve non-finite at every probed point is excluded from the
+ * envelope rather than forcing a fallback.
  */
 function envelopeAt(
   spec: SolidSpec,
-  mid: number,
+  pa: number,
+  pb: number,
 ): { upperIndex: number | null; lowerIndex: number | null } {
   const { curves } = spec;
 
   if (curves.length === 1) {
     const baseline = baselineValue(spec);
-    const v = safeEval(curves[0].fn, mid);
-    // Ties (v === baseline, or v is non-finite) default to the curve being
-    // the lower boundary; for disk-washer this is immaterial since the area
-    // only depends on |value - axis|, and for shell/cross-section the sign
-    // of (curve - baseline) still comes out right either way.
-    const curveIsUpper = Number.isFinite(v) ? v > baseline : false;
-    return curveIsUpper ? { upperIndex: 0, lowerIndex: null } : { upperIndex: null, lowerIndex: 0 };
+    for (const frac of MID_PROBE_FRACTIONS) {
+      const v = safeEval(curves[0].fn, probeMid(pa, pb, frac));
+      if (Number.isFinite(v)) {
+        return v > baseline
+          ? { upperIndex: 0, lowerIndex: null }
+          : { upperIndex: null, lowerIndex: 0 };
+      }
+    }
+    // Non-finite everywhere probed: default to "lower" (see disk-washer/shell note above).
+    return { upperIndex: null, lowerIndex: 0 };
   }
 
-  let upperIndex: number | null = null;
-  let lowerIndex: number | null = null;
-  let maxV = -Infinity;
-  let minV = Infinity;
-  for (let i = 0; i < curves.length; i++) {
-    const v = safeEval(curves[i].fn, mid);
-    if (!Number.isFinite(v)) continue;
-    if (v > maxV) {
-      maxV = v;
-      upperIndex = i;
+  let best: { upperIndex: number | null; lowerIndex: number | null } = {
+    upperIndex: null,
+    lowerIndex: null,
+  };
+  let bestCount = -1;
+
+  for (const frac of MID_PROBE_FRACTIONS) {
+    const t = probeMid(pa, pb, frac);
+    let upperIndex: number | null = null;
+    let lowerIndex: number | null = null;
+    let maxV = -Infinity;
+    let minV = Infinity;
+    let count = 0;
+    for (let i = 0; i < curves.length; i++) {
+      const v = safeEval(curves[i].fn, t);
+      if (!Number.isFinite(v)) continue;
+      count++;
+      if (v > maxV) {
+        maxV = v;
+        upperIndex = i;
+      }
+      if (v < minV) {
+        minV = v;
+        lowerIndex = i;
+      }
     }
-    if (v < minV) {
-      minV = v;
-      lowerIndex = i;
+    if (count > bestCount) {
+      bestCount = count;
+      best = { upperIndex, lowerIndex };
+      if (count === curves.length) break;
     }
   }
-  return { upperIndex, lowerIndex };
+  return best;
 }
 
 /**
@@ -121,8 +154,7 @@ export function computePieces(spec: SolidSpec): SolidPiece[] {
     const pb = boundaries[i + 1];
     if (pb - pa <= span * EPS) continue;
 
-    const mid = 0.5 * (pa + pb);
-    const { upperIndex, lowerIndex } = envelopeAt(spec, mid);
+    const { upperIndex, lowerIndex } = envelopeAt(spec, pa, pb);
     pieces.push({ a: pa, b: pb, upperIndex, lowerIndex });
   }
   return pieces;

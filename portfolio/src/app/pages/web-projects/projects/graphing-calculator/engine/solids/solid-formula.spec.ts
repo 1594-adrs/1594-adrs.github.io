@@ -62,6 +62,56 @@ describe('buildTerms', () => {
     });
   });
 
+  it('omits the r² term for a single curve entirely below the axis (1/x on [-1,-0.1])', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [symbolicCurve('1/x', 'f1')],
+      a: -1,
+      b: -0.1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const pieces = computePieces(spec);
+    expect(pieces[0].upperIndex).toBeNull(); // baseline (y=0) is upper here
+    expect(pieces[0].lowerIndex).toBe(0); // curve (negative) is lower
+    const [term] = buildTerms(spec, pieces);
+    // (1/x)^2, not 0^2 - (1/x)^2: the baseline is the "near" radius regardless of
+    // whether it's the piece's upper or lower boundary, since it's always exactly
+    // at the axis (distance 0), so it must be the omitted one, never the curve.
+    expect(term.integrand).toEqual({
+      type: 'BinaryOp',
+      operator: '^',
+      left: {
+        type: 'BinaryOp',
+        operator: '/',
+        left: { type: 'NumberLiteral', value: 1 },
+        right: { type: 'Variable', name: 'x' },
+      },
+      right: { type: 'NumberLiteral', value: 2 },
+    });
+  });
+
+  it('simplifies "A - (-B)" to "A + B" instead of a double negative (cross-section width)', () => {
+    const spec: SolidSpec = {
+      method: 'cross-section',
+      variable: 'x',
+      curves: [symbolicCurve('sqrt(1-x^2)', 'f1'), symbolicCurve('-sqrt(1-x^2)', 'f2')],
+      a: -1,
+      b: 1,
+      shape: 'square',
+    };
+    const [term] = buildTerms(spec, computePieces(spec));
+    // width = upper - lower = sqrt(1-x^2) - (-sqrt(1-x^2)), which must render as a sum,
+    // never as "sqrt(1-x^2) - -(sqrt(1-x^2))".
+    expect(term.integrand).toMatchObject({
+      type: 'BinaryOp',
+      operator: '^',
+      left: { type: 'BinaryOp', operator: '+' },
+    });
+    const width = (term.integrand as { left: { operator: string } }).left;
+    expect(width.operator).toBe('+');
+  });
+
   it('builds a washer term matching sliceArea (two curves)', () => {
     const spec: SolidSpec = {
       method: 'disk-washer',

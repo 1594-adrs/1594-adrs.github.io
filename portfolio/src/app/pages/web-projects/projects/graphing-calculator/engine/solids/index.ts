@@ -11,12 +11,21 @@ export { recognizeExact } from './solid-exact';
 export { computeSurfaceArea } from './solid-surface';
 export type * from './solid.types';
 
+/** Up to 4 significant figures, snapping a numerically-negligible value to '0' (an adaptive
+ *  quadrature's reported "bad point" is often only accurate to within a fraction of the
+ *  panel width it was found in, e.g. -1.862645149230957e-9 instead of exactly 0). */
+function formatAt(at: number): string {
+  if (Math.abs(at) < 1e-6) return '0';
+  return String(Number(at.toPrecision(4)));
+}
+
 function issueMessage(
   code: 'divergent' | 'undefined-domain',
   variable: string,
   at?: number,
 ): string {
-  const where = at !== undefined && Number.isFinite(at) ? ` near ${variable} = ${at}` : '';
+  const where =
+    at !== undefined && Number.isFinite(at) ? ` near ${variable} = ${formatAt(at)}` : '';
   return code === 'divergent'
     ? `The integral diverges${where} (a non-integrable singularity).`
     : `The integrand is undefined${where} (outside its real domain).`;
@@ -34,6 +43,30 @@ function issueMessage(
 export function computeSolid(spec: SolidSpec): SolidResult {
   try {
     const pieces = computePieces(spec);
+
+    // Defence in depth: with a structurally valid, non-empty curve selection this shouldn't
+    // happen (computePieces always returns at least one piece), but a volume of 0 must never
+    // come from summing zero pieces - that would silently hide a real computation failure.
+    if (spec.curves.length > 0 && pieces.length === 0) {
+      return {
+        volume: null,
+        errorEstimate: 0,
+        exact: null,
+        terms: [],
+        pieces: [],
+        sliceArea: () => NaN,
+        issues: [
+          {
+            code: 'undefined-domain',
+            severity: 'error',
+            message: 'The solid could not be computed (no valid region).',
+          },
+        ],
+        surfaceArea: null,
+        surfaceExact: null,
+      };
+    }
+
     const area = sliceArea(spec, pieces);
     const terms = buildTerms(spec, pieces);
 

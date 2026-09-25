@@ -24,7 +24,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  margin: 0 3px;
+  margin: 0 4px 0 3px;
 }
 
 .integral-symbol {
@@ -38,7 +38,9 @@
   flex-direction: column;
   justify-content: space-between;
   height: 1.5em;
-  margin-left: -3px;
+  /* Positive spacing so the limits sit clearly to the right of the integral sign's
+     upper/lower tails, instead of overlapping them. */
+  margin-left: 3px;
   font-size: 0.55em;
 }
 

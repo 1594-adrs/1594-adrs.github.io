@@ -57,6 +57,23 @@ describe('SolidPanelComponent', () => {
     expect(checkboxes[1].disabled).toBe(true);
   });
 
+  it('validates live while typing (input event), not only on blur (change event)', () => {
+    const fixture = TestBed.createComponent(SolidPanelComponent);
+    const state = fixture.componentInstance.state;
+    state.connect(signal<MathExpression[]>([explicitFn('x')]));
+    state.toggleCurve(0);
+    fixture.detectChanges();
+    const aInput = (fixture.nativeElement as HTMLElement).querySelector(
+      '.range-field input[type="text"]',
+    ) as HTMLInputElement;
+    aInput.value = 'not-a-number';
+    aInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(state.aText()).toBe('not-a-number');
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Enter a number or expression');
+  });
+
   it('shows an inline error when a >= b', () => {
     const fixture = TestBed.createComponent(SolidPanelComponent);
     const state = fixture.componentInstance.state;
@@ -94,6 +111,22 @@ describe('SolidPanelComponent', () => {
     expect(text).toContain('S ≈');
     expect(text).toContain('π(1+√2)');
     expect(text).toContain('total surface');
+  });
+
+  it('renders the interior-curve info issue for the x, x^2, x^3 envelope', () => {
+    const fixture = TestBed.createComponent(SolidPanelComponent);
+    const state = fixture.componentInstance.state;
+    state.connect(
+      signal<MathExpression[]>([explicitFn('x'), explicitFn('x^2'), explicitFn('x^3')]),
+    );
+    state.toggleCurve(0);
+    state.toggleCurve(1);
+    state.toggleCurve(2);
+    state.setA('0');
+    state.setB('1');
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('does not bound the solid');
   });
 
   it('does not show a surface line for a cross-section', () => {

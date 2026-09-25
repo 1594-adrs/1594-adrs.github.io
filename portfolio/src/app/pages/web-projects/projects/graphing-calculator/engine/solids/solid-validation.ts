@@ -219,6 +219,11 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
       let interiorEverywhere = true;
       let sawValidSample = false;
       for (let i = 0; i < SAMPLE_COUNT && interiorEverywhere; i++) {
+        // Curves selected together commonly meet exactly at a or b (e.g. x, x², x³ all pass
+        // through the origin) - that coincidence doesn't mean the curve suddenly bounds the
+        // region there, so it shouldn't disqualify it from being "always interior".
+        const t = i === SAMPLE_COUNT - 1 ? b : a + i * dt;
+        if (t < a + endpointEps || t > b - endpointEps) continue;
         const vc = samplesByCurve[c][i];
         if (!Number.isFinite(vc)) continue;
         const others = samplesByCurve

@@ -52,7 +52,7 @@
         <input
           type="text"
           [value]="state.aText()"
-          (change)="state.setA($any($event.target).value)"
+          (input)="state.setA($any($event.target).value)"
           [class.input-error]="!!state.fieldErrors().a"
           [attr.aria-invalid]="state.fieldErrors().a ? true : null"
           [attr.aria-describedby]="state.fieldErrors().a ? 'solid-a-error' : null"
@@ -63,7 +63,7 @@
         <input
           type="text"
           [value]="state.bText()"
-          (change)="state.setB($any($event.target).value)"
+          (input)="state.setB($any($event.target).value)"
           [class.input-error]="!!state.fieldErrors().b"
           [attr.aria-invalid]="state.fieldErrors().b ? true : null"
           [attr.aria-describedby]="state.fieldErrors().b ? 'solid-b-error' : null"
@@ -87,7 +87,7 @@
           <input
             type="text"
             [value]="state.axisValueText()"
-            (change)="state.setAxisValue($any($event.target).value)"
+            (input)="state.setAxisValue($any($event.target).value)"
             [class.input-error]="!!state.fieldErrors().axis"
             [attr.aria-invalid]="state.fieldErrors().axis ? true : null"
             [attr.aria-describedby]="state.fieldErrors().axis ? 'solid-axis-error' : null"
@@ -120,7 +120,7 @@
           <input
             type="text"
             [value]="state.heightRatioText()"
-            (change)="state.setHeightRatio($any($event.target).value)"
+            (input)="state.setHeightRatio($any($event.target).value)"
             [class.input-error]="!!state.fieldErrors().ratio"
             [attr.aria-invalid]="state.fieldErrors().ratio ? true : null"
             [attr.aria-describedby]="state.fieldErrors().ratio ? 'solid-ratio-error' : null"

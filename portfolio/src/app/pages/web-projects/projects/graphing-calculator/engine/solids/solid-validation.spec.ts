@@ -100,6 +100,25 @@ describe('validateSolidSpec', () => {
     ]);
   });
 
+  it('flags interior-curve for x^2 in the x, x^2, x^3 envelope on [0,1] (endpoints coincide)', () => {
+    // x >= x^2 >= x^3 on [0,1], with all three equal only at the endpoints - f2 must still be
+    // flagged even though it touches the envelope's boundary exactly at t=0 and t=1.
+    const s = spec({
+      method: 'disk-washer',
+      curves: [curve((x) => x, 'f₁'), curve((x) => x * x, 'f₂'), curve((x) => x ** 3, 'f₃')],
+      a: 0,
+      b: 1,
+    });
+    const issues = validateSolidSpec(s);
+    expect(
+      issues.some(
+        (i) =>
+          i.code === 'interior-curve' &&
+          i.message === 'f₂ lies inside the region and does not bound the solid',
+      ),
+    ).toBe(true);
+  });
+
   it('does not flag interior-curve when every curve bounds the region somewhere', () => {
     // f1 = x, f2 = 1 - x and f3 = 0.3 each take a turn as the envelope's upper or
     // lower boundary on some sub-interval of (0,1), so none is always interior.

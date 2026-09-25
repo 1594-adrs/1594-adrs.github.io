@@ -28,6 +28,10 @@ function isOne(node: ExpressionNode): boolean {
 function sub(left: ExpressionNode, right: ExpressionNode): ExpressionNode {
   if (isZero(right)) return left;
   if (isZero(left)) return { type: 'UnaryOp', operator: '-', operand: right };
+  // left − (−x) is left + x, not a literal "− −x" double negative.
+  if (right.type === 'UnaryOp' && right.operator === '-') {
+    return { type: 'BinaryOp', operator: '+', left, right: right.operand };
+  }
   return { type: 'BinaryOp', operator: '-', left, right };
 }
 
