@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { GraphingCalculatorComponent } from './graphing-calculator.component';
@@ -233,6 +233,114 @@ describe('GraphingCalculatorComponent', () => {
       const fixture = TestBed.createComponent(GraphingCalculatorComponent);
       const comp = fixture.componentInstance;
       expect(comp.functions()[0].error).toBeNull();
+    });
+  });
+
+  describe('keyboard-accessible row reordering', () => {
+    it('moveFunctionDown/moveFunctionUp reorder rows through the same path as drag-and-drop', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'sin(x)');
+      comp.addFunction();
+      comp.updateExpression(1, 'cos(x)');
+      expect(comp.functions().map((f) => f.raw)).toEqual(['sin(x)', 'cos(x)']);
+
+      comp.moveFunctionDown(0);
+      expect(comp.functions().map((f) => f.raw)).toEqual(['cos(x)', 'sin(x)']);
+      expect(comp.moveAnnouncement()).toContain('Moved');
+
+      comp.moveFunctionUp(1);
+      expect(comp.functions().map((f) => f.raw)).toEqual(['sin(x)', 'cos(x)']);
+    });
+
+    it('calls solidToolState.handleFunctionMoved, same as drag-and-drop', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.addFunction();
+      const spy = vi.spyOn(comp.solidToolState, 'handleFunctionMoved');
+      comp.moveFunctionDown(0);
+      expect(spy).toHaveBeenCalledWith(0, 1);
+    });
+
+    it('does not move past the first or last row', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      expect(comp.canMoveFunctionUp(0)).toBe(false);
+      expect(comp.canMoveFunctionDown(0)).toBe(false);
+      comp.moveFunctionUp(0);
+      expect(comp.functions().length).toBe(1);
+    });
+
+    it('Alt+ArrowDown on the row input triggers the same reorder', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.addFunction();
+      comp.updateExpression(0, 'sin(x)');
+      comp.updateExpression(1, 'cos(x)');
+      const event = new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true });
+      const preventSpy = vi.spyOn(event, 'preventDefault');
+      comp.onFnInputKeyDown(0, event);
+      expect(preventSpy).toHaveBeenCalled();
+      expect(comp.functions().map((f) => f.raw)).toEqual(['cos(x)', 'sin(x)']);
+    });
+
+    it('ignores arrow keys without Alt', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.addFunction();
+      const event = new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: false });
+      comp.onFnInputKeyDown(0, event);
+      expect(comp.functions().map((f) => f.raw)).toEqual(['sin(x)', '']);
+    });
+  });
+
+  describe('canvas accessible description', () => {
+    it('describes visible functions', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'x^2');
+      expect(comp.canvasDescription()).toContain('y = x^2');
+    });
+
+    it('omits hidden functions', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.updateExpression(0, 'x^2');
+      comp.toggleVisibility(0);
+      expect(comp.canvasDescription()).toContain('No functions plotted');
+    });
+
+    it('reflects the active solid tool', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      comp.toggleSolidTool();
+      expect(comp.canvasDescription()).toContain('Solid of revolution tool active');
+    });
+
+    it('updates reactively when a function changes', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      expect(comp.canvasDescription()).toContain('y = sin(x)');
+      comp.updateExpression(0, 'cos(x)');
+      expect(comp.canvasDescription()).toContain('y = cos(x)');
+    });
+  });
+
+  describe('help modal focus return', () => {
+    it('returns focus to the help button after onHelpClose', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+      comp.showHelp.set(true);
+      fixture.detectChanges();
+
+      const helpButton = comp.helpBtn();
+      const focusSpy = helpButton ? vi.spyOn(helpButton.nativeElement, 'focus') : null;
+
+      comp.onHelpClose();
+
+      expect(comp.showHelp()).toBe(false);
+      if (focusSpy) expect(focusSpy).toHaveBeenCalled();
     });
   });
 });

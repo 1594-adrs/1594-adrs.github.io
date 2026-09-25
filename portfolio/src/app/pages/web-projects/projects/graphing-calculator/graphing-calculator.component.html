@@ -40,6 +40,7 @@
               (input)="updateExpression($index, $any($event.target).value)"
               (focus)="onInputFocus($index)"
               (blur)="onInputBlur()"
+              (keydown)="onFnInputKeyDown($index, $event)"
               [placeholder]="
                 fn.mode === 'implicit'
                   ? 'e.g. x^2+y^2=1'
@@ -55,6 +56,24 @@
             />
           </div>
           <div class="fn-actions">
+            <button
+              class="action-btn move-btn"
+              (click)="moveFunctionUp($index)"
+              [disabled]="!canMoveFunctionUp($index)"
+              [attr.aria-label]="'Move ' + functionLabel($index) + ' up'"
+              title="Move up (Alt+ArrowUp)"
+            >
+              ↑
+            </button>
+            <button
+              class="action-btn move-btn"
+              (click)="moveFunctionDown($index)"
+              [disabled]="!canMoveFunctionDown($index)"
+              [attr.aria-label]="'Move ' + functionLabel($index) + ' down'"
+              title="Move down (Alt+ArrowDown)"
+            >
+              ↓
+            </button>
             <button class="action-btn mode-btn" (click)="cycleMode($index)" [title]="fn.mode">
               {{
                 fn.mode === 'implicit'
@@ -135,6 +154,8 @@
         }
       }
     </div>
+
+    <p class="sr-only" role="status" aria-live="polite">{{ moveAnnouncement() }}</p>
 
     @if (functions().length < 5) {
       <button class="t-btn" (click)="addFunction()">+ add_function</button>
@@ -309,10 +330,12 @@
     class="canvas-container"
     tabindex="0"
     aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset."
+    aria-describedby="canvas-graph-description"
     (keydown)="onCanvasKeyDown($event)"
     (mouseenter)="showCanvasControls.set(true)"
     (mouseleave)="showCanvasControls.set(false)"
   >
+    <span id="canvas-graph-description" class="sr-only">{{ canvasDescription() }}</span>
     @if (show3DSolid() && hasSolidResult()) {
       <div class="solid-3d-container">
         <app-solid-3d

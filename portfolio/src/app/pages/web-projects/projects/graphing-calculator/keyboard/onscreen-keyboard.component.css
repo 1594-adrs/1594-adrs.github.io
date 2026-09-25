@@ -1,13 +1,14 @@
 .keyboard {
   display: flex;
   flex-direction: column;
-  background: #0a0a0f;
-  border-top: 1px solid #1a1a2e;
+  background: var(--color-bg-dark);
+  border-top: 1px solid var(--color-border);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .keyboard-tabs {
   display: flex;
-  border-bottom: 1px solid #1a1a2e;
+  border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -23,7 +24,7 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #555;
+  color: var(--color-text-muted);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -36,7 +37,7 @@
 }
 
 .tab-btn:hover {
-  color: #888;
+  color: var(--color-text-subtle);
 }
 
 .tab-btn.active {
@@ -71,9 +72,9 @@
   flex: 1;
   min-width: 0;
   height: 30px;
-  border: 1px solid #1a1a2e;
-  background: #0d0d15;
-  color: #666;
+  border: 1px solid var(--color-border);
+  background: var(--color-canvas-bg);
+  color: var(--color-text-muted);
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 11px;
   cursor: pointer;
@@ -90,8 +91,8 @@
 }
 
 .key:hover {
-  border-color: #333;
-  color: #ccc;
+  border-color: var(--color-border-hover);
+  color: var(--color-text);
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -104,7 +105,7 @@
   top: -1px;
   right: 2px;
   font-size: 7px;
-  color: #444;
+  color: var(--color-text-muted);
 }
 
 .key-label {
@@ -132,9 +133,30 @@
 }
 
 .key-special {
-  color: #555;
+  color: var(--color-text-muted);
 }
 
 .key-special:hover {
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* Coarse-pointer (touch): keys need >=44px hit targets; tab buttons get a min height too. */
+@media (pointer: coarse) {
+  .key {
+    height: 44px;
+    font-size: 13px;
+  }
+  .tab-btn {
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 375px) {
+  .keyboard-body {
+    padding: 3px;
+  }
+  .keyboard-row {
+    gap: 1px;
+  }
 }

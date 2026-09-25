@@ -102,7 +102,12 @@ function formatValue(v: number): string {
   ],
   providers: [SolidToolState],
   templateUrl: './graphing-calculator.component.html',
-  styleUrls: ['./graphing-calculator.component.css', './results.css'],
+  styleUrls: [
+    './graphing-calculator.component.css',
+    './canvas.css',
+    './function-list.css',
+    './results.css',
+  ],
 })
 export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
@@ -140,6 +145,37 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   focusedInputIndex = signal<number | null>(null);
   evalPoint = signal<string>('0');
   dragIndex = signal<number | null>(null);
+  moveAnnouncement = signal<string>('');
+
+  /** Accessible description of what's currently on the canvas, for aria-describedby. */
+  canvasDescription = computed(() => {
+    const parts: string[] = [];
+    const descriptions = this.functions()
+      .filter((f) => f.visible && f.raw.trim())
+      .map((f) => this.describeFunctionForA11y(f));
+    parts.push(
+      descriptions.length > 0 ? `Graph of ${descriptions.join(', ')}.` : 'No functions plotted.',
+    );
+    if (this.showSolidTool()) parts.push('Solid of revolution tool active.');
+    if (this.activeIntegral()) parts.push('Integral tool active.');
+    if (this.activeMultiArea()) parts.push('Area between curves tool active.');
+    return parts.join(' ');
+  });
+
+  private describeFunctionForA11y(f: MathExpression): string {
+    switch (f.mode) {
+      case 'explicit':
+        return `y = ${f.raw}`;
+      case 'explicit-y':
+        return `x = ${f.raw.replace(/^[xX]\s*=\s*/, '')}`;
+      case 'parametric':
+        return `parametric curve ${f.raw}`;
+      case 'polar':
+        return `polar curve ${f.raw}`;
+      default:
+        return f.raw;
+    }
+  }
 
   evalResults = computed(() => {
     const point = parseFloat(this.evalPoint());
@@ -985,7 +1021,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     event.preventDefault();
     const sourceIndex = this.dragIndex();
     if (sourceIndex === null || sourceIndex === targetIndex) return;
+    this.reorderFunction(sourceIndex, targetIndex);
+    this.dragIndex.set(null);
+  }
 
+  onDragEnd(): void {
+    this.dragIndex.set(null);
+  }
+
+  /** Moves the function row at `sourceIndex` to `targetIndex`, keeping the active
+   *  integral/solid-tool selections pointed at the same underlying function.
+   *  Shared by drag-and-drop and the keyboard-accessible move up/down controls. */
+  private reorderFunction(sourceIndex: number, targetIndex: number): void {
     this.functions.update((fns) => {
       const updated = [...fns];
       const [moved] = updated.splice(sourceIndex, 1);
@@ -1016,12 +1063,48 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       });
     }
 
-    this.dragIndex.set(null);
     this.requestRender();
   }
 
-  onDragEnd(): void {
-    this.dragIndex.set(null);
+  /** Label used in the aria-live announcement and aria-labels for the move up/down controls. */
+  functionLabel(index: number): string {
+    const fn = this.functions()[index];
+    return fn?.raw?.trim() ? `function ${index + 1}, ${fn.raw}` : `function ${index + 1}`;
+  }
+
+  canMoveFunctionUp(index: number): boolean {
+    return index > 0;
+  }
+
+  canMoveFunctionDown(index: number): boolean {
+    return index < this.functions().length - 1;
+  }
+
+  moveFunctionUp(index: number): void {
+    if (!this.canMoveFunctionUp(index)) return;
+    const label = this.functionLabel(index);
+    this.reorderFunction(index, index - 1);
+    this.moveAnnouncement.set(`Moved ${label} up to position ${index}`);
+  }
+
+  moveFunctionDown(index: number): void {
+    if (!this.canMoveFunctionDown(index)) return;
+    const label = this.functionLabel(index);
+    this.reorderFunction(index, index + 1);
+    this.moveAnnouncement.set(`Moved ${label} down to position ${index + 2}`);
+  }
+
+  /** Alt+ArrowUp / Alt+ArrowDown on a function's expression input reorders that row,
+   *  reusing the same move logic as the drag handles and the move up/down buttons. */
+  onFnInputKeyDown(index: number, event: KeyboardEvent): void {
+    if (!event.altKey) return;
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.moveFunctionUp(index);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.moveFunctionDown(index);
+    }
   }
 
   onHelpClose(): void {

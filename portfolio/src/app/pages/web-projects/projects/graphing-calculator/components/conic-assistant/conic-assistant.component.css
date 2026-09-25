@@ -127,3 +127,27 @@
   width: 100%;
   text-align: center;
 }
+
+@media (pointer: coarse) {
+  .conic-tab {
+    min-height: 44px;
+  }
+  .param-field input,
+  .param-field select {
+    min-height: 36px;
+    width: 60px;
+  }
+  .conic-add-btn {
+    min-height: 44px;
+  }
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 375px) {
+  .conic-params {
+    grid-template-columns: 1fr;
+  }
+}
