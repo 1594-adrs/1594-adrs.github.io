@@ -280,9 +280,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const result = integrateAdaptive(fn, intg.a, intg.b);
         const value =
           result.status === 'divergent'
-            ? 'diverge'
+            ? 'diverges'
             : result.status === 'undefined'
-              ? `no definida en x≈${result.badPoint?.toFixed(4) ?? '?'}`
+              ? `undefined near x ≈ ${result.badPoint?.toFixed(4) ?? '?'}`
               : formatValue(result.value);
         res.push({ label: `∫ ${expr.raw} dx`, value });
       }

@@ -86,7 +86,7 @@ export type SolidIssueCode =
 export interface SolidIssue {
   code: SolidIssueCode;
   severity: 'error' | 'warning' | 'info';
-  /** User-facing Spanish message, short and specific. */
+  /** User-facing message (English, like the rest of the UI), short and specific. */
   message: string;
   field?: 'curves' | 'a' | 'b' | 'axis' | 'shape' | 'ratio';
   /** Location (value of t) the issue refers to, when applicable. */
