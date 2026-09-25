@@ -81,12 +81,7 @@
           </div>
         </div>
         @if (fn.error) {
-          <p
-            [id]="'fn-error-' + $index"
-            role="alert"
-            aria-live="polite"
-            style="margin: -1px 0.75rem 3px 2.6rem; font-size: 10px; color: var(--color-corruption)"
-          >
+          <p [id]="'fn-error-' + $index" role="alert" aria-live="polite" class="fn-error">
             {{ fn.error }}
           </p>
         }
@@ -151,7 +146,7 @@
         <button class="t-btn" (click)="activateIntegral()" [class.active]="activeIntegral()">
           ∫ integral
         </button>
-        <button class="t-btn" (click)="activateSolid()" [class.active]="activeSolid()">
+        <button class="t-btn" (click)="toggleSolidTool()" [class.active]="showSolidTool()">
           ↻ solid_rev
         </button>
         <button class="t-btn" (click)="activateMultiArea()" [class.active]="activeMultiArea()">
@@ -166,9 +161,7 @@
         </button>
       </div>
       @if (functions().some((f) => f.mode === 'explicit-y')) {
-        <p style="padding: 0.3rem 0.75rem 0; font-size: 10px; color: #555">
-          x = g(y) rows aren't supported by ∫, area, or solid tools yet.
-        </p>
+        <p class="tool-note">x = g(y) rows aren't supported by the ∫ or area tools yet.</p>
       }
     </div>
 
@@ -207,83 +200,19 @@
       </div>
     }
 
-    @if (activeSolid()) {
+    @if (showSolidTool()) {
+      <app-solid-panel />
       <div class="range-section">
-        <span class="range-label">solid revolution</span>
-        <div class="range-inputs">
-          <label class="range-field">
-            a =
-            <input
-              type="text"
-              [value]="activeSolid()!.a"
-              (change)="updateSolidA($any($event.target).value)"
-              placeholder="0"
-              [class.input-error]="limitErrors()['solidA']"
-            />
-          </label>
-          <label class="range-field">
-            b =
-            <input
-              type="text"
-              [value]="activeSolid()!.b"
-              (change)="updateSolidB($any($event.target).value)"
-              placeholder="pi"
-              [class.input-error]="limitErrors()['solidB']"
-            />
-          </label>
-        </div>
-        <div class="bounded-fn-selects">
-          @for (fn of functions(); track $index) {
-            <label class="range-field multi-fn-toggle">
-              <input
-                type="checkbox"
-                [checked]="activeSolid()!.functionIndices.includes($index)"
-                (change)="toggleSolidFunction($index)"
-                [disabled]="!canUseWithTools(fn)"
-              />
-              <span class="color-swatch" [style.background]="fn.color"></span>
-              f{{ $index + 1 }}
-            </label>
-          }
-        </div>
-        @if (activeSolid()!.functionIndices.length >= 2) {
-          <label class="range-field">
-            <input
-              type="checkbox"
-              [checked]="activeSolid()!.overlapMode === 'all'"
-              (change)="updateSolidOverlapMode($any($event.target).checked)"
-            />
-            only where ALL overlap
-          </label>
-        }
-        <div class="axis-config">
-          <span class="range-label">rotation axis</span>
-          <div class="range-inputs">
-            <select
-              class="axis-select"
-              [attr.aria-label]="'Rotation axis type'"
-              [value]="activeSolid()!.axis.type"
-              (change)="updateSolidAxisType($any($event.target).value)"
-            >
-              <option value="x">y = k (horizontal)</option>
-              <option value="y">x = k (vertical)</option>
-            </select>
-            <label class="range-field">
-              k =
-              <input
-                type="number"
-                [value]="activeSolid()!.axis.value"
-                (change)="updateSolidAxisValue($any($event.target).value)"
-                step="0.5"
-              />
-            </label>
-          </div>
-        </div>
         <div class="solid-view-toggle">
           <button class="t-btn" [class.active]="!show3DSolid()" (click)="show3DSolid.set(false)">
             2D cross-section
           </button>
-          <button class="t-btn" [class.active]="show3DSolid()" (click)="show3DSolid.set(true)">
+          <button
+            class="t-btn"
+            [class.active]="show3DSolid()"
+            [disabled]="!hasSolidResult()"
+            (click)="show3DSolid.set(true)"
+          >
             3D view
           </button>
         </div>
@@ -384,13 +313,13 @@
     (mouseenter)="showCanvasControls.set(true)"
     (mouseleave)="showCanvasControls.set(false)"
   >
-    @if (show3DSolid() && hasSolidData()) {
+    @if (show3DSolid() && hasSolidResult()) {
       <div class="solid-3d-container">
         <app-solid-3d
-          [functions]="solidEvalFns()"
-          [regions]="solidRegions()"
-          [axis]="activeSolid()!.axis"
-          [color]="solidFnColors()[0]"
+          [spec]="solidToolState.spec()"
+          [pieces]="solidToolState.result()?.pieces ?? []"
+          [sweepT]="solidToolState.sweepT()"
+          [color]="solidColor()"
           [visible]="show3DSolid()"
         />
       </div>

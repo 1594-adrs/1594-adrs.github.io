@@ -1,0 +1,313 @@
+/* This component has its own view encapsulation, so it repeats (rather than inherits) the
+   calculator sidebar's look: dark tokens, monospace fields, .t-btn buttons. */
+
+:host {
+  display: block;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+.solid-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.range-section {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid #1a1a2e;
+}
+
+.range-label {
+  display: block;
+  font-size: 10px;
+  color: #555;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.3rem;
+}
+
+.range-inputs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.range-field {
+  flex: 1;
+  font-size: 11px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.range-field input {
+  width: 55px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #1a1a2e;
+  border-radius: 4px;
+  color: var(--color-text);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  padding: 2px 5px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.range-field input:focus {
+  border-color: var(--color-primary);
+}
+
+.range-field input.input-error {
+  border-color: var(--color-corruption);
+}
+
+.color-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.axis-select {
+  flex: 1;
+  background: #0a0a0f;
+  border: 1px solid #1a1a2e;
+  border-radius: 4px;
+  color: var(--color-text);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  padding: 4px 5px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  min-height: 30px;
+}
+
+.axis-select:focus {
+  border-color: var(--color-primary);
+}
+
+.t-btn {
+  display: block;
+  width: calc(100% - 1.5rem);
+  margin: 3px 0.75rem;
+  padding: 5px 8px;
+  background: none;
+  border: 1px solid #1a1a2e;
+  border-radius: 5px;
+  color: #555;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background-color 0.15s;
+}
+
+.t-btn:hover {
+  border-color: #333;
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.t-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(0, 255, 136, 0.06);
+}
+
+.t-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.method-group {
+  border: none;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid #1a1a2e;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.method-group > legend {
+  padding: 0;
+  margin-bottom: 0.2rem;
+}
+
+.method-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #1a1a2e;
+  border-radius: 6px;
+  cursor: pointer;
+  min-height: 44px;
+  justify-content: center;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.method-option:hover {
+  border-color: #333;
+}
+
+.method-option.selected {
+  border-color: var(--color-primary);
+  background: rgba(0, 255, 136, 0.06);
+}
+
+.method-option-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.method-option-head input[type='radio'] {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+}
+
+.method-guidance {
+  font-size: 10px;
+  color: #666;
+  line-height: 1.4;
+  padding-left: 22px;
+}
+
+.bounded-fn-selects {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.multi-fn-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  font-size: 10px;
+  color: #555;
+  min-height: 28px;
+}
+
+.multi-fn-toggle input[type='checkbox'] {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+}
+
+.multi-fn-toggle.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.variable-readout {
+  margin: 0.3rem 0 0;
+  font-size: 10px;
+  color: #666;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.field-error {
+  margin: 0.25rem 0 0;
+  font-size: 10px;
+  color: var(--color-corruption);
+  line-height: 1.4;
+}
+
+.issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid #1a1a2e;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.issue-row {
+  font-size: 10px;
+  color: #667;
+  line-height: 1.4;
+}
+
+.issue-row.warning {
+  color: #ffaa00;
+}
+
+.issue-row.error {
+  color: var(--color-corruption);
+}
+
+.solid-result {
+  overflow-x: auto;
+}
+
+.volume-line {
+  margin: 0.5rem 0 0;
+  font-size: 12px;
+  color: var(--color-text);
+  font-family: 'Cambria Math', serif;
+}
+
+.volume-line .exact {
+  color: var(--color-primary);
+}
+
+.volume-line .error-estimate {
+  color: #666;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.sweep-controls {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sweep-slider {
+  width: 100%;
+  accent-color: var(--color-primary);
+  height: 24px;
+  cursor: pointer;
+}
+
+.sweep-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.sweep-btn {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  min-height: 32px;
+}
+
+@media (max-width: 480px) {
+  .method-option {
+    min-height: 44px;
+  }
+  .sweep-slider {
+    height: 30px;
+  }
+}

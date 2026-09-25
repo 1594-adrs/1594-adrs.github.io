@@ -1,0 +1,21 @@
+<p class="integral-formula" [attr.aria-label]="spokenText()">
+  @for (term of terms(); track $index) {
+    <span class="term" aria-hidden="true">
+      @if ($index > 0) {
+        <span class="plus">+</span>
+      }
+      @if (term.coefficient) {
+        <app-math-renderer [ast]="term.coefficient" [fontSize]="16" />
+      }
+      <span class="integral-sign">
+        <span class="integral-symbol">∫</span>
+        <span class="limits">
+          <span class="limit-upper">{{ formatLimit(term.b) }}</span>
+          <span class="limit-lower">{{ formatLimit(term.a) }}</span>
+        </span>
+      </span>
+      <app-math-renderer [ast]="term.integrand" [fontSize]="16" />
+      <span class="dvar">d{{ term.variable }}</span>
+    </span>
+  }
+</p>

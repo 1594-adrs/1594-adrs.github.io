@@ -36,31 +36,26 @@ import { drawImplicitCurve } from './canvas/implicit-renderer';
 import { solveConicForY } from './engine/conic-solver';
 import { detectConicDomain } from './engine/conic-detector';
 import { detectAsymptotes } from './engine/asymptote-detector';
-import { drawSolidCrossSectionSingle, drawSolidCrossSectionMulti } from './canvas/solid-renderer';
+import { drawSolidRegion } from './canvas/solid-region-renderer';
 import { parse } from './engine/parser';
 import type { ExpressionNode } from './engine/parser';
 import { evalExpression, evaluate, evalConstantExpression } from './engine/evaluator';
 import { integrateAdaptive } from './engine/quadrature';
-import {
-  solidVolumeSingle,
-  solidSurfaceAreaSingle,
-  areaSingle,
-  solidVolumeMulti,
-  solidSurfaceAreaMulti,
-} from './engine/calculus';
+import { areaSingle } from './engine/calculus';
 import { findIntersections } from './engine/intersection-finder';
 import { findAxisCrossings } from './canvas/utils';
-import { computeAreaRegions, computeRevolutionRegions } from './engine/area-splitter';
+import { parseLimitText } from './engine/parse-limit';
+import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode } from './engine/mode-detector';
 import { FUNCTION_COLORS } from './utils/color';
 import { OnscreenKeyboardComponent } from './keyboard/onscreen-keyboard.component';
 import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
 import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
+import { SolidPanelComponent } from './components/solid-panel/solid-panel.component';
+import { SolidToolState } from './state/solid-tool.state';
 import type {
   MathExpression,
   IntegralResult,
-  RotationAxis,
-  SolidConfig,
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
@@ -76,6 +71,11 @@ function formatExpressionError(message: string, exprText: string): string {
   const name = match[1];
   const followedByParen = new RegExp(`${name}\\s*\\(`).test(exprText);
   return followedByParen ? `Unknown function or variable '${name}'` : `Unknown variable '${name}'`;
+}
+
+/** Rounds an auto-detected solid bound to a friendly display precision. */
+function roundLimit(v: number): number {
+  return Math.round(v * 10000) / 10000;
 }
 
 function formatValue(v: number): string {
@@ -98,7 +98,9 @@ function formatValue(v: number): string {
     HelpModalComponent,
     MathRendererComponent,
     ConicAssistantComponent,
+    SolidPanelComponent,
   ],
+  providers: [SolidToolState],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: ['./graphing-calculator.component.css', './results.css'],
 })
@@ -107,6 +109,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private ngZone = inject(NgZone);
   private cdr = inject(ChangeDetectorRef);
   private titleService = inject(Title);
+  solidToolState = inject(SolidToolState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   fnInputs = viewChildren<ElementRef<HTMLInputElement>>('fnInput');
@@ -124,7 +127,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   ]);
 
   activeIntegral = signal<{ fnIndex: number; a: number; b: number } | null>(null);
-  activeSolid = signal<SolidConfig | null>(null);
+  showSolidTool = signal(false);
   activeMultiArea = signal<MultiFunctionAreaConfig | null>(null);
   angleUnit = signal<'deg' | 'rad'>('rad');
   limitErrors = signal<Record<string, boolean>>({});
@@ -159,113 +162,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       });
   });
 
-  solidEvalFns = computed<Array<(x: number) => number>>(() => {
-    const sol = this.activeSolid();
-    if (!sol) return [];
-    const au = this.angleUnit();
-    return sol.functionIndices
-      .map((i) => this.functions()[i])
-      .filter((e) => !!e?.visible && this.canUseWithTools(e))
-      .map((e) => {
-        if (e.mode === 'explicit' && e.ast) {
-          return (x: number) => evalExpression(e.ast!, x, undefined, au);
-        }
-        if (e.mode === 'implicit' && e.ast) {
-          const branches = solveConicForY(e.ast);
-          if (branches && branches.length > 0) {
-            const branchFn = branches[0].fn;
-            return (x: number) => branchFn(x) ?? NaN;
-          }
-          return (x: number) => evalExpression(e.ast!, x, undefined, au);
-        }
-        if (e.mode === 'parametric' && e.paramX && e.paramY) {
-          const evalX = (tVal: number) => evaluate(e.paramX!, { x: tVal, t: tVal }, au);
-          const evalY = (tVal: number) => evaluate(e.paramY!, { x: tVal, t: tVal }, au);
-          const tMin = this.evalRange(e.tMin, 0);
-          const tMax = this.evalRange(e.tMax, 2 * Math.PI);
-          const N = 500;
-          const pts: Array<{ x: number; y: number }> = [];
-          for (let i = 0; i <= N; i++) {
-            const t = tMin + (i / N) * (tMax - tMin);
-            try {
-              const px = evalX(t);
-              const py = evalY(t);
-              if (isFinite(px) && isFinite(py)) pts.push({ x: px, y: py });
-            } catch {
-              /* skip */
-            }
-          }
-          return (x: number) => {
-            for (let i = 0; i < pts.length - 1; i++) {
-              const p0 = pts[i];
-              const p1 = pts[i + 1];
-              if ((p0.x <= x && p1.x >= x) || (p1.x <= x && p0.x >= x)) {
-                const dx = p1.x - p0.x;
-                if (Math.abs(dx) < 1e-15) return p0.y;
-                const t = (x - p0.x) / dx;
-                return p0.y + t * (p1.y - p0.y);
-              }
-            }
-            return NaN;
-          };
-        }
-        if (e.mode === 'polar' && e.ast) {
-          const evalR = (theta: number) => evalExpression(e.ast!, theta, undefined, au);
-          const thetaMin = this.evalRange(e.thetaMin, 0);
-          const thetaMax = this.evalRange(e.thetaMax, 2 * Math.PI);
-          const N = 500;
-          const pts: Array<{ x: number; y: number }> = [];
-          for (let i = 0; i <= N; i++) {
-            const theta = thetaMin + (i / N) * (thetaMax - thetaMin);
-            try {
-              const r = evalR(theta);
-              if (isFinite(r)) pts.push({ x: r * Math.cos(theta), y: r * Math.sin(theta) });
-            } catch {
-              /* skip */
-            }
-          }
-          return (x: number) => {
-            for (let i = 0; i < pts.length - 1; i++) {
-              const p0 = pts[i];
-              const p1 = pts[i + 1];
-              if ((p0.x <= x && p1.x >= x) || (p1.x <= x && p0.x >= x)) {
-                const dx = p1.x - p0.x;
-                if (Math.abs(dx) < 1e-15) return p0.y;
-                const t = (x - p0.x) / dx;
-                return p0.y + t * (p1.y - p0.y);
-              }
-            }
-            return NaN;
-          };
-        }
-        return (x: number) => NaN;
-      });
-  });
+  /** Color of the solid's first curve, for the 3D view; falls back to the default palette. */
+  solidColor = computed(() => this.solidToolState.spec()?.curves[0]?.color ?? FUNCTION_COLORS[0]);
 
-  solidFnColors = computed<string[]>(() => {
-    const sol = this.activeSolid();
-    if (!sol) return [];
-    return sol.functionIndices
-      .map((i) => this.functions()[i])
-      .filter((e) => !!e?.visible && this.canUseWithTools(e))
-      .map((e) => e.color);
-  });
-
-  solidRegions = computed(() => {
-    const fns = this.solidEvalFns();
-    const sol = this.activeSolid();
-    if (!sol || fns.length < 1) return [];
-    if (fns.length === 1) {
-      return [{ a: sol.a, b: sol.b, topFunctionIndex: 0, bottomFunctionIndex: 0 }];
-    }
-    const intersections = findIntersections(fns, sol.a, sol.b);
-    return computeRevolutionRegions(fns, intersections, sol.a, sol.b, sol.overlapMode);
-  });
-
-  hasSolidData = computed(() => {
-    const sol = this.activeSolid();
-    if (!sol) return false;
-    return this.solidRegions().length > 0;
+  hasSolidResult = computed(() => {
+    const result = this.solidToolState.result();
+    return !!result && result.volume !== null;
   });
 
   viewport = new Viewport();
@@ -309,35 +211,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         res.push({ label: `∫ ${expr.raw} dx`, value });
       }
     }
-    const sol = this.activeSolid();
-    if (sol) {
-      const evalFns = this.solidEvalFns();
-      const regions = this.solidRegions();
-      const axisLabel =
-        sol.axis.type === 'x' && sol.axis.value === 0
-          ? 'y = 0'
-          : sol.axis.type === 'y' && sol.axis.value === 0
-            ? 'x = 0'
-            : sol.axis.type === 'y'
-              ? `x = ${sol.axis.value}`
-              : `y = ${sol.axis.value}`;
-
-      if (evalFns.length === 1 && regions.length > 0) {
-        const vol = solidVolumeSingle(evalFns[0], sol.a, sol.b, sol.axis);
-        const sa = solidSurfaceAreaSingle(evalFns[0], sol.a, sol.b, sol.axis);
-        const fnLabel = this.functions()[sol.functionIndices[0]]?.raw ?? 'f';
-        res.push({ label: `V [${axisLabel}] (${fnLabel})`, value: formatValue(vol) });
-        res.push({ label: `S [${axisLabel}] (${fnLabel})`, value: formatValue(sa) });
-      } else if (evalFns.length >= 2 && regions.length > 0) {
-        const vol = solidVolumeMulti(evalFns, regions, sol.axis);
-        const sa = solidSurfaceAreaMulti(evalFns, regions, sol.axis);
-        const fnLabels = sol.functionIndices
-          .map((i) => this.functions()[i]?.raw ?? `f${i + 1}`)
-          .join(', ');
-        res.push({ label: `V [${axisLabel}] (${fnLabels})`, value: formatValue(vol) });
-        res.push({ label: `S [${axisLabel}] (${fnLabels})`, value: formatValue(sa) });
-      }
-    }
+    // Solid-of-revolution / cross-section results are shown inline by <app-solid-panel>
+    // (via SolidToolState), not duplicated in this footer.
 
     const mArea = this.activeMultiArea();
     if (mArea && mArea.functionIndices.length >= 2) {
@@ -388,6 +263,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     return res;
   });
+
+  constructor() {
+    this.solidToolState.connect(this.functions, this.angleUnit);
+  }
 
   ngAfterViewInit(): void {
     this.titleService.setTitle('Graphing Calculator — Andres Rincon');
@@ -441,13 +320,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.functions().length < 2) {
       this.activeMultiArea.set(null);
     }
-    this.activeSolid.update((s) => {
-      if (!s) return null;
-      const newIndices = s.functionIndices
-        .filter((i) => i !== index)
-        .map((i) => (i > index ? i - 1 : i));
-      return newIndices.length >= 1 ? { ...s, functionIndices: newIndices } : null;
-    });
+    this.solidToolState.handleFunctionRemoved(index);
     this.requestRender();
   }
 
@@ -708,41 +581,38 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (current) {
       this.activeIntegral.set(null);
     } else {
-      this.activeSolid.set(null);
+      this.closeSolidTool();
       this.activeMultiArea.set(null);
-      this.show3DSolid.set(false);
       this.activeIntegral.set({ fnIndex: 0, a: -2, b: 2 });
     }
     this.requestRender();
   }
 
-  activateSolid(): void {
-    const current = this.activeSolid();
-    if (current) {
-      this.activeSolid.set(null);
-      this.show3DSolid.set(false);
-    } else {
-      this.activeIntegral.set(null);
-      this.activeMultiArea.set(null);
+  /** Opens/closes the "solids by integration" panel, seeding a first guess of curves/bounds. */
+  toggleSolidTool(): void {
+    if (this.showSolidTool()) {
+      this.closeSolidTool();
+      this.requestRender();
+      return;
+    }
+
+    this.activeIntegral.set(null);
+    this.activeMultiArea.set(null);
+    this.showSolidTool.set(true);
+
+    if (this.solidToolState.curveIndices().length === 0) {
       const visibles = this.functions()
         .map((f, i) => ({ f, i }))
-        .filter(
-          (x) => x.f.visible && x.f.mode !== 'explicit-y' && (x.f.ast || x.f.mode === 'implicit'),
-        );
-      const indices = visibles.slice(0, Math.min(2, visibles.length)).map((x) => x.i);
+        .filter((x) => x.f.visible && x.f.mode === 'explicit' && x.f.ast);
+      const indices = visibles.slice(0, 2).map((x) => x.i);
+      for (const i of indices) this.solidToolState.toggleCurve(i);
 
       let a = this.viewport.xMin;
       let b = this.viewport.xMax;
 
       if (indices.length === 1) {
         const expr = this.functions()[indices[0]];
-        if (expr?.mode === 'implicit' && expr.ast) {
-          const domain = detectConicDomain(expr.ast);
-          if (domain) {
-            a = domain[0].a;
-            b = domain[0].b;
-          }
-        } else if (expr?.ast && expr.mode !== 'explicit-y') {
+        if (expr?.ast) {
           const evalFn = (x: number) => evalExpression(expr.ast!, x);
           const crossings = findAxisCrossings(evalFn, a, b, 0);
           if (crossings.length >= 2) {
@@ -752,13 +622,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           }
         }
       } else if (indices.length >= 2) {
-        const evalFns = indices
-          .map((i) => this.functions()[i])
-          .filter(
-            (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
-              !!e?.ast && e.visible && this.canUseWithTools(e),
-          )
-          .map((e) => (x: number) => evalExpression(e.ast!, x));
+        const evalFns = indices.map((i) => {
+          const ast = this.functions()[i].ast!;
+          return (x: number) => evalExpression(ast, x);
+        });
         const intersections = findIntersections(evalFns, a, b);
         if (intersections.length >= 2) {
           const sorted = [...intersections].sort((p, q) => Math.abs(p.x) - Math.abs(q.x));
@@ -767,71 +634,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
       }
 
-      this.activeSolid.set({
-        functionIndices: indices.length > 0 ? indices : [0],
-        a,
-        b,
-        axis: { type: 'x', value: 0 },
-        overlapMode: 'pairwise',
-      });
+      this.solidToolState.setA(String(roundLimit(a)));
+      this.solidToolState.setB(String(roundLimit(b)));
     }
     this.requestRender();
   }
 
-  toggleSolidFunction(index: number): void {
-    this.activeSolid.update((cfg) => {
-      if (!cfg) return null;
-      const has = cfg.functionIndices.includes(index);
-      if (has) {
-        const newIndices = cfg.functionIndices.filter((i) => i !== index);
-        return newIndices.length >= 1 ? { ...cfg, functionIndices: newIndices } : null;
-      }
-      return { ...cfg, functionIndices: [...cfg.functionIndices, index].sort() };
-    });
-    this.requestRender();
-  }
-
-  updateSolidA(value: string): void {
-    const v = this.parseLimit(value, 'solidA');
-    if (v !== null) {
-      this.activeSolid.update((s) => (s ? { ...s, a: v } : null));
-      this.requestRender();
-    }
-  }
-
-  updateSolidB(value: string): void {
-    const v = this.parseLimit(value, 'solidB');
-    if (v !== null) {
-      this.activeSolid.update((s) => (s ? { ...s, b: v } : null));
-      this.requestRender();
-    }
-  }
-
-  updateSolidAxisType(value: string): void {
-    const type = value as RotationAxis['type'];
-    this.activeSolid.update((s) => {
-      if (!s) return null;
-      return { ...s, axis: { type, value: s.axis.value } };
-    });
-    this.requestRender();
-  }
-
-  updateSolidAxisValue(value: string): void {
-    const v = parseFloat(value);
-    if (!isNaN(v)) {
-      this.activeSolid.update((s) => {
-        if (!s) return null;
-        return { ...s, axis: { ...s.axis, value: v } };
-      });
-      this.requestRender();
-    }
-  }
-
-  updateSolidOverlapMode(checked: boolean): void {
-    this.activeSolid.update((s) =>
-      s ? { ...s, overlapMode: checked ? 'all' : 'pairwise' } : null,
-    );
-    this.requestRender();
+  private closeSolidTool(): void {
+    this.showSolidTool.set(false);
+    this.show3DSolid.set(false);
+    this.solidToolState.reset();
   }
 
   activateMultiArea(): void {
@@ -840,8 +652,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.activeMultiArea.set(null);
     } else {
       this.activeIntegral.set(null);
-      this.activeSolid.set(null);
-      this.show3DSolid.set(false);
+      this.closeSolidTool();
       const indices =
         this.functions().length >= 2 ? [0, 1] : this.functions().length === 1 ? [0] : [];
 
@@ -1182,18 +993,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       return updated;
     });
 
-    if (this.activeSolid()) {
-      this.activeSolid.update((sol) => {
-        if (!sol) return null;
-        const newIndices = sol.functionIndices.map((i) => {
-          if (i === sourceIndex) return targetIndex;
-          if (sourceIndex < targetIndex && i > sourceIndex && i <= targetIndex) return i - 1;
-          if (sourceIndex > targetIndex && i >= targetIndex && i < sourceIndex) return i + 1;
-          return i;
-        });
-        return { ...sol, functionIndices: newIndices };
-      });
-    }
+    this.solidToolState.handleFunctionMoved(sourceIndex, targetIndex);
 
     if (this.activeIntegral()) {
       this.activeIntegral.update((intg) => {
@@ -1314,24 +1114,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   private parseLimit(value: string, key: string): number | null {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      this.limitErrors.update((e) => ({ ...e, [key]: false }));
-      return null;
-    }
-    const num = parseFloat(trimmed);
-    if (!isNaN(num)) {
-      this.limitErrors.update((e) => ({ ...e, [key]: false }));
-      return num;
-    }
-    try {
-      const result = evalConstantExpression(trimmed);
-      this.limitErrors.update((e) => ({ ...e, [key]: false }));
-      return result;
-    } catch {
-      this.limitErrors.update((e) => ({ ...e, [key]: true }));
-      return null;
-    }
+    const { value: v, invalid } = parseLimitText(value);
+    this.limitErrors.update((e) => ({ ...e, [key]: invalid }));
+    return v;
   }
 
   private evalRange(raw: string | undefined, defaultVal: number): number {
@@ -1496,33 +1281,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       }
     }
 
-    const sol = this.activeSolid();
-    if (sol) {
-      const evalFns = this.solidEvalFns();
-      const regions = this.solidRegions();
-      if (evalFns.length === 1 && regions.length > 0) {
-        const expr = this.functions()[sol.functionIndices[0]];
-        if (expr?.ast && expr.visible) {
-          drawSolidCrossSectionSingle(
-            ctx,
-            this.viewport,
-            evalFns[0],
-            sol.a,
-            sol.b,
-            sol.axis,
-            w,
-            h,
-            expr.color,
-          );
-        }
-      } else if (evalFns.length >= 2 && regions.length > 0) {
-        drawSolidCrossSectionMulti(
+    if (this.showSolidTool()) {
+      const spec = this.solidToolState.spec();
+      const result = this.solidToolState.result();
+      if (spec && result) {
+        drawSolidRegion(
           ctx,
           this.viewport,
-          evalFns,
-          this.solidFnColors(),
-          regions,
-          sol.axis,
+          spec,
+          result.pieces,
+          this.solidToolState.sweepT(),
           w,
           h,
         );

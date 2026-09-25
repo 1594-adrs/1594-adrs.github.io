@@ -13,11 +13,8 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { SolidScene } from './solid-scene';
-import { generateRevolutionMeshMulti } from './solid-geometry';
 import { buildSolidGeometry } from './solid-mesh-builder';
 import { buildSliceGeometry } from './slice-geometry';
-import type { RotationAxis } from '../../models/calculator.models';
-import type { SolidRegion } from '../../engine/calculus';
 import type { SolidPiece, SolidSpec } from '../../engine/solids/solid.types';
 
 const SLICE_HIGHLIGHT_COLOR = '#ffcc00';
@@ -53,13 +50,10 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('threeCanvas');
 
-  functions = input<Array<(x: number) => number>>([]);
-  regions = input<SolidRegion[]>([]);
-  axis = input<RotationAxis>({ type: 'x', value: 0 });
   color = input('#00ff88');
   visible = input(false);
 
-  /** Spec-driven "solids by integration" inputs. When `spec` is non-null, these take over. */
+  /** Spec-driven "solids by integration" inputs. */
   spec = input<SolidSpec | null>(null);
   pieces = input<SolidPiece[]>([]);
   sweepT = input<number | null>(null);
@@ -95,18 +89,7 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.ngZone.runOutsideAngular(() => {
-      // Legacy (functions/regions) pipeline — unchanged, but skipped while a spec is active.
-      effect(() => {
-        const _fns = this.functions();
-        const _regions = this.regions();
-        const _axis = this.axis();
-        const _color = this.color();
-        if (this.spec()) return;
-        this.scene?.clearSpecMesh();
-        this.updateGeometry();
-      });
-
-      // Spec-driven mesh rebuild — only on spec/pieces change (color handled separately below).
+      // Mesh rebuild — only on spec/pieces change (color handled separately below).
       effect(() => {
         const spec = this.spec();
         const pieces = this.pieces();
@@ -114,11 +97,10 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
           this.scene?.clearSpecMesh();
           return;
         }
-        this.scene?.clearLegacyMesh();
         this.rebuildSolidMesh(spec, pieces);
       });
 
-      // Spec-driven color updates, independent of geometry rebuilds.
+      // Color updates, independent of geometry rebuilds.
       effect(() => {
         const spec = this.spec();
         const color = this.color();
@@ -167,25 +149,10 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       const spec = this.spec();
-      if (spec) {
-        this.scene?.clearLegacyMesh();
-        this.rebuildSolidMesh(spec, this.pieces());
-      } else {
-        this.updateGeometry();
-      }
+      if (spec) this.rebuildSolidMesh(spec, this.pieces());
       this.updateSweep(spec, this.pieces(), this.sweepT());
       this.scene?.render();
     });
-  }
-
-  private updateGeometry(): void {
-    if (!this.scene) return;
-    const fns = this.functions();
-    const regs = this.regions();
-    if (fns.length === 0 || regs.length === 0) return;
-    const meshes = generateRevolutionMeshMulti(fns, regs, this.axis());
-    this.scene.updateMesh(meshes, this.color());
-    this.scene.render();
   }
 
   private rebuildSolidMesh(spec: SolidSpec, pieces: SolidPiece[]): void {

@@ -10,20 +10,15 @@ import {
   GridHelper,
   AxesHelper,
   MeshPhongMaterial,
-  MeshBasicMaterial,
   Material,
   DoubleSide,
   Spherical,
-  EdgesGeometry,
-  LineSegments,
-  LineBasicMaterial,
   LineDashedMaterial,
   Line,
   Plane,
   Vector3,
   BufferGeometry,
 } from 'three';
-import type { SolidMeshes } from './solid-geometry';
 import type { AxisLine } from '../../engine/solids/solid.types';
 
 /** Normal + constant of a THREE.Plane, kept DOM/three-agnostic at the call site. */
@@ -44,16 +39,11 @@ export class SolidScene {
   private scene: Scene;
   private camera: PerspectiveCamera;
   private renderer: WebGLRenderer;
-  private outerMesh: Mesh | null = null;
-  private innerMesh: Mesh | null = null;
-  private innerWire: Mesh | null = null;
-  private capMesh: Mesh | null = null;
-  private edgeLines: LineSegments | null = null;
   private readonly grid: GridHelper;
   private readonly axes: AxesHelper;
   private isDisposed = false;
 
-  // "solids by integration" (spec-driven) pipeline — kept separate from the legacy fields above.
+  // "solids by integration" (spec-driven) pipeline.
   private solidPieceMeshes: Mesh[] = [];
   private sliceMesh: Mesh | null = null;
   private axisLine: Line | null = null;
@@ -89,101 +79,6 @@ export class SolidScene {
 
     this.axes = new AxesHelper(10);
     this.scene.add(this.axes);
-  }
-
-  updateMesh(meshes: SolidMeshes, color: string): void {
-    this.disposeMeshes();
-
-    const baseColor = new Color(color);
-    const darkerColor = baseColor.clone().multiplyScalar(0.55);
-
-    this.outerMesh = new Mesh(
-      meshes.outer,
-      new MeshPhongMaterial({
-        color: baseColor,
-        transparent: true,
-        opacity: 0.45,
-        side: DoubleSide,
-      }),
-    );
-    this.scene.add(this.outerMesh);
-
-    if (meshes.inner) {
-      this.innerMesh = new Mesh(
-        meshes.inner,
-        new MeshPhongMaterial({
-          color: darkerColor,
-          transparent: true,
-          opacity: 0.65,
-          side: DoubleSide,
-        }),
-      );
-      this.scene.add(this.innerMesh);
-
-      this.innerWire = new Mesh(
-        meshes.inner,
-        new MeshBasicMaterial({
-          color: darkerColor,
-          wireframe: true,
-          transparent: true,
-          opacity: 0.15,
-        }),
-      );
-      this.scene.add(this.innerWire);
-    }
-
-    this.capMesh = new Mesh(
-      meshes.caps,
-      new MeshPhongMaterial({
-        color: baseColor,
-        transparent: true,
-        opacity: 0.55,
-        side: DoubleSide,
-      }),
-    );
-    this.scene.add(this.capMesh);
-
-    const edges = new EdgesGeometry(meshes.caps, 15);
-    this.edgeLines = new LineSegments(
-      edges,
-      new LineBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.3,
-      }),
-    );
-    this.scene.add(this.edgeLines);
-  }
-
-  private disposeMeshes(): void {
-    const fields = [
-      this.outerMesh,
-      this.innerMesh,
-      this.innerWire,
-      this.capMesh,
-    ] as (Mesh | null)[];
-    for (const m of fields) {
-      if (m) {
-        this.scene.remove(m);
-        m.geometry.dispose();
-        (m.material as Material).dispose();
-      }
-    }
-    if (this.edgeLines) {
-      this.scene.remove(this.edgeLines);
-      this.edgeLines.geometry.dispose();
-      (this.edgeLines.material as Material).dispose();
-    }
-    this.outerMesh = null;
-    this.innerMesh = null;
-    this.innerWire = null;
-    this.capMesh = null;
-    this.edgeLines = null;
-  }
-
-  /** Clears the legacy (functions/regions) meshes, e.g. when a spec-driven solid takes over. */
-  clearLegacyMesh(): void {
-    this.disposeMeshes();
   }
 
   /** Clears the spec-driven meshes (solid pieces, slice, axis line), e.g. when spec becomes null. */
@@ -317,7 +212,6 @@ export class SolidScene {
 
   dispose(): void {
     this.isDisposed = true;
-    this.disposeMeshes();
     this.disposeSolidPieces();
     if (this.sliceMesh) {
       this.sliceMesh.geometry.dispose();

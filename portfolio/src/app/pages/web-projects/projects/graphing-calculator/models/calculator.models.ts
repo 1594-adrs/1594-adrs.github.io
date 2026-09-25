@@ -1,12 +1,5 @@
 import type { ExpressionNode } from '../engine/parser';
 
-type RotationAxisType = 'x' | 'y' | 'custom';
-
-export interface RotationAxis {
-  type: RotationAxisType;
-  value: number;
-}
-
 export type CurveMode = 'explicit' | 'explicit-y' | 'implicit' | 'parametric' | 'polar';
 export type OverlapMode = 'pairwise' | 'all';
 
@@ -30,18 +23,6 @@ export interface MathExpression {
 export interface IntegralResult {
   label: string;
   value: string;
-}
-
-export interface SolidConfig {
-  functionIndices: number[];
-  a: number;
-  b: number;
-  axis: RotationAxis;
-  overlapMode: OverlapMode;
-  tMin?: string;
-  tMax?: string;
-  thetaMin?: string;
-  thetaMax?: string;
 }
 
 export interface MultiFunctionAreaConfig {

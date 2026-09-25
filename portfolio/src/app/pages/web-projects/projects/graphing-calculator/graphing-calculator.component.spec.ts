@@ -65,9 +65,9 @@ describe('GraphingCalculatorComponent', () => {
   it('should activate solid mode', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     const comp = fixture.componentInstance;
-    expect(comp.activeSolid()).toBeNull();
-    comp.activateSolid();
-    expect(comp.activeSolid()).not.toBeNull();
+    expect(comp.showSolidTool()).toBe(false);
+    comp.toggleSolidTool();
+    expect(comp.showSolidTool()).toBe(true);
   });
 
   it('should render canvas element', () => {
@@ -84,30 +84,34 @@ describe('GraphingCalculatorComponent', () => {
     expect(compiled.querySelector('.sidebar')).toBeTruthy();
   });
 
-  it('should produce single branch for conic in solidEvalFns', () => {
+  it('should produce a single curve adapter for an implicit conic', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     const comp = fixture.componentInstance;
     comp.addFunction();
     comp.updateExpression(1, 'x^2+y^2-4=0');
-    comp.activateSolid();
-    const sol = comp.activeSolid();
-    expect(sol).not.toBeNull();
-    const evalFns = comp.solidEvalFns();
-    expect(evalFns.length).toBe(1);
-    expect(evalFns[0](0)).toBeCloseTo(2, 5);
-    expect(evalFns[0](2)).toBeCloseTo(0, 5);
+    comp.toggleSolidTool();
+    comp.solidToolState.toggleCurve(1);
+    comp.solidToolState.setA('-2');
+    comp.solidToolState.setB('2');
+    const spec = comp.solidToolState.spec();
+    expect(spec).not.toBeNull();
+    expect(spec!.curves.length).toBe(1);
+    expect(spec!.curves[0].fn(0)).toBeCloseTo(2, 5);
+    expect(spec!.curves[0].fn(2)).toBeCloseTo(0, 5);
   });
 
-  it('should create conic region with top===bottom for disk method', () => {
+  it('should compute a solid result for a single conic curve', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     const comp = fixture.componentInstance;
     comp.addFunction();
     comp.updateExpression(1, 'x^2+y^2-4=0');
-    comp.activateSolid();
-    const regions = comp.solidRegions();
-    expect(regions.length).toBe(1);
-    expect(regions[0].topFunctionIndex).toBe(0);
-    expect(regions[0].bottomFunctionIndex).toBe(0);
+    comp.toggleSolidTool();
+    comp.solidToolState.toggleCurve(1);
+    comp.solidToolState.setA('-2');
+    comp.solidToolState.setB('2');
+    const result = comp.solidToolState.result();
+    expect(result).not.toBeNull();
+    expect(result!.pieces.length).toBeGreaterThan(0);
   });
 
   describe('detectMode', () => {
