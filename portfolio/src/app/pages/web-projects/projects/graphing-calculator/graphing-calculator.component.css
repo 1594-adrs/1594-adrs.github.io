@@ -50,16 +50,20 @@
   border-radius: 2px;
 }
 @media (max-width: 768px) {
+  /* `height` (not `max-height`) so the "auto" grid row is actually forced to this size
+     regardless of content height — otherwise a grid `auto` track just shrinks to fit
+     shorter content and the canvas row below never gives the sidebar the room back. */
   .sidebar {
     grid-row: auto;
-    max-height: 40vh;
+    height: 40vh;
+    height: 40dvh;
     border-right: none;
     border-bottom: 1px solid var(--color-border);
-    transition: max-height 0.2s ease;
+    transition: height 0.2s ease;
   }
   .sidebar.expanded {
-    max-height: 80vh;
-    max-height: 80dvh;
+    height: 80vh;
+    height: 80dvh;
   }
 }
 .sidebar-header {

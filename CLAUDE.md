@@ -40,7 +40,9 @@ Keep the layers separate:
 - `state/solid-tool.state.ts` — signal state for the solids panel (axis orientation is derived from method + variable).
 - `canvas/` — 2D rendering (`viewport.ts`, grid/graph/implicit renderers, `solid-region-renderer.ts`); `canvas/utils.ts` has the shared `tryEval` and `findAxisCrossings` — reuse them.
 - `canvas/solid-3d/` — Three.js viewer (`solid-mesh-builder.ts`: lathe for revolution, `loft.ts` for cross-sections; sweep = clipping plane, no remesh). Dispose every geometry/material/renderer on teardown.
-- `components/` — `solid-panel`, `integral-formula`, `math-renderer`, `conic-assistant`. `graphing-calculator.component.ts` is large — put new logic in `engine/`/`state/`/`canvas/`, not in the component.
+- `engine/solids/` also computes the total surface (`solid-surface.ts`, derivative-free frustum sum) and supports 1–5 curves (region = envelope between the highest and lowest curve).
+- Graph interaction: `engine/critical-points.ts` + `canvas/curve-locator.ts` + `canvas/trace-renderer.ts`, state in `state/graph-interaction.state.ts` (trace, points of interest, `P` cycles them). Share links: `state/share-state.ts` (`#s=` base64url JSON, versioned, captured before routing). Canvas redraws are triggered by effects on state signals — new state that affects drawing must be read inside one of those effects.
+- `components/` — `solid-panel`, `integral-formula`, `math-renderer`, `conic-assistant`, `value-table`, `color-picker`. Calculator CSS is split across `graphing-calculator.component.css`, `function-list.css`, `canvas.css`, `results.css` to stay under the per-stylesheet budget. `graphing-calculator.component.ts` is large — put new logic in `engine/`/`state/`/`canvas/`, not in the component.
 - UI text is English.
 - Keyboard: `+`/`-` zoom, arrows pan, `R` reset.
 

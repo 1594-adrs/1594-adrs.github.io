@@ -205,3 +205,13 @@
     gap: 4px;
   }
 }
+
+/* The color-picker's tap target grows to 44px on coarse pointers (see color-picker.css);
+   size the gutter column to its actual content instead of a fixed px so the button never
+   bleeds into the expression column. Placed after the max-width:375 rule so it wins when
+   both match (a narrow touch screen). */
+@media (pointer: coarse) {
+  .function-row {
+    grid-template-columns: auto 1fr auto;
+  }
+}

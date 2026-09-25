@@ -2,7 +2,7 @@
   <button
     type="button"
     class="color-swatch-btn"
-    [style.background]="color()"
+    [style.--swatch-color]="color()"
     (click)="toggle()"
     [attr.aria-expanded]="open()"
     [attr.aria-label]="label()"
