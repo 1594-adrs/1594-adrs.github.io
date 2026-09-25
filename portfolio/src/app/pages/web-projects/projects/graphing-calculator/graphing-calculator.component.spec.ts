@@ -343,4 +343,28 @@ describe('GraphingCalculatorComponent', () => {
       if (focusSpy) expect(focusSpy).toHaveBeenCalled();
     });
   });
+
+  describe('points of interest toggle', () => {
+    it('hides points from click-to-pin when toggled off', () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+
+      // Default canvas size in jsdom is 300x150; with the default viewport
+      // (-10..10, -7..7) the point (0, -1) lands at screen (150, ~85.7).
+      comp.interactionState.setPoints([{ x: 0, y: -1, label: 'min of f1' }]);
+      const click = new MouseEvent('click', { clientX: 150, clientY: 86 });
+
+      expect(comp.interactionState.showPointsOfInterest()).toBe(true);
+      comp.onCanvasClick(click);
+      expect(comp.interactionState.pinnedPoints().length).toBe(1);
+
+      comp.interactionState.clearPinned();
+      comp.togglePointsOfInterest();
+      expect(comp.interactionState.showPointsOfInterest()).toBe(false);
+
+      comp.onCanvasClick(click);
+      expect(comp.interactionState.pinnedPoints().length).toBe(0);
+    });
+  });
 });

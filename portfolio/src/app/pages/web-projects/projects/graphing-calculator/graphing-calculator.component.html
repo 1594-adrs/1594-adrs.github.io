@@ -329,7 +329,7 @@
   <main
     class="canvas-container"
     tabindex="0"
-    aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset."
+    aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset, P to cycle points of interest, Escape to clear pinned labels."
     aria-describedby="canvas-graph-description"
     (keydown)="onCanvasKeyDown($event)"
     (mouseenter)="showCanvasControls.set(true)"
@@ -354,6 +354,7 @@
         (wheel)="onCanvasWheel($event)"
         (mousedown)="onCanvasMouseDown($event)"
         (mouseup)="onCanvasMouseUp()"
+        (click)="onCanvasClick($event)"
         (touchstart)="onCanvasTouchStart($event)"
         (touchmove)="onCanvasTouchMove($event)"
         (touchend)="onCanvasTouchEnd($event)"
@@ -372,6 +373,15 @@
           title="Toggle grid"
         >
           ⊞
+        </button>
+        <button
+          class="canvas-ctrl-btn"
+          [class.active]="interactionState.showPointsOfInterest()"
+          (click)="togglePointsOfInterest()"
+          title="Points of interest"
+          aria-label="Toggle points of interest"
+        >
+          ◦
         </button>
       </div>
     }

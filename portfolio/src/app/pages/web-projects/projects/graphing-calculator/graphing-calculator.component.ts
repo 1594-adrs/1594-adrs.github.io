@@ -44,6 +44,11 @@ import { integrateAdaptive } from './engine/quadrature';
 import { areaSingle } from './engine/calculus';
 import { findIntersections } from './engine/intersection-finder';
 import { findAxisCrossings } from './canvas/utils';
+import { findNearestCurvePoint } from './canvas/curve-locator';
+import type { TraceCurve } from './canvas/curve-locator';
+import { drawTracePoint, drawPointOfInterest } from './canvas/trace-renderer';
+import { computePointsOfInterest } from './engine/critical-points';
+import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode } from './engine/mode-detector';
@@ -53,12 +58,24 @@ import { MathRendererComponent } from './components/math-renderer/math-renderer.
 import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
 import { SolidPanelComponent } from './components/solid-panel/solid-panel.component';
 import { SolidToolState } from './state/solid-tool.state';
+import { GraphInteractionState } from './state/graph-interaction.state';
 import type {
   MathExpression,
   IntegralResult,
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
+
+/** Screen-px hit radius for snapping the pointer to a curve (trace mode). */
+const TRACE_SNAP_PX = 12;
+/** Click/tap hit radius for a point of interest; wider on coarse (touch) pointers. */
+const POI_HIT_PX_FINE = 12;
+const POI_HIT_PX_COARSE = 22;
+/** Debounce for recomputing points of interest after a pan/zoom. */
+const POI_RECOMPUTE_DELAY_MS = 150;
+/** Movement (screen px) beyond which a single-finger touch commits to panning
+ *  instead of holding still to trace a curve. */
+const TOUCH_PAN_THRESHOLD_PX = 10;
 
 /**
  * Rewrites the evaluator's "Unknown variable: 'foo'" into a display message.
@@ -100,7 +117,7 @@ function formatValue(v: number): string {
     ConicAssistantComponent,
     SolidPanelComponent,
   ],
-  providers: [SolidToolState],
+  providers: [SolidToolState, GraphInteractionState],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
     './graphing-calculator.component.css',
@@ -115,6 +132,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private titleService = inject(Title);
   solidToolState = inject(SolidToolState);
+  interactionState = inject(GraphInteractionState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   fnInputs = viewChildren<ElementRef<HTMLInputElement>>('fnInput');
@@ -146,6 +164,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   evalPoint = signal<string>('0');
   dragIndex = signal<number | null>(null);
   moveAnnouncement = signal<string>('');
+  poiAnnouncement = signal<string>('');
 
   /** Accessible description of what's currently on the canvas, for aria-describedby. */
   canvasDescription = computed(() => {
@@ -159,6 +178,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.showSolidTool()) parts.push('Solid of revolution tool active.');
     if (this.activeIntegral()) parts.push('Integral tool active.');
     if (this.activeMultiArea()) parts.push('Area between curves tool active.');
+    if (this.poiAnnouncement()) parts.push(this.poiAnnouncement());
     return parts.join(' ');
   });
 
@@ -216,6 +236,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private animFrameId = 0;
   private pendingRafIds: number[] = [];
   private blurTimerId: ReturnType<typeof setTimeout> | null = null;
+  private poiTimer: ReturnType<typeof setTimeout> | null = null;
+  private poiKey: string | null = null;
+  private touchAnchor: { x: number; y: number } | null = null;
+  private touchPanEngaged = false;
 
   private requestRender(): void {
     if (this.renderRequested) return;
@@ -332,6 +356,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.blurTimerId !== null) {
       clearTimeout(this.blurTimerId);
       this.blurTimerId = null;
+    }
+    if (this.poiTimer !== null) {
+      clearTimeout(this.poiTimer);
+      this.poiTimer = null;
     }
   }
 
@@ -828,6 +856,35 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.lastDrag.set(null);
   }
 
+  /** Pins/unpins the nearest point of interest to a click/tap, within a wider hit
+   *  radius on coarse (touch) pointers. */
+  onCanvasClick(event: MouseEvent): void {
+    if (!this.interactionState.showPointsOfInterest()) return;
+    const canvas = this.canvasRef()?.nativeElement;
+    if (!canvas) return;
+    const points = this.interactionState.pointsOfInterest();
+    if (points.length === 0) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+    const hitRadius = coarse ? POI_HIT_PX_COARSE : POI_HIT_PX_FINE;
+
+    let best: { point: PointOfInterest; distance: number } | null = null;
+    for (const p of points) {
+      const [sx, sy] = this.viewport.worldToScreen(p.x, p.y, canvas.width, canvas.height);
+      const distance = Math.hypot(sx - x, sy - y);
+      if (distance <= hitRadius && (!best || distance < best.distance)) {
+        best = { point: p, distance };
+      }
+    }
+    if (best) {
+      this.interactionState.togglePin(best.point);
+      this.requestRender();
+    }
+  }
+
   onCanvasKeyDown(event: KeyboardEvent): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
@@ -864,10 +921,36 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       case 'R':
         this.resetView();
         return;
+      case 'p':
+      case 'P':
+        this.cyclePointOfInterest();
+        return;
+      case 'Escape':
+        if (this.interactionState.pinnedPoints().length > 0) {
+          this.interactionState.clearPinned();
+          this.requestRender();
+        }
+        return;
       default:
         return;
     }
     event.preventDefault();
+    this.requestRender();
+  }
+
+  /** Cycles the keyboard focus through the currently visible points of interest,
+   *  announcing the current one via the canvas's aria-describedby region. */
+  private cyclePointOfInterest(): void {
+    if (!this.interactionState.showPointsOfInterest()) return;
+    const next = this.interactionState.cycleNext();
+    if (!next) {
+      this.poiAnnouncement.set('No points of interest in view.');
+      return;
+    }
+    const { point, index, total } = next;
+    this.poiAnnouncement.set(
+      `Point of interest ${index + 1} of ${total}: (${point.x.toFixed(3)}, ${point.y.toFixed(3)}), ${point.label}.`,
+    );
     this.requestRender();
   }
 
@@ -881,8 +964,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const rect = canvas.getBoundingClientRect();
       const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
-      this.isDragging.set(true);
+      this.touchAnchor = { x, y };
+      this.touchPanEngaged = false;
+      this.isDragging.set(false);
       this.lastDrag.set({ x, y });
+      this.mousePos.set({ x, y });
+      this.requestRender();
     } else if (event.touches.length === 2) {
       const touch1 = event.touches[0];
       const touch2 = event.touches[1];
@@ -897,18 +984,32 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
 
-    if (event.touches.length === 1 && this.isDragging()) {
+    if (event.touches.length === 1) {
       const touch = event.touches[0];
       const rect = canvas.getBoundingClientRect();
       const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
-      const last = this.lastDrag();
-      if (last) {
-        const dx = x - last.x;
-        const dy = y - last.y;
-        this.viewport.pan(dx, dy, canvas.width, canvas.height);
+
+      // A single finger holds still to trace a curve; it only commits to panning
+      // once it has moved past a small threshold (a deliberate drag gesture).
+      if (!this.touchPanEngaged && this.touchAnchor) {
+        const moved = Math.hypot(x - this.touchAnchor.x, y - this.touchAnchor.y);
+        if (moved > TOUCH_PAN_THRESHOLD_PX) {
+          this.touchPanEngaged = true;
+          this.isDragging.set(true);
+        }
+      }
+
+      if (this.touchPanEngaged) {
+        const last = this.lastDrag();
+        if (last) {
+          const dx = x - last.x;
+          const dy = y - last.y;
+          this.viewport.pan(dx, dy, canvas.width, canvas.height);
+        }
       }
       this.lastDrag.set({ x, y });
+      this.mousePos.set({ x, y });
       this.requestRender();
     } else if (event.touches.length === 2) {
       const touch1 = event.touches[0];
@@ -938,6 +1039,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (event.touches.length === 0) {
       this.isDragging.set(false);
       this.lastDrag.set(null);
+      this.touchAnchor = null;
+      this.touchPanEngaged = false;
+      this.mousePos.set(null);
+      this.requestRender();
     } else if (event.touches.length === 1) {
       const canvas = this.canvasRef()?.nativeElement;
       if (canvas) {
@@ -971,6 +1076,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   toggleGrid(): void {
     this.showGrid.update((v) => !v);
+    this.requestRender();
+  }
+
+  togglePointsOfInterest(): void {
+    this.interactionState.toggle();
     this.requestRender();
   }
 
@@ -1228,6 +1338,75 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     );
   }
 
+  /** Visible explicit / x=g(y) curves, as evaluator closures, for the trace search. */
+  private buildTraceCurves(): TraceCurve[] {
+    const au = this.angleUnit();
+    const curves: TraceCurve[] = [];
+    this.functions().forEach((fn, index) => {
+      if (!fn.visible || !fn.ast) return;
+      if (fn.mode === 'explicit') {
+        curves.push({
+          index,
+          color: fn.color,
+          mode: 'explicit',
+          fn: (x: number) => evalExpression(fn.ast!, x, undefined, au),
+        });
+      } else if (fn.mode === 'explicit-y') {
+        curves.push({
+          index,
+          color: fn.color,
+          mode: 'explicit-y',
+          fn: (y: number) => evaluate(fn.ast!, { y }, au),
+        });
+      }
+    });
+    return curves;
+  }
+
+  /** Visible explicit curves, labeled by function slot, for the points-of-interest engine. */
+  private buildNamedCurves(): NamedCurve[] {
+    const au = this.angleUnit();
+    const curves: NamedCurve[] = [];
+    this.functions().forEach((fn, index) => {
+      if (!fn.visible || !fn.ast || fn.mode !== 'explicit') return;
+      curves.push({
+        label: `f${index + 1}`,
+        fn: (x: number) => evalExpression(fn.ast!, x, undefined, au),
+      });
+    });
+    return curves;
+  }
+
+  private poiComputeKey(): string {
+    const v = this.viewport;
+    const fnsKey = this.functions()
+      .map((f) => `${f.mode}:${f.visible}:${f.raw}`)
+      .join('|');
+    return `${v.xMin.toFixed(4)},${v.xMax.toFixed(4)}|${fnsKey}`;
+  }
+
+  /** Recomputes points of interest at most once per POI_RECOMPUTE_DELAY_MS, so panning
+   *  or zooming doesn't re-run root/extrema/intersection search every frame. */
+  private schedulePoiRecompute(): void {
+    if (this.poiComputeKey() === this.poiKey) return;
+    if (this.poiTimer !== null) return;
+    this.poiTimer = setTimeout(() => {
+      this.poiTimer = null;
+      this.poiKey = this.poiComputeKey();
+      this.recomputePointsOfInterest();
+      this.requestRender();
+    }, POI_RECOMPUTE_DELAY_MS);
+  }
+
+  private recomputePointsOfInterest(): void {
+    const curves = this.buildNamedCurves();
+    const points =
+      curves.length > 0
+        ? computePointsOfInterest(curves, this.viewport.xMin, this.viewport.xMax)
+        : [];
+    this.interactionState.setPoints(points);
+  }
+
   private render(): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
@@ -1380,17 +1559,54 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    if (this.interactionState.showPointsOfInterest()) {
+      this.schedulePoiRecompute();
+      const activeIndex = this.interactionState.activeIndex();
+      const pinned = this.interactionState.pinnedPoints();
+      this.interactionState.pointsOfInterest().forEach((p, i) => {
+        const [sx, sy] = this.viewport.worldToScreen(p.x, p.y, w, h);
+        const isActive = i === activeIndex;
+        const pin = pinned.find((pt) => Math.abs(pt.x - p.x) < 1e-9 && Math.abs(pt.y - p.y) < 1e-9);
+        const label =
+          isActive || pin ? `(${p.x.toFixed(3)}, ${p.y.toFixed(3)}) · ${p.label}` : null;
+        drawPointOfInterest(ctx, sx, sy, p.x, p.y, label, isActive || !!pin, w, h);
+      });
+    }
+
     const mouse = this.mousePos();
     if (mouse && !this.isDragging()) {
-      const intgFn = this.activeIntegral();
-      let activeFn: ((x: number) => number) | null = null;
-      if (intgFn) {
-        const expr = this.functions()[intgFn.fnIndex];
-        if (expr?.ast && expr.visible) {
-          activeFn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
+      const traceCurves = this.buildTraceCurves();
+      const trace = findNearestCurvePoint(
+        traceCurves,
+        mouse.x,
+        mouse.y,
+        this.viewport,
+        w,
+        h,
+        TRACE_SNAP_PX,
+      );
+      if (trace) {
+        drawTracePoint(
+          ctx,
+          trace.screenX,
+          trace.screenY,
+          trace.worldX,
+          trace.worldY,
+          trace.color,
+          w,
+          h,
+        );
+      } else {
+        const intgFn = this.activeIntegral();
+        let activeFn: ((x: number) => number) | null = null;
+        if (intgFn) {
+          const expr = this.functions()[intgFn.fnIndex];
+          if (expr?.ast && expr.visible) {
+            activeFn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
+          }
         }
+        drawCrosshair(ctx, this.viewport, mouse.x, mouse.y, activeFn, '#666680', w, h);
       }
-      drawCrosshair(ctx, this.viewport, mouse.x, mouse.y, activeFn, '#666680', w, h);
     }
   }
 }
