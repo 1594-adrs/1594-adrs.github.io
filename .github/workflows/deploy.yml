@@ -34,6 +34,14 @@ jobs:
         working-directory: portfolio
         run: npm ci
 
+      - name: Typecheck
+        working-directory: portfolio
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: portfolio
+        run: npx ng test --watch=false
+
       - name: Build
         working-directory: portfolio
         run: npm run build
