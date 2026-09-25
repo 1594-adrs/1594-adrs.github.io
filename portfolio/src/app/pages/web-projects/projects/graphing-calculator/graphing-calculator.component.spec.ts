@@ -376,4 +376,70 @@ describe('GraphingCalculatorComponent', () => {
       expect(comp.interactionState.pinnedPoints().length).toBe(0);
     });
   });
+
+  describe('reactive canvas redraw', () => {
+    it('schedules a render when the solid tool state changes (e.g. axis value)', async () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      comp.addFunction();
+      comp.updateExpression(1, 'x^2+y^2-4=0');
+      comp.toggleSolidTool();
+      comp.solidToolState.toggleCurve(1);
+      comp.solidToolState.setA('-2');
+      comp.solidToolState.setB('2');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      (comp as any).renderRequested = false;
+      rafSpy.mockClear();
+
+      comp.solidToolState.setAxisValue('1');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(rafSpy).toHaveBeenCalled();
+    });
+
+    it('schedules a render and invalidates points of interest when a function changes', async () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const spy = vi.spyOn(comp.interactionState, 'setPoints');
+      comp.updateExpression(0, 'x^2-1');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it('clears stale points of interest after replacing the function that produced them', async () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      comp.updateExpression(0, 'sin(x)');
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const withSin = comp.interactionState.pointsOfInterest();
+      expect(withSin.length).toBeGreaterThan(0);
+
+      comp.updateExpression(0, 'sqrt(1-x^2)');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const afterReplace = comp.interactionState.pointsOfInterest();
+      // sin(x) has a root near x = pi (~3.14) within the default viewport; that
+      // should not still be reported once the function is sqrt(1-x^2), whose
+      // domain (and every one of its critical points) is confined to [-1, 1].
+      expect(afterReplace.some((p) => Math.abs(p.x - Math.PI) < 0.1)).toBe(false);
+      expect(afterReplace.every((p) => Math.abs(p.x) < 1.01)).toBe(true);
+    });
+  });
 });

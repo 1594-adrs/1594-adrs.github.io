@@ -1,9 +1,17 @@
 <div class="calculator-layout">
-  <aside class="sidebar">
+  <aside class="sidebar" [class.expanded]="isSidebarExpanded()">
     <div class="sidebar-header">
       <a routerLink="/web-projects" class="back-link">&lt; back</a>
       <img src="LOGO.png" alt="A.D.R.S." class="sidebar-logo" />
       <span class="header-title">functions</span>
+      <button
+        type="button"
+        class="sidebar-expand-toggle"
+        [attr.aria-expanded]="isSidebarExpanded()"
+        (click)="toggleSidebarExpanded()"
+      >
+        {{ isSidebarExpanded() ? '▼ show graph' : '▲ expand panel' }}
+      </button>
     </div>
 
     <div class="functions-list">

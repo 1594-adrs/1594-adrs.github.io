@@ -186,10 +186,14 @@
   border-color: var(--color-primary);
 }
 
-/* Touch target >=44x44px for row action buttons on coarse pointers. */
+/* Touch target >=44x44px for row action buttons and text inputs on coarse pointers. */
 @media (pointer: coarse) {
   .action-btn {
     min-width: 44px;
+    min-height: 44px;
+  }
+  .fn-input,
+  .range-input-inline {
     min-height: 44px;
   }
 }

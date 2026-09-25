@@ -4,6 +4,7 @@ import {
   ChangeDetectorRef,
   signal,
   computed,
+  effect,
   ElementRef,
   viewChild,
   viewChildren,
@@ -172,6 +173,20 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   shareNotice = signal<string>('');
   private shareNoticeTimerId: ReturnType<typeof setTimeout> | null = null;
 
+  /** Manual override for the mobile sidebar's expanded/collapsed height (see `isSidebarExpanded`). */
+  sidebarExpanded = signal(false);
+
+  /** On narrow screens the sidebar defaults to a short strip; it expands automatically while
+   *  a tool panel is open (solid/integral/area/conics), or when the user toggles it manually. */
+  isSidebarExpanded = computed(
+    () =>
+      this.sidebarExpanded() ||
+      this.showSolidTool() ||
+      this.activeIntegral() !== null ||
+      this.activeMultiArea() !== null ||
+      this.showConicAssistant(),
+  );
+
   /** Accessible description of what's currently on the canvas, for aria-describedby. */
   canvasDescription = computed(() => {
     const parts: string[] = [];
@@ -332,6 +347,35 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.solidToolState.connect(this.functions, this.angleUnit);
+
+    // The 2D canvas is drawn imperatively (not from template bindings), so solid-panel
+    // edits (method/axis/bounds/curve selection) need an explicit trigger to redraw —
+    // otherwise the canvas keeps showing the previous axis line / filled region even
+    // though the panel's own computed volume is already up to date.
+    effect(() => {
+      this.solidToolState.spec();
+      this.solidToolState.result();
+      this.solidToolState.sweepT();
+      this.solidToolState.axisOrientation();
+      if (!this.isBrowser) return;
+      this.requestRender();
+    });
+
+    // Points of interest are memoized off the visible functions; invalidate and
+    // recompute them the instant a function's text/visibility changes (add/edit/
+    // remove/hide), rather than waiting for some other render to notice the key
+    // changed — this also covers the case where a tool (e.g. solids) is active
+    // and would otherwise be the only thing driving further renders.
+    effect(() => {
+      this.functions();
+      this.poiKey = null;
+      if (!this.isBrowser) return;
+      if (this.interactionState.showPointsOfInterest()) {
+        this.recomputePointsOfInterest();
+        this.poiKey = this.poiComputeKey();
+      }
+      this.requestRender();
+    });
   }
 
   ngAfterViewInit(): void {
@@ -1099,6 +1143,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.angleUnit.update((u) => (u === 'deg' ? 'rad' : 'deg'));
   }
 
+  /** Mobile-only: expands/collapses the sidebar between a short strip and most of the screen. */
+  toggleSidebarExpanded(): void {
+    this.sidebarExpanded.update((v) => !v);
+  }
+
   /** Opens/closes the table-of-values panel for a function row (toggles closed if already open). */
   toggleValueTable(index: number): void {
     this.tableOpenIndex.update((cur) => (cur === index ? null : index));
@@ -1552,7 +1601,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private poiComputeKey(): string {
     const v = this.viewport;
     const fnsKey = this.functions()
-      .map((f) => `${f.mode}:${f.visible}:${f.raw}`)
+      .map((f) => `${f.mode}:${f.visible}:${f.ast ? '1' : '0'}:${f.raw}`)
       .join('|');
     return `${v.xMin.toFixed(4)},${v.xMax.toFixed(4)}|${fnsKey}`;
   }
