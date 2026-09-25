@@ -175,6 +175,12 @@ class Lexer {
   }
 
   private insertImplicitMultiplication(): void {
+    // `func ^ (...)` is the powered-function exponent group (`sin^(1/3)(x)`,
+    // `cos^(2)(x)`): the rparen closing it is immediately followed by the
+    // function's own argument lparen, which must NOT be read as
+    // multiplication (unlike e.g. `(2)(3)` or `x(x+1)`).
+    const powerGroupCloses = this.findPowerGroupCloses();
+
     const result: Token[] = [];
     for (let i = 0; i < this.tokens.length; i++) {
       const tok = this.tokens[i];
@@ -190,6 +196,7 @@ class Lexer {
 
       if (tokIsValue && nextIsValue) {
         if (tok.type === 'variable' && isKnownFunction(tok.value)) continue;
+        if (tok.type === 'rparen' && powerGroupCloses.has(i)) continue;
         if (
           tok.type === 'number' &&
           next.type === 'lparen' &&
@@ -202,6 +209,39 @@ class Lexer {
       }
     }
     this.tokens = result;
+  }
+
+  /**
+   * Indices of rparen tokens that close a `<knownFunction> ^ ( ... )`
+   * exponent group — e.g. the `)` in `sin^(1/3)` — tracked by paren depth so
+   * nested parens inside the exponent (`sin^(1/(2+3))`) are handled too.
+   */
+  private findPowerGroupCloses(): Set<number> {
+    const marked = new Set<number>();
+    for (let i = 0; i < this.tokens.length; i++) {
+      const tok = this.tokens[i];
+      if (
+        tok.type === 'variable' &&
+        isKnownFunction(tok.value) &&
+        this.tokens[i + 1]?.type === 'operator' &&
+        this.tokens[i + 1].value === '^' &&
+        this.tokens[i + 2]?.type === 'lparen'
+      ) {
+        let depth = 0;
+        for (let j = i + 2; j < this.tokens.length; j++) {
+          if (this.tokens[j].type === 'lparen') {
+            depth++;
+          } else if (this.tokens[j].type === 'rparen') {
+            depth--;
+            if (depth === 0) {
+              marked.add(j);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return marked;
   }
 
   private skipWhitespace(): void {

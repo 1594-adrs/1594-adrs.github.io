@@ -529,6 +529,58 @@ describe('parser', () => {
       }
       expect(evaluate(ast, { x: Math.PI / 4 })).toBeCloseTo(1, 10);
     });
+
+    it('should parse a parenthesized fractional power cos^(1/3)(pi) as PoweredFunctionCall, not cos^(1/3) * (pi)', () => {
+      const ast = parse('cos^(1/3)(pi)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('cos');
+        expect(ast.arg.type).toBe('Variable');
+        expect(ast.power.type).toBe('BinaryOp');
+      }
+    });
+
+    it('should evaluate cos^(1/3)(pi) = -1 (real cube root, like the ^ operator)', () => {
+      const ast = parse('cos^(1/3)(pi)');
+      expect(evaluate(ast, {})).toBeCloseTo(-1, 9);
+    });
+
+    it('should parse a parenthesized integer power sin^(2)(pi/2) as PoweredFunctionCall', () => {
+      const ast = parse('sin^(2)(pi/2)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('sin');
+        expect(ast.power.type).toBe('NumberLiteral');
+      }
+    });
+
+    it('should evaluate sin^(2)(pi/2) = 1', () => {
+      const ast = parse('sin^(2)(pi/2)');
+      expect(evaluate(ast, {})).toBeCloseTo(1, 10);
+    });
+
+    it('sin^2(x) (bare, unparenthesized power) should still parse and evaluate the same as before', () => {
+      const ast = parse('sin^2(x)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      expect(evaluate(ast, { x: Math.PI / 2 })).toBeCloseTo(1, 10);
+    });
+  });
+
+  describe('multiplication is unaffected by the power-group fix', () => {
+    it('(x+1)(x-1) should still parse as (x+1)*(x-1)', () => {
+      const ast = parse('(x+1)(x-1)');
+      expect(evaluate(ast, { x: 3 })).toBe(8);
+    });
+
+    it('2(x) should still parse as 2*x', () => {
+      const ast = parse('2(x)');
+      expect(evaluate(ast, { x: 5 })).toBe(10);
+    });
+
+    it('x(x+1) should still parse as x*(x+1)', () => {
+      const ast = parse('x(x+1)');
+      expect(evaluate(ast, { x: 3 })).toBe(12);
+    });
   });
 
   describe('complexity limit', () => {
