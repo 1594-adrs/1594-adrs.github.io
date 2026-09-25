@@ -20,6 +20,14 @@ import {
 } from 'three';
 import type { SolidMeshes } from './solid-geometry';
 
+function disposeMaterial(material: Material | Material[]): void {
+  if (Array.isArray(material)) {
+    for (const m of material) m.dispose();
+  } else {
+    material.dispose();
+  }
+}
+
 export class SolidScene {
   private scene: Scene;
   private camera: PerspectiveCamera;
@@ -29,6 +37,8 @@ export class SolidScene {
   private innerWire: Mesh | null = null;
   private capMesh: Mesh | null = null;
   private edgeLines: LineSegments | null = null;
+  private readonly grid: GridHelper;
+  private readonly axes: AxesHelper;
   private isDisposed = false;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -54,11 +64,11 @@ export class SolidScene {
     point.position.set(-5, 5, -5);
     this.scene.add(point);
 
-    const grid = new GridHelper(20, 20, 0x333355, 0x1a1a2e);
-    this.scene.add(grid);
+    this.grid = new GridHelper(20, 20, 0x333355, 0x1a1a2e);
+    this.scene.add(this.grid);
 
-    const axes = new AxesHelper(10);
-    this.scene.add(axes);
+    this.axes = new AxesHelper(10);
+    this.scene.add(this.axes);
   }
 
   updateMesh(meshes: SolidMeshes, color: string): void {
@@ -183,6 +193,10 @@ export class SolidScene {
   dispose(): void {
     this.isDisposed = true;
     this.disposeMeshes();
+    this.grid.geometry.dispose();
+    disposeMaterial(this.grid.material);
+    this.axes.geometry.dispose();
+    disposeMaterial(this.axes.material);
     this.scene.clear();
     this.renderer.dispose();
   }

@@ -1,5 +1,5 @@
 import { Viewport } from './viewport';
-import { tryEval } from './utils';
+import { tryEval, findAxisCrossings } from './utils';
 import { detectAsymptotes } from '../engine/asymptote-detector';
 import type { Asymptote } from '../engine/asymptote-detector';
 import type { ExpressionNode } from '../engine/parser';
@@ -256,32 +256,14 @@ export function drawAreaBetween(
   height: number,
 ): void {
   const steps = Math.max(200, Math.abs(b - a) * 20);
-  const h = (b - a) / steps;
-
   const subIntervals: Array<{ start: number; end: number; topIsUpper: boolean }> = [];
-  const crossPoints: number[] = [];
-  const EPS = 1e-12;
-  let prevDiff = NaN;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const yU = tryEval(fUpper, x);
-    const yL = tryEval(fLower, x);
-    if (isNaN(yU) || isNaN(yL)) {
-      prevDiff = NaN;
-      continue;
-    }
-    const diff = yU - yL;
-    if (Math.abs(diff) < EPS) {
-      crossPoints.push(x);
-      prevDiff = diff;
-      continue;
-    }
-    if (isFinite(prevDiff) && Math.abs(prevDiff) >= EPS && prevDiff * diff < 0) {
-      const t = prevDiff / (prevDiff - diff);
-      crossPoints.push(a + (i - 1) * h + t * h);
-    }
-    prevDiff = diff;
-  }
+  const crossPoints = findAxisCrossings(
+    (x) => tryEval(fUpper, x) - tryEval(fLower, x),
+    a,
+    b,
+    0,
+    steps,
+  );
 
   const boundaries = [a, ...crossPoints, b];
   for (let i = 0; i < boundaries.length - 1; i++) {

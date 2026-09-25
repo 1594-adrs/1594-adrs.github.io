@@ -2,7 +2,6 @@ import {
   Component,
   ChangeDetectionStrategy,
   output,
-  HostListener,
   ElementRef,
   inject,
   AfterViewInit,
@@ -12,6 +11,10 @@ import {
 @Component({
   selector: 'app-help-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(document:keydown.escape)': 'onEscapeKey()',
+    '(document:keydown.tab)': 'onTabKey($event)',
+  },
   template: `
     <div class="modal-backdrop" role="dialog" aria-modal="true" (click)="close.emit()">
       <div
@@ -172,12 +175,10 @@ export class HelpModalComponent implements AfterViewInit {
     }
   }
 
-  @HostListener('document:keydown.escape')
   onEscapeKey(): void {
     this.close.emit();
   }
 
-  @HostListener('document:keydown.tab', ['$event'])
   onTabKey(event: Event): void {
     const keyboardEvent = event as KeyboardEvent;
     const modal = this.el.nativeElement.querySelector('.modal-content') as HTMLElement | null;

@@ -1301,8 +1301,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     const parent = canvas.parentElement;
     if (parent) {
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientHeight;
+      const targetWidth = parent.clientWidth;
+      const targetHeight = parent.clientHeight;
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
     }
 
     const w = canvas.width;

@@ -107,8 +107,8 @@ export function evaluate(
         return node.value;
 
       case 'Variable':
-        if (node.name in variables) return variables[node.name];
-        if (node.name in CONSTANTS) return CONSTANTS[node.name];
+        if (Object.hasOwn(variables, node.name)) return variables[node.name];
+        if (Object.hasOwn(CONSTANTS, node.name)) return CONSTANTS[node.name];
         throw new Error(`Unknown variable: '${node.name}'`);
 
       case 'BinaryOp': {

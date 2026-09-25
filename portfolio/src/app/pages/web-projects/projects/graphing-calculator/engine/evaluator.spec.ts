@@ -50,6 +50,11 @@ describe('evalConstantExpression', () => {
     expect(() => evalConstantExpression('foo')).toThrow();
   });
 
+  it('should throw on Object.prototype property names used as variables', () => {
+    expect(() => evalConstantExpression('constructor')).toThrow();
+    expect(() => evalConstantExpression('toString')).toThrow();
+  });
+
   it('should evaluate abs(-3)', () => {
     expect(evalConstantExpression('abs(-3)')).toBe(3);
   });
