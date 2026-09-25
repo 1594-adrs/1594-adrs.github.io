@@ -98,6 +98,12 @@ const MULTI_ARG_REQUIRED_ARGS = new Map([
 
 const MAX_AST_NODES = 500;
 
+// Single-letter names the evaluator binds directly (explicit x/y, parametric
+// t) — used to split a concatenated run like `xy` or `2xt` into implicit
+// multiplication. Deliberately small: it must not swallow `pi`, `e`, `theta`
+// or an unknown identifier like `sinx`/`foo`.
+const SINGLE_LETTER_VARIABLES = new Set(['x', 'y', 't']);
+
 class Lexer {
   private pos = 0;
   private tokens: Token[] = [];
@@ -119,7 +125,7 @@ class Lexer {
         this.tokens.push({ type: 'variable', value: 'π' });
         this.pos++;
       } else if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_') {
-        this.tokens.push(this.readIdentifier(input));
+        this.tokens.push(...this.readIdentifier(input));
       } else if (ch === '(') {
         this.tokens.push({ type: 'lparen', value: '(' });
         this.pos++;
@@ -242,7 +248,7 @@ class Lexer {
     return { type: 'number', value: num };
   }
 
-  private readIdentifier(input: string): Token {
+  private readIdentifier(input: string): Token[] {
     let id = '';
     while (
       this.pos < input.length &&
@@ -256,9 +262,18 @@ class Lexer {
     }
     const lower = id.toLowerCase();
     if (KNOWN_FUNCTIONS.has(lower)) {
-      return { type: 'variable', value: lower };
+      return [{ type: 'variable', value: lower }];
     }
-    return { type: 'variable', value: id };
+    // Split a run of concatenated single-letter variables (e.g. `xy` -> x, y;
+    // `2xy` -> 2, x, y) into individual variable tokens so implicit
+    // multiplication (below) joins them back with `*`. Only when every
+    // character is one of the evaluator's known single-letter variables —
+    // `sinx`, `theta`, `pi`, `e` and the like all fail this (mixed/unknown
+    // letters) and stay intact as a single identifier, unchanged.
+    if (id.length > 1 && [...id].every((c) => SINGLE_LETTER_VARIABLES.has(c))) {
+      return [...id].map((c) => ({ type: 'variable' as const, value: c }));
+    }
+    return [{ type: 'variable', value: id }];
   }
 }
 

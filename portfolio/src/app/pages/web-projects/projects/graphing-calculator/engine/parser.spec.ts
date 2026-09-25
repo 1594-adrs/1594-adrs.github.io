@@ -324,6 +324,60 @@ describe('parser', () => {
     });
   });
 
+  describe('implicit multiplication of concatenated single-letter variables', () => {
+    it('xy should parse as x*y', () => {
+      const ast = parse('xy');
+      expect(evaluate(ast, { x: 3, y: 4 })).toBe(12);
+    });
+
+    it('2xy should parse as 2*x*y', () => {
+      const ast = parse('2xy');
+      expect(evaluate(ast, { x: 3, y: 4 })).toBe(24);
+    });
+
+    it('xt should parse as x*t (both single-letter variables)', () => {
+      const ast = parse('xt');
+      expect(evaluate(ast, { x: 5, t: 2 })).toBe(10);
+    });
+
+    it('yx should parse as y*x', () => {
+      const ast = parse('yx');
+      expect(evaluate(ast, { x: 3, y: 4 })).toBe(12);
+    });
+
+    it('xy(3) should parse as x*y*(3)', () => {
+      const ast = parse('xy(3)');
+      expect(evaluate(ast, { x: 2, y: 5 })).toBe(30);
+    });
+
+    it('sinx should stay intact as a single unknown variable (not split)', () => {
+      const ast = parse('sinx');
+      expect(ast.type).toBe('Variable');
+      expect(evaluate(ast, { sinx: 7 })).toBe(7);
+    });
+
+    it('pi should stay intact as the constant (not split into p*i)', () => {
+      const ast = parse('pi');
+      expect(evaluate(ast, {})).toBeCloseTo(Math.PI, 10);
+    });
+
+    it('theta should stay intact as a single unknown variable (not split)', () => {
+      const ast = parse('theta');
+      expect(ast.type).toBe('Variable');
+      expect(evaluate(ast, { theta: 9 })).toBe(9);
+    });
+
+    it('e should stay intact as the constant', () => {
+      const ast = parse('e');
+      expect(evaluate(ast, {})).toBeCloseTo(Math.E, 10);
+    });
+
+    it('function names stay intact: sin(x) is still a FunctionCall', () => {
+      const ast = parse('sin(x)');
+      expect(ast.type).toBe('FunctionCall');
+    });
+  });
+
   describe('chained powers (right-associative)', () => {
     it('2^3^2 should be 2^(3^2) = 512', () => {
       const ast = parse('2^3^2');

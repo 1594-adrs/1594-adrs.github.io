@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { evalConstantExpression, evalExpression } from './evaluator';
+import { evalConstantExpression, evalExpression, evaluate } from './evaluator';
+import { parse, type PoweredFunctionCall } from './parser';
 
 describe('evalConstantExpression', () => {
   it('should evaluate pi', () => {
@@ -297,6 +298,29 @@ describe('evalConstantExpression', () => {
 
     it('(-2)^0.5 is NaN', () => {
       expect(evalExpression('(-2)^0.5', 0)).toBeNaN();
+    });
+
+    // Built by hand (not via `parse`) because the outer '^' power and the
+    // function's own arg-parens are adjacent text ('...)(...)'), which the
+    // lexer's implicit-multiplication pass also treats as `)*( ` — a
+    // separate, pre-existing tokenization quirk unrelated to this fix.
+    function poweredCall(name: string, powerExpr: string): PoweredFunctionCall {
+      return {
+        type: 'PoweredFunctionCall',
+        name,
+        arg: { type: 'Variable', name: 'pi' },
+        power: parse(powerExpr),
+      };
+    }
+
+    it('cos^(1/3)(pi) = -1 (PoweredFunctionCall outer power uses the real odd root, like ^)', () => {
+      const ast = poweredCall('cos', '1/3');
+      expect(evaluate(ast, {})).toBeCloseTo(-1, 9);
+    });
+
+    it('cos^(1/2)(pi) is NaN (even denominator, no real root, like ^)', () => {
+      const ast = poweredCall('cos', '1/2');
+      expect(evaluate(ast, {})).toBeNaN();
     });
   });
 

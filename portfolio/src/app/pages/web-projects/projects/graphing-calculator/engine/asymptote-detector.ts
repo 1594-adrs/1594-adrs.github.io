@@ -10,12 +10,47 @@ export interface Asymptote {
 export type FunctionCategory =
   'rational' | 'trigonometric' | 'polynomial' | 'exponential' | 'logarithmic' | 'other';
 
+const CACHE_LIMIT = 32;
+const cache = new Map<string, Asymptote[]>();
+
+// Object/function identity, not content, is the cache key component for the
+// AST (or the plain function when no AST is given) — two structurally equal
+// ASTs from different parses must not collide, and re-parses must not
+// accidentally hit a stale entry.
+let nextIdentityId = 0;
+const identityIds = new WeakMap<object, number>();
+function identityKey(obj: object): number {
+  let id = identityIds.get(obj);
+  if (id === undefined) {
+    id = nextIdentityId++;
+    identityIds.set(obj, id);
+  }
+  return id;
+}
+
+/** Rounds a viewport bound so nearby pans/zooms still hit the cache. */
+function roundBound(v: number): number {
+  if (!isFinite(v)) return v;
+  const scale = Math.max(1, Math.abs(v));
+  const precision = Math.pow(10, Math.floor(Math.log10(scale)) - 2);
+  return Math.round(v / precision) * precision;
+}
+
 export function detectAsymptotes(
   fn: (x: number) => number,
   xMin: number,
   xMax: number,
   ast?: ExpressionNode,
 ): Asymptote[] {
+  const key = `${identityKey(ast ?? fn)}:${roundBound(xMin)}:${roundBound(xMax)}`;
+  const cached = cache.get(key);
+  if (cached) {
+    // Refresh recency for the simple LRU eviction below.
+    cache.delete(key);
+    cache.set(key, cached);
+    return cached;
+  }
+
   const asymptotes: Asymptote[] = [];
 
   detectVertical(fn, xMin, xMax, asymptotes);
@@ -28,7 +63,18 @@ export function detectAsymptotes(
     detectOblique(fn, xMin, xMax, asymptotes);
   }
 
+  cache.set(key, asymptotes);
+  if (cache.size > CACHE_LIMIT) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) cache.delete(oldestKey);
+  }
+
   return asymptotes;
+}
+
+/** Test-only: clears the memoization cache so specs don't leak state. */
+export function clearAsymptoteCache(): void {
+  cache.clear();
 }
 
 function categorizeFunction(ast?: ExpressionNode): FunctionCategory {
@@ -237,12 +283,134 @@ function binarySearchAsymptote(
       left = mid;
     }
   }
-  const result = (left + right) / 2;
-  const yResult = safeEval(fn, result);
-  if (yResult !== null && isFinite(yResult) && Math.abs(yResult) < 1000) {
-    return null;
+  const vx = (left + right) / 2;
+  return isGenuineVerticalAsymptote(fn, vx) ? vx : null;
+}
+
+/**
+ * Distinguishes a real vertical asymptote from a removable hole (e.g.
+ * (x^2-1)/(x-1) at x=1, where `binarySearchAsymptote`'s bisection converges
+ * exactly onto the 0/0 point and a single-point NaN/spike would otherwise be
+ * mistaken for divergence). Samples both sides at several shrinking scales
+ * and requires |f| to actually grow — not just be undefined or noisy at the
+ * exact candidate point — as x approaches it.
+ */
+function isGenuineVerticalAsymptote(fn: (x: number) => number, vx: number): boolean {
+  const base = Math.max(1e-3, Math.abs(vx) * 1e-3);
+  const offsets = [base, base / 10, base / 100, base / 1000];
+
+  for (const dir of [-1, 1] as const) {
+    const vals: number[] = [];
+    for (const off of offsets) {
+      const y = safeEval(fn, vx + dir * off);
+      if (y !== null) vals.push(Math.abs(y));
+    }
+    if (vals.length < 3) continue;
+
+    let monotonic = true;
+    for (let i = 1; i < vals.length; i++) {
+      if (vals[i] < vals[i - 1] * 0.9) {
+        monotonic = false;
+        break;
+      }
+    }
+    const growthRatio = vals[vals.length - 1] / Math.max(vals[0], 1e-300);
+    if (monotonic && growthRatio > 1.5) return true;
   }
-  return result;
+  return false;
+}
+
+interface ScaleSample {
+  avg: number;
+  values: number[];
+}
+
+/**
+ * Analyzes one tail (x -> +Infinity when `dir` is 1, x -> -Infinity when -1)
+ * across several widening scales and returns the limit `f` converges to,
+ * or null when it doesn't converge to a horizontal asymptote. The tails are
+ * analyzed separately (rather than pooling +x/-x samples into one average)
+ * because pooling can average an unbounded odd-ish function like x+1/x down
+ * to ~0 and look like a false "y = 0" horizontal.
+ */
+function analyzeHorizontalTail(
+  fn: (x: number) => number,
+  baseScale: number,
+  scaleMultipliers: number[],
+  samplesPerScale: number,
+  dir: 1 | -1,
+): number | null {
+  const scaleSamples: ScaleSample[] = [];
+  let directionChanges = 0;
+  let signChanges = 0;
+  let total = 0;
+
+  for (const mult of scaleMultipliers) {
+    const scale = baseScale * mult;
+    const values: number[] = [];
+    let prevY: number | null = null;
+    let prevDirection = 0;
+
+    for (let i = 0; i < samplesPerScale; i++) {
+      const x = dir * scale * (0.05 + 0.9 * (i / (samplesPerScale - 1)));
+      const y = safeEval(fn, x);
+      if (y === null) continue;
+
+      values.push(y);
+      total++;
+
+      if (prevY !== null) {
+        if ((prevY > 0 && y < 0) || (prevY < 0 && y > 0)) signChanges++;
+        const direction = y > prevY ? 1 : y < prevY ? -1 : 0;
+        if (direction !== 0 && prevDirection !== 0 && direction !== prevDirection) {
+          directionChanges++;
+        }
+        prevDirection = direction;
+      }
+      prevY = y;
+    }
+
+    if (values.length > 0) {
+      scaleSamples.push({ avg: values.reduce((a, b) => a + b, 0) / values.length, values });
+    }
+  }
+
+  if (total < 10 || scaleSamples.length < 3) return null;
+
+  const directionChangeRatio = directionChanges / total;
+  const signChangeRatio = signChanges / total;
+  if (directionChangeRatio > 0.1 || signChangeRatio > 0.1) return null;
+
+  const allValues = scaleSamples.flatMap((s) => s.values);
+  const maxVal = Math.max(...allValues);
+  const minVal = Math.min(...allValues);
+  const valueRange = maxVal - minVal;
+
+  if (valueRange > 0.5 && valueRange < 2.5) {
+    const allBounded = allValues.every((v) => Math.abs(v) <= 1.5);
+    if (allBounded && signChanges > 2) return null;
+  }
+
+  const first = scaleSamples[0];
+  const prev = scaleSamples[scaleSamples.length - 2];
+  const last = scaleSamples[scaleSamples.length - 1];
+  const limit = last.avg;
+
+  // Convergence trend, checked relative to the candidate limit's own
+  // magnitude instead of a fixed absolute tolerance (a fixed 0.01 rejects a
+  // real limit like y=2 whose approach error is naturally a few permille of
+  // 2, and would separately accept a limit like y=1e8 from noise alone).
+  const tolBase = Math.max(Math.abs(limit), 0.1);
+  const lastSpread = Math.max(...last.values) - Math.min(...last.values);
+  const drift = Math.abs(last.avg - prev.avg);
+  const totalDrift = Math.abs(first.avg - last.avg);
+
+  const converges =
+    lastSpread < tolBase * 0.05 &&
+    drift < tolBase * 0.02 &&
+    (totalDrift < 1e-9 || drift <= totalDrift);
+
+  return converges ? limit : null;
 }
 
 function detectHorizontal(
@@ -254,89 +422,18 @@ function detectHorizontal(
   const baseScale = Math.max(Math.abs(xMin), Math.abs(xMax)) * 100;
   if (baseScale < 100) return;
 
-  const scales = [baseScale * 0.25, baseScale * 0.5, baseScale * 0.75, baseScale, baseScale * 2];
+  const scaleMultipliers = [0.25, 0.5, 0.75, 1, 2, 4];
   const samplesPerScale = 20;
 
-  const allValues: number[] = [];
-  let directionChanges = 0;
-  let signChanges = 0;
+  const limits = [
+    analyzeHorizontalTail(fn, baseScale, scaleMultipliers, samplesPerScale, 1),
+    analyzeHorizontalTail(fn, baseScale, scaleMultipliers, samplesPerScale, -1),
+  ].filter((v): v is number => v !== null);
 
-  for (const scale of scales) {
-    let prevY: number | null = null;
-    let prevDirection = 0;
-
-    for (let i = 0; i < samplesPerScale; i++) {
-      const x = scale * (0.05 + 0.9 * (i / (samplesPerScale - 1)));
-      const y = safeEval(fn, x);
-      if (y === null) continue;
-
-      allValues.push(y);
-
-      if (prevY !== null) {
-        if ((prevY > 0 && y < 0) || (prevY < 0 && y > 0)) {
-          signChanges++;
-        }
-        const direction = y > prevY ? 1 : y < prevY ? -1 : 0;
-        if (direction !== 0 && prevDirection !== 0 && direction !== prevDirection) {
-          directionChanges++;
-        }
-        prevDirection = direction;
-      }
-      prevY = y;
-    }
-
-    prevY = null;
-    prevDirection = 0;
-
-    for (let i = 0; i < samplesPerScale; i++) {
-      const x = -scale * (0.05 + 0.9 * (i / (samplesPerScale - 1)));
-      const y = safeEval(fn, x);
-      if (y === null) continue;
-
-      allValues.push(y);
-
-      if (prevY !== null) {
-        if ((prevY > 0 && y < 0) || (prevY < 0 && y > 0)) {
-          signChanges++;
-        }
-        const direction = y > prevY ? 1 : y < prevY ? -1 : 0;
-        if (direction !== 0 && prevDirection !== 0 && direction !== prevDirection) {
-          directionChanges++;
-        }
-        prevDirection = direction;
-      }
-      prevY = y;
-    }
-  }
-
-  if (allValues.length < 20) return;
-
-  const totalSamples = allValues.length;
-  const directionChangeRatio = directionChanges / totalSamples;
-  const signChangeRatio = signChanges / totalSamples;
-
-  const maxVal = Math.max(...allValues);
-  const minVal = Math.min(...allValues);
-  const valueRange = maxVal - minVal;
-
-  if (directionChangeRatio > 0.1 || signChangeRatio > 0.1) {
-    return;
-  }
-
-  if (valueRange > 0.5 && valueRange < 2.5) {
-    const allBounded = allValues.every((v) => Math.abs(v) <= 1.5);
-    if (allBounded && signChanges > 2) {
-      return;
-    }
-  }
-
-  const avg = allValues.reduce((a, b) => a + b, 0) / totalSamples;
-  const maxDev = Math.max(...allValues.map((v) => Math.abs(v - avg)));
-
-  if (maxDev < 0.01 && Math.abs(avg) < 1e6) {
-    const eq = `y = ${fmtVal(avg)}`;
-    if (!result.some((a) => a.type === 'horizontal' && Math.abs(a.value - avg) < 1e-6)) {
-      result.push({ type: 'horizontal', equation: eq, value: avg });
+  for (const limit of limits) {
+    if (!result.some((a) => a.type === 'horizontal' && Math.abs(a.value - limit) < 1e-6)) {
+      const eq = `y = ${fmtVal(limit)}`;
+      result.push({ type: 'horizontal', equation: eq, value: limit });
     }
   }
 }
@@ -359,6 +456,9 @@ function detectOblique(
   const b = y1 - m * largeX;
 
   if (!isFinite(m) || !isFinite(b)) return;
+  // A near-zero slope here is really a (missed) horizontal asymptote, not an
+  // oblique one — never surface it as a spurious near-flat "oblique" line.
+  if (Math.abs(m) < 1e-2) return;
 
   const yNeg = safeEval(fn, -largeX);
   if (yNeg !== null) {
@@ -373,10 +473,27 @@ function detectOblique(
   const avgResidual =
     (residual(largeX * 0.5) + residual(-largeX * 0.5) + residual(largeX * 0.25)) / 3;
 
-  if (Math.abs(m) > 1e-6 && avgResidual < Math.abs(m * largeX * 0.01) + 1) {
-    const eq = `y = ${fmtVal(m)}x + ${fmtVal(b)}`;
-    result.push({ type: 'oblique', equation: eq, value: m, intercept: b });
-  }
+  if (!(avgResidual < Math.abs(m * largeX * 0.01) + 1)) return;
+
+  // Reject a candidate line that already fits the function almost exactly at
+  // a moderate (non-asymptotic) distance — that's not an asymptote being
+  // approached, it's the function itself (e.g. (x^2-1)/(x-1) === x+1 for all
+  // x != 1: the "oblique" line isn't a limit, it's an exact, removable-hole
+  // identity). A genuine oblique asymptote still has a real, shrinking-but
+  // present residual well short of `largeX`.
+  const scale = Math.max(Math.abs(xMin), Math.abs(xMax));
+  const nearXCandidates = [0.2, 0.3, 0.5, 0.7]
+    .map((f) => f * scale)
+    .filter(
+      (nx) => !result.some((a) => a.type === 'vertical' && Math.abs(a.value - nx) < 0.05 * scale),
+    );
+  const hasMeaningfulResidual = nearXCandidates.some(
+    (nx) => residual(nx) > 1e-4 || residual(-nx) > 1e-4,
+  );
+  if (!hasMeaningfulResidual) return;
+
+  const eq = `y = ${fmtVal(m)}x + ${fmtVal(b)}`;
+  result.push({ type: 'oblique', equation: eq, value: m, intercept: b });
 }
 
 function safeEval(fn: (x: number) => number, x: number): number | null {

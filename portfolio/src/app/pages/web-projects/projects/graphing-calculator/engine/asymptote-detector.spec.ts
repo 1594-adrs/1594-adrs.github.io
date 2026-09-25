@@ -106,4 +106,66 @@ describe('asymptote-detector', () => {
     const oblique = result.filter((a) => a.type === 'oblique');
     expect(oblique.length).toBeGreaterThan(0);
   });
+
+  it('should NOT flag a removable hole as a vertical asymptote: (x^2-1)/(x-1) at x=1', () => {
+    const fn = (x: number) => (x * x - 1) / (x - 1);
+    const ast = parse('(x^2-1)/(x-1)');
+    const result = detectAsymptotes(fn, -10, 10, ast);
+    const vertical = result.filter((a) => a.type === 'vertical');
+    expect(vertical.some((a) => Math.abs(a.value - 1) < 0.1)).toBe(false);
+  });
+
+  it('should NOT produce a bogus oblique y=x+1 for the removable-hole identity (x^2-1)/(x-1)', () => {
+    const fn = (x: number) => (x * x - 1) / (x - 1);
+    const ast = parse('(x^2-1)/(x-1)');
+    const result = detectAsymptotes(fn, -10, 10, ast);
+    const oblique = result.filter((a) => a.type === 'oblique');
+    expect(oblique.length).toBe(0);
+  });
+
+  it('should detect horizontal asymptote y=2 for (2x^2+1)/(x^2-1)', () => {
+    const fn = (x: number) => (2 * x * x + 1) / (x * x - 1);
+    const ast = parse('(2x^2+1)/(x^2-1)');
+    const result = detectAsymptotes(fn, -10, 10, ast);
+    const horizontal = result.filter((a) => a.type === 'horizontal');
+    expect(horizontal.length).toBeGreaterThan(0);
+    expect(horizontal.some((a) => Math.abs(a.value - 2) < 0.01)).toBe(true);
+  });
+
+  it('should NOT produce a bogus near-zero-slope oblique for (2x^2+1)/(x^2-1) once its horizontal is found', () => {
+    const fn = (x: number) => (2 * x * x + 1) / (x * x - 1);
+    const ast = parse('(2x^2+1)/(x^2-1)');
+    const result = detectAsymptotes(fn, -10, 10, ast);
+    const oblique = result.filter((a) => a.type === 'oblique');
+    expect(oblique.length).toBe(0);
+  });
+
+  it('should still detect the real vertical poles for (2x^2+1)/(x^2-1) at x=+-1', () => {
+    const fn = (x: number) => (2 * x * x + 1) / (x * x - 1);
+    const ast = parse('(2x^2+1)/(x^2-1)');
+    const result = detectAsymptotes(fn, -10, 10, ast);
+    const vertical = result.filter((a) => a.type === 'vertical');
+    expect(vertical.some((a) => Math.abs(a.value - 1) < 0.1)).toBe(true);
+    expect(vertical.some((a) => Math.abs(a.value + 1) < 0.1)).toBe(true);
+  });
+});
+
+describe('detectAsymptotes memoization', () => {
+  it('returns the same array reference on a repeated call with the same ast/fn and viewport', () => {
+    const fn = (x: number) => 1 / x;
+    const ast = parse('1/x');
+    const first = detectAsymptotes(fn, -1000, 1000, ast);
+    const second = detectAsymptotes(fn, -1000, 1000, ast);
+    expect(second).toBe(first);
+  });
+
+  it('computes a fresh result for a different ast even if structurally identical', () => {
+    const fn = (x: number) => 1 / x;
+    const astA = parse('1/x');
+    const astB = parse('1 / x '); // different source text -> different cache entry, different AST object
+    const first = detectAsymptotes(fn, -1000, 1000, astA);
+    const second = detectAsymptotes(fn, -1000, 1000, astB);
+    expect(second).not.toBe(first);
+    expect(second).toEqual(first);
+  });
 });

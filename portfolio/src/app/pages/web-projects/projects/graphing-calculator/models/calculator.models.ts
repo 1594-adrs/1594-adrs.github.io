@@ -1,5 +1,7 @@
 import type { ExpressionNode } from '../engine/parser';
 
+export type { ConicType } from '../engine/types';
+
 export type CurveMode = 'explicit' | 'explicit-y' | 'implicit' | 'parametric' | 'polar';
 export type OverlapMode = 'pairwise' | 'all';
 
@@ -32,5 +34,3 @@ export interface MultiFunctionAreaConfig {
   autoDetectIntersections: boolean;
   overlapMode: OverlapMode;
 }
-
-export type ConicType = 'circle' | 'ellipse' | 'parabola' | 'hyperbola';

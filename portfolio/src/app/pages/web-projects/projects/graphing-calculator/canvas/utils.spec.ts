@@ -83,4 +83,21 @@ describe('findAxisCrossings', () => {
     const c = findAxisCrossings(Math.sin, -0.5, 4, 0.5);
     expect(c.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('tan(x) with y=1 on [0,2]: finds only pi/4, rejecting the pole jump at pi/2', () => {
+    const c = findAxisCrossings(Math.tan, 0, 2, 1);
+    expect(c.length).toBe(1);
+    expect(c[0]).toBeCloseTo(Math.PI / 4, 2);
+  });
+
+  it('x^2 with y=0 on [-1.3, 1.1]: finds the tangent point x=0 (touch, no sign change)', () => {
+    const c = findAxisCrossings((x) => x * x, -1.3, 1.1, 0);
+    expect(c.length).toBe(1);
+    expect(c[0]).toBeCloseTo(0, 4);
+  });
+
+  it('sin(x) with y=1: finds the tangent point x=pi/2 (touch, no sign change)', () => {
+    const c = findAxisCrossings(Math.sin, 0, 2 * Math.PI, 1);
+    expect(c.some((x) => Math.abs(x - Math.PI / 2) < 0.01)).toBe(true);
+  });
 });

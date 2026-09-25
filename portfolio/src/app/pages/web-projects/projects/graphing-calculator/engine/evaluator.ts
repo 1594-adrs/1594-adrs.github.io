@@ -253,9 +253,9 @@ export function evaluate(
         const power = evalNode(node.power);
 
         if (INVERSE_TRIG_FUNCTIONS.has(node.name) && angleUnit === 'deg') {
-          return Math.pow((result * 180) / Math.PI, power);
+          return signedRealPow((result * 180) / Math.PI, power);
         }
-        return Math.pow(result, power);
+        return signedRealPow(result, power);
       }
     }
   }

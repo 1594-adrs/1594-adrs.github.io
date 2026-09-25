@@ -1,5 +1,5 @@
 import type { ExpressionNode } from './parser';
-import type { ConicType } from '../models/calculator.models';
+import type { ConicType } from './types';
 
 export interface ConicInfo {
   type: ConicType;
