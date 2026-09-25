@@ -1,4 +1,5 @@
 import {
+  Profile,
   NavLink,
   SocialNetwork,
   SkillCategory,
@@ -7,6 +8,15 @@ import {
   Project,
   WebProject,
 } from '../models/portfolio.models';
+
+export const PROFILE: Profile = {
+  name: 'Andrés David Rincón Salazar',
+  shortName: 'Andrés Rincón',
+  title: 'Software Developer',
+  level: 'Mid-Level',
+  role: 'Full Stack Developer',
+  description: `I build software that works. Computer Science student at UTP, I write clean code in Python, Java, and TypeScript, and I pick up new stacks quickly. Certified in AI and prompt engineering. Currently sharpening my skills through competitive programming.`,
+};
 
 export const NAV_LINKS: NavLink[] = [
   { label: 'Home', href: '#home', id: 'home' },
@@ -17,19 +27,16 @@ export const NAV_LINKS: NavLink[] = [
 
 export const SOCIAL_NETWORKS: SocialNetwork[] = [
   {
-    icon: 'fab fa-github',
     iconName: 'github',
     url: 'https://github.com/1594-adrs',
     label: 'GitHub',
   },
   {
-    icon: 'fab fa-linkedin',
     iconName: 'linkedin',
     url: 'https://www.linkedin.com/in/1594-adrs/',
     label: 'LinkedIn',
   },
   {
-    icon: 'fa-regular fa-envelope',
     iconName: 'envelope',
     url: 'mailto:andresdrincons2007@gmail.com',
     label: 'Email',
@@ -39,22 +46,18 @@ export const SOCIAL_NETWORKS: SocialNetwork[] = [
 export const SKILLS: SkillCategory[] = [
   {
     title: 'Advanced',
-    icon: 'fas fa-code',
     skills: ['Python', 'C', 'Racket'],
   },
   {
     title: 'Functional',
-    icon: 'fas fa-laptop-code',
     skills: ['Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'LUA'],
   },
   {
     title: 'Databases',
-    icon: 'fas fa-database',
     skills: ['SQL'],
   },
   {
     title: 'Infrastructure',
-    icon: 'fas fa-cloud',
     skills: ['Git', 'GitHub', 'AWS', 'Azure', 'Google Cloud'],
   },
 ];
@@ -128,7 +131,6 @@ export const WEB_PROJECTS: WebProject[] = [
       'Plot functions, compute integrals, and visualize solids of revolution in real time.',
     route: '/web-projects/calculator',
     technologies: ['Angular', 'Canvas API', 'Custom Parser'],
-    icon: 'fas fa-calculator',
     iconName: 'calculator',
   },
 ];

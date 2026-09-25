@@ -1,3 +1,12 @@
+export interface Profile {
+  name: string;
+  shortName: string;
+  title: string;
+  level: string;
+  description: string;
+  role: string;
+}
+
 export interface NavLink {
   label: string;
   href: string;
@@ -6,7 +15,6 @@ export interface NavLink {
 }
 
 export interface SocialNetwork {
-  icon: string;
   iconName: string;
   url: string;
   label: string;
@@ -14,7 +22,6 @@ export interface SocialNetwork {
 
 export interface SkillCategory {
   title: string;
-  icon: string;
   skills: string[];
 }
 
@@ -47,6 +54,5 @@ export interface WebProject {
   description: string;
   route: string;
   technologies: string[];
-  icon: string;
   iconName: string;
 }

@@ -1,6 +1,12 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { SkillCategory, Course } from '../../../../shared/models/portfolio.models';
-import { SKILLS, COURSES, EDUCATION, SOFT_SKILLS } from '../../../../shared/data/portfolio.data';
+import {
+  PROFILE,
+  SKILLS,
+  COURSES,
+  EDUCATION,
+  SOFT_SKILLS,
+} from '../../../../shared/data/portfolio.data';
 import { RevealOnScroll } from '../../../../shared/directives/reveal-on-scroll.directive';
 
 @Component({
@@ -11,11 +17,11 @@ import { RevealOnScroll } from '../../../../shared/directives/reveal-on-scroll.d
   imports: [RevealOnScroll],
 })
 export class AboutMe {
-  name = 'Andrés David Rincón Salazar';
-  title = 'Software Developer';
-  level = 'Mid-Level';
+  name = PROFILE.name;
+  title = PROFILE.title;
+  level = PROFILE.level;
 
-  description = `I build software that works. Computer Science student at UTP, I write clean code in Python, Java, and TypeScript, and I pick up new stacks quickly. Certified in AI and prompt engineering. Currently sharpening my skills through competitive programming.`;
+  description = PROFILE.description;
 
   skills: SkillCategory[] = SKILLS;
   courses: Course[] = COURSES;

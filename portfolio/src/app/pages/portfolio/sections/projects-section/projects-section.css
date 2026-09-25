@@ -60,7 +60,7 @@
 
 .project-card.featured:hover {
   border-color: var(--color-primary);
-  box-shadow: 4px 4px 0 rgba(0, 255, 136, 0.2);
+  box-shadow: 4px 4px 0 var(--color-glow-20);
 }
 
 .card-topbar {
