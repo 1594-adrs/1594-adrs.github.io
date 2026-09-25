@@ -48,12 +48,69 @@ describe('validateSolidSpec', () => {
     ]);
   });
 
-  it('flags too-many-curves', () => {
-    const s = spec({ curves: [curve((x) => x), curve((x) => x * x), curve((x) => -x)] });
+  it('accepts up to 5 curves (no too-many-curves error)', () => {
+    const s = spec({
+      curves: [
+        curve((x) => x),
+        curve((x) => x + 1),
+        curve((x) => x + 2),
+        curve((x) => x + 3),
+        curve((x) => x + 4),
+      ],
+    });
+    const issues = validateSolidSpec(s);
+    expect(issues.some((i) => i.severity === 'error')).toBe(false);
+  });
+
+  it('flags too-many-curves beyond 5', () => {
+    const s = spec({
+      curves: [
+        curve((x) => x),
+        curve((x) => x + 1),
+        curve((x) => x + 2),
+        curve((x) => x + 3),
+        curve((x) => x + 4),
+        curve((x) => x + 5),
+      ],
+    });
     const issues = validateSolidSpec(s);
     expect(issues).toEqual([
       expect.objectContaining({ code: 'too-many-curves', severity: 'error', field: 'curves' }),
     ]);
+  });
+
+  it('flags interior-curve when a curve never bounds the region', () => {
+    // f2 = 1 (constant) sits strictly between f1 = 2 and f3 = 0 everywhere on [0,1].
+    const s = spec({
+      method: 'cross-section',
+      shape: 'square',
+      axis: undefined,
+      curves: [curve(() => 2, 'f₁'), curve(() => 1, 'f₂'), curve(() => 0, 'f₃')],
+      a: 0,
+      b: 1,
+    });
+    const issues = validateSolidSpec(s);
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: 'interior-curve',
+        severity: 'info',
+        field: 'curves',
+        message: 'f₂ lies inside the region and does not bound the solid',
+      }),
+    ]);
+  });
+
+  it('does not flag interior-curve when every curve bounds the region somewhere', () => {
+    // f1 = x, f2 = 1 - x and f3 = 0.3 each take a turn as the envelope's upper or
+    // lower boundary on some sub-interval of (0,1), so none is always interior.
+    const s = spec({
+      method: 'disk-washer',
+      curves: [curve((x) => x, 'f₁'), curve((x) => 1 - x, 'f₂'), curve(() => 0.3, 'f₃')],
+      a: 0,
+      b: 1,
+    });
+    const issues = validateSolidSpec(s);
+    expect(issues.some((i) => i.code === 'interior-curve')).toBe(false);
   });
 
   it('flags bounds-order when a >= b (a > b)', () => {

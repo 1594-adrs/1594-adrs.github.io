@@ -47,7 +47,7 @@ export interface SolidCurve {
 export interface SolidSpec {
   method: SolidMethod;
   variable: IntegrationVariable;
-  /** 1 or 2 curves. */
+  /** 1 to 5 curves. */
   curves: SolidCurve[];
   a: number;
   b: number;
@@ -81,7 +81,8 @@ export type SolidIssueCode =
   | 'undefined-domain' // curve is NaN somewhere in [a, b]
   | 'divergent' // integral diverges / pole in [a, b]
   | 'curves-cross' // info: region split at crossings
-  | 'axis-inside-region'; // warning: axis cuts the region, solid overlaps itself
+  | 'axis-inside-region' // warning: axis cuts the region, solid overlaps itself
+  | 'interior-curve'; // info: a selected curve never bounds the region (always dominated)
 
 export interface SolidIssue {
   code: SolidIssueCode;
@@ -117,4 +118,9 @@ export interface SolidResult {
   sliceArea: (t: number) => number;
   /** Computation-time issues only (divergent, undefined-domain found by the quadrature). */
   issues: SolidIssue[];
+  /** Total boundary surface area of the solid of revolution; null for 'cross-section', when the
+   *  axis cuts the region, or when the surface quadrature does not converge cleanly. */
+  surfaceArea: number | null;
+  /** Closed form of `surfaceArea` when recognised, e.g. '4π', 'π(1+√2)'. */
+  surfaceExact: string | null;
 }

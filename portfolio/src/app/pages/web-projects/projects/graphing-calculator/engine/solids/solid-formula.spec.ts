@@ -130,6 +130,40 @@ describe('buildTerms', () => {
     expect(term.integrand).toMatchObject({ type: 'BinaryOp', operator: '*' });
   });
 
+  it('splits a shell term in two with opposite (t-k)/(k-t) orientation when k is inside (a,b)', () => {
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [symbolicCurve('x^2', 'f1')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0.5 },
+    };
+    const pieces = computePieces(spec);
+    const terms = buildTerms(spec, pieces);
+    const area = sliceArea(spec, pieces);
+
+    expect(pieces).toHaveLength(2);
+    expect(terms).toHaveLength(2);
+    // First half: mid < k, so the term is written (k - t); second half: (t - k).
+    expect(terms[0].integrand).toMatchObject({
+      type: 'BinaryOp',
+      operator: '*',
+      left: { type: 'BinaryOp', operator: '-', left: { type: 'NumberLiteral', value: 0.5 } },
+    });
+    expect(terms[1].integrand).toMatchObject({
+      type: 'BinaryOp',
+      operator: '*',
+      left: { type: 'BinaryOp', operator: '-', right: { type: 'NumberLiteral', value: 0.5 } },
+    });
+
+    for (const [i, term] of terms.entries()) {
+      const t = 0.5 * (pieces[i].a + pieces[i].b);
+      const fromTerm = coeffValue(term.coefficient) * evaluate(term.integrand, { x: t });
+      expect(fromTerm).toBeCloseTo(area(t), 8);
+    }
+  });
+
   it('builds cross-section terms with the shape-specific coefficient', () => {
     const base: Omit<SolidSpec, 'shape' | 'heightRatio'> = {
       method: 'cross-section',

@@ -314,6 +314,62 @@ describe('SolidToolState E2E', () => {
     expect(issues.some((i) => i.code === 'axis-inside-region')).toBe(true);
   });
 
+  it('16a: envelope x, x^2, x^3 on [0,1], disk-washer, k=0 -> 4pi/21 (upper x, lower x^3)', () => {
+    state.connect(
+      signal<MathExpression[]>([
+        explicitFn('x', FUNCTION_COLORS[0]),
+        explicitFn('x^2', FUNCTION_COLORS[1]),
+        explicitFn('x^3', FUNCTION_COLORS[2]),
+      ]),
+    );
+    state.toggleCurve(0);
+    state.toggleCurve(1);
+    state.toggleCurve(2);
+    state.setMethod('disk-washer');
+    state.setA('0');
+    state.setB('1');
+    state.setAxisValue('0');
+    const result = state.result();
+    expect(result).not.toBeNull();
+    expect(result!.pieces).toHaveLength(1);
+    expect(result!.pieces[0].upperIndex).toBe(0);
+    expect(result!.pieces[0].lowerIndex).toBe(2);
+    expect(result!.volume).toBeCloseTo((4 * Math.PI) / 21, 6);
+    expect(result!.exact).toBe('4π/21');
+  });
+
+  it('16b: sphere y=sqrt(1-x^2), [-1,1], disk-washer, k=0 -> surfaceArea 4pi', () => {
+    state.connect(signal<MathExpression[]>([explicitFn('sqrt(1-x^2)')]));
+    state.toggleCurve(0);
+    state.setMethod('disk-washer');
+    state.setA('-1');
+    state.setB('1');
+    state.setAxisValue('0');
+    const result = state.result();
+    expect(result).not.toBeNull();
+    expect(result!.surfaceArea).not.toBeNull();
+    expect(result!.surfaceArea!).toBeCloseTo(4 * Math.PI, 6);
+    expect(result!.surfaceExact).toBe('4π');
+  });
+
+  it('16c: cross-section surfaceArea is always null', () => {
+    state.connect(
+      signal<MathExpression[]>([
+        explicitFn('sqrt(1-x^2)', FUNCTION_COLORS[0]),
+        explicitFn('-sqrt(1-x^2)', FUNCTION_COLORS[1]),
+      ]),
+    );
+    state.toggleCurve(0);
+    state.toggleCurve(1);
+    state.setMethod('cross-section');
+    state.setA('-1');
+    state.setB('1');
+    state.setShape('square');
+    const result = state.result();
+    expect(result).not.toBeNull();
+    expect(result!.surfaceArea).toBeNull();
+  });
+
   it('15e: heightRatio "0" for rectangle -> bad-ratio', () => {
     state.connect(
       signal<MathExpression[]>([

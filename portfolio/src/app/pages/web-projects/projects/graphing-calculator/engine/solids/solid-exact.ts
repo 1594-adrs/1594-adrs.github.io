@@ -1,10 +1,10 @@
 /**
- * Recognises a computed volume as a short closed form, trying (in this
- * order, and preferring the smallest denominator, then the fewest radicals):
- * a plain rational p/q, then (p/q)·π, (p/q)·√2, (p/q)·√3, (p/q)·π·√2 and
- * (p/q)·π·√3, for q up to 60. An integer volume (e.g. 16) is reported as the
- * plain rational '16' - it's still an exact closed form, just one without a
- * fractional or irrational part.
+ * Recognises a computed volume (or surface area) as a short closed form,
+ * trying (in this order, and preferring the smallest denominator, then the
+ * fewest radicals): a plain rational p/q, then (p/q)·π, (p/q)·√2, (p/q)·√3,
+ * (p/q)·π·√2, (p/q)·π·√3 and (p/q)·π·(1+√2), for q up to 60. An integer
+ * volume (e.g. 16) is reported as the plain rational '16' - it's still an
+ * exact closed form, just one without a fractional or irrational part.
  */
 
 const MAX_DENOMINATOR = 60;
@@ -23,6 +23,8 @@ const FORMS: Form[] = [
   { multiplier: Math.sqrt(3), unit: '√3' },
   { multiplier: Math.PI * Math.SQRT2, unit: 'π√2' },
   { multiplier: Math.PI * Math.sqrt(3), unit: 'π√3' },
+  // Cheap addition for cone-like lateral-surface totals, e.g. π(1+√2).
+  { multiplier: Math.PI * (1 + Math.SQRT2), unit: 'π(1+√2)' },
 ];
 
 function gcd(a: number, b: number): number {

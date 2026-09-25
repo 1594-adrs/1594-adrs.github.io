@@ -23,21 +23,6 @@ function baselineValue(spec: SolidSpec): number {
   return spec.method === 'disk-washer' ? (spec.axis?.value ?? 0) : 0;
 }
 
-function singleCurvePiece(spec: SolidSpec): SolidPiece {
-  const { a, b } = spec;
-  const baseline = baselineValue(spec);
-  const mid = 0.5 * (a + b);
-  const v = safeEval(spec.curves[0].fn, mid);
-  // Ties (v === baseline, or v is non-finite) default to the curve being the
-  // lower boundary; for disk-washer this is immaterial since the area only
-  // depends on |value - axis|, and for shell/cross-section the sign of
-  // (curve - baseline) still comes out right either way.
-  const curveIsUpper = Number.isFinite(v) ? v > baseline : false;
-  return curveIsUpper
-    ? { a, b, upperIndex: 0, lowerIndex: null }
-    : { a, b, upperIndex: null, lowerIndex: 0 };
-}
-
 function dedupeSorted(values: number[]): number[] {
   const out: number[] = [];
   for (const v of values) {
@@ -46,15 +31,89 @@ function dedupeSorted(values: number[]): number[] {
   return out;
 }
 
-function twoCurvePieces(spec: SolidSpec): SolidPiece[] {
+/**
+ * Interior breakpoints of [a, b]: every pairwise crossing between any two of
+ * the (up to 5) selected curves, plus - for the shell method - the axis
+ * value when it sits strictly inside the domain, so buildTerms can pick a
+ * single, non-flipping sign of (t − k) per piece (see solid-formula.ts).
+ */
+function interiorBreakpoints(spec: SolidSpec): number[] {
   const { a, b, curves } = spec;
-  const fns = curves.map((c) => c.fn);
   const span = Math.max(1e-9, b - a);
-  const crossings = findIntersections(fns, a, b)
-    .map((p) => p.x)
-    .filter((x) => x > a + span * EPS && x < b - span * EPS)
-    .sort((x, y) => x - y);
-  const boundaries = [a, ...dedupeSorted(crossings), b];
+  const points: number[] = [];
+
+  if (curves.length >= 2) {
+    const fns = curves.map((c) => c.fn);
+    for (const p of findIntersections(fns, a, b)) {
+      if (p.x > a + span * EPS && p.x < b - span * EPS) points.push(p.x);
+    }
+  }
+
+  if (spec.method === 'shell' && spec.axis) {
+    const k = spec.axis.value;
+    if (k > a + span * EPS && k < b - span * EPS) points.push(k);
+  }
+
+  return dedupeSorted(points.sort((x, y) => x - y));
+}
+
+/**
+ * Upper/lower ordering at a piece midpoint. A single curve is ordered
+ * against the baseline (ties/non-finite default to "lower", see below); with
+ * two or more curves, upperIndex/lowerIndex are the argmax/argmin among the
+ * curves' finite values there (an envelope) - non-finite samples don't
+ * participate, so a curve that's undefined at the midpoint is simply
+ * excluded from that piece's envelope rather than forcing a fallback.
+ */
+function envelopeAt(
+  spec: SolidSpec,
+  mid: number,
+): { upperIndex: number | null; lowerIndex: number | null } {
+  const { curves } = spec;
+
+  if (curves.length === 1) {
+    const baseline = baselineValue(spec);
+    const v = safeEval(curves[0].fn, mid);
+    // Ties (v === baseline, or v is non-finite) default to the curve being
+    // the lower boundary; for disk-washer this is immaterial since the area
+    // only depends on |value - axis|, and for shell/cross-section the sign
+    // of (curve - baseline) still comes out right either way.
+    const curveIsUpper = Number.isFinite(v) ? v > baseline : false;
+    return curveIsUpper ? { upperIndex: 0, lowerIndex: null } : { upperIndex: null, lowerIndex: 0 };
+  }
+
+  let upperIndex: number | null = null;
+  let lowerIndex: number | null = null;
+  let maxV = -Infinity;
+  let minV = Infinity;
+  for (let i = 0; i < curves.length; i++) {
+    const v = safeEval(curves[i].fn, mid);
+    if (!Number.isFinite(v)) continue;
+    if (v > maxV) {
+      maxV = v;
+      upperIndex = i;
+    }
+    if (v < minV) {
+      minV = v;
+      lowerIndex = i;
+    }
+  }
+  return { upperIndex, lowerIndex };
+}
+
+/**
+ * Splits [spec.a, spec.b] into pieces with a fixed upper/lower curve
+ * ordering: at every interior crossing between any pair of the selected
+ * curves (an envelope, for 2-5 curves), plus the shell axis split (see
+ * interiorBreakpoints), or a single piece (ordered against the baseline) for
+ * a one-curve spec.
+ */
+export function computePieces(spec: SolidSpec): SolidPiece[] {
+  if (spec.curves.length === 0) return [];
+
+  const { a, b } = spec;
+  const span = Math.max(1e-9, b - a);
+  const boundaries = [a, ...interiorBreakpoints(spec), b];
 
   const pieces: SolidPiece[] = [];
   for (let i = 0; i < boundaries.length - 1; i++) {
@@ -63,30 +122,10 @@ function twoCurvePieces(spec: SolidSpec): SolidPiece[] {
     if (pb - pa <= span * EPS) continue;
 
     const mid = 0.5 * (pa + pb);
-    const v0 = safeEval(fns[0], mid);
-    const v1 = safeEval(fns[1], mid);
-    // If the midpoint sample is inconclusive (non-finite on one side), fall
-    // back to the default ordering (curve 0 upper) - the quadrature will
-    // surface the underlying domain issue regardless of which side we pick.
-    const curve1IsUpper = Number.isFinite(v0) && Number.isFinite(v1) ? v1 > v0 : false;
-    pieces.push(
-      curve1IsUpper
-        ? { a: pa, b: pb, upperIndex: 1, lowerIndex: 0 }
-        : { a: pa, b: pb, upperIndex: 0, lowerIndex: 1 },
-    );
+    const { upperIndex, lowerIndex } = envelopeAt(spec, mid);
+    pieces.push({ a: pa, b: pb, upperIndex, lowerIndex });
   }
   return pieces;
-}
-
-/**
- * Splits [spec.a, spec.b] into pieces with a fixed upper/lower curve
- * ordering: at interior crossings of the two curves for a two-curve spec, or
- * a single piece (ordered against the baseline) for a one-curve spec.
- */
-export function computePieces(spec: SolidSpec): SolidPiece[] {
-  if (spec.curves.length === 0) return [];
-  if (spec.curves.length === 1) return [singleCurvePiece(spec)];
-  return twoCurvePieces(spec);
 }
 
 function findPieceIndex(pieces: SolidPiece[], t: number): number {

@@ -19,7 +19,7 @@
   </fieldset>
 
   <div class="range-section curve-section">
-    <span class="range-label">curves (max 2)</span>
+    <span class="range-label">curves (max 5)</span>
     <div class="bounded-fn-selects">
       @for (opt of state.curveOptions(); track opt.index) {
         <label
@@ -166,6 +166,15 @@
             <span class="error-estimate"> ± {{ formatVolume(result.errorEstimate) }}</span>
           }
         </p>
+        @if (result.surfaceArea !== null) {
+          <p class="volume-line">
+            S ≈ {{ formatVolume(result.surfaceArea) }}
+            @if (result.surfaceExact) {
+              <span class="exact"> = {{ result.surfaceExact }}</span>
+            }
+            <span> (total surface)</span>
+          </p>
+        }
 
         <div class="sweep-controls">
           <input

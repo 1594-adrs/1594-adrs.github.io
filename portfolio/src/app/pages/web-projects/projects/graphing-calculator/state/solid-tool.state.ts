@@ -38,7 +38,7 @@ export interface SolidCurveOption {
   reason: string;
 }
 
-const MAX_CURVES = 2;
+const MAX_CURVES = 5;
 const SWEEP_DURATION_MS = 4000;
 const DEFAULT_METHOD: SolidMethod = 'disk-washer';
 

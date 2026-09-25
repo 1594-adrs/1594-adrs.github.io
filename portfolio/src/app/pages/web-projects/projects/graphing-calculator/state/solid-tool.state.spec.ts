@@ -70,14 +70,19 @@ describe('SolidToolState', () => {
     expect(state.fieldErrors().a).toBeTruthy();
   });
 
-  it('caps curve selection at 2', () => {
+  it('caps curve selection at 5, rejecting a 6th', () => {
     state.connect(
-      signal<MathExpression[]>([explicitFn('x'), explicitFn('x+1'), explicitFn('x+2')]),
+      signal<MathExpression[]>([
+        explicitFn('x'),
+        explicitFn('x+1'),
+        explicitFn('x+2'),
+        explicitFn('x+3'),
+        explicitFn('x+4'),
+        explicitFn('x+5'),
+      ]),
     );
-    state.toggleCurve(0);
-    state.toggleCurve(1);
-    state.toggleCurve(2);
-    expect(state.curveIndices()).toEqual([0, 1]);
+    for (let i = 0; i < 6; i++) state.toggleCurve(i);
+    expect(state.curveIndices()).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('disables an explicit-y curve when the variable is x', () => {

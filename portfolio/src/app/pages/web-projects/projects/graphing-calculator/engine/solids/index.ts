@@ -2,11 +2,13 @@ import { integrateAdaptive } from '../quadrature';
 import { computePieces, sliceArea } from './solid-integrand';
 import { buildTerms } from './solid-formula';
 import { recognizeExact } from './solid-exact';
+import { computeSurfaceArea } from './solid-surface';
 import type { SolidIssue, SolidIssueCode, SolidResult, SolidSpec } from './solid.types';
 
 export { computePieces, sliceArea } from './solid-integrand';
 export { buildTerms } from './solid-formula';
 export { recognizeExact } from './solid-exact';
+export { computeSurfaceArea } from './solid-surface';
 export type * from './solid.types';
 
 function issueMessage(
@@ -74,6 +76,8 @@ export function computeSolid(spec: SolidSpec): SolidResult {
       }
     }
 
+    const surfaceArea = failed ? null : computeSurfaceArea(spec, pieces);
+
     return {
       volume: failed ? null : volume,
       errorEstimate,
@@ -82,6 +86,8 @@ export function computeSolid(spec: SolidSpec): SolidResult {
       pieces,
       sliceArea: area,
       issues,
+      surfaceArea,
+      surfaceExact: surfaceArea === null ? null : recognizeExact(surfaceArea),
     };
   } catch {
     return {
@@ -98,6 +104,8 @@ export function computeSolid(spec: SolidSpec): SolidResult {
           message: 'The solid could not be computed (unexpected error).',
         },
       ],
+      surfaceArea: null,
+      surfaceExact: null,
     };
   }
 }

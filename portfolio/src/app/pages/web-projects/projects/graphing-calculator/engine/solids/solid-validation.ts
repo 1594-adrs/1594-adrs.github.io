@@ -66,11 +66,11 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
       message: 'Select at least one curve for the solid.',
       field: 'curves',
     });
-  } else if (spec.curves.length > 2) {
+  } else if (spec.curves.length > 5) {
     issues.push({
       code: 'too-many-curves',
       severity: 'error',
-      message: 'At most 2 curves are supported.',
+      message: 'At most 5 curves are supported.',
       field: 'curves',
     });
   }
@@ -211,6 +211,39 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
         message: `Curves cross at ${spec.variable} ≈ ${shown.join(', ')} — the region is split there`,
         at: crossings[0],
       });
+    }
+  }
+
+  if (spec.curves.length >= 3) {
+    for (let c = 0; c < spec.curves.length; c++) {
+      let interiorEverywhere = true;
+      let sawValidSample = false;
+      for (let i = 0; i < SAMPLE_COUNT && interiorEverywhere; i++) {
+        const vc = samplesByCurve[c][i];
+        if (!Number.isFinite(vc)) continue;
+        const others = samplesByCurve
+          .filter((_, idx) => idx !== c)
+          .map((s) => s[i])
+          .filter((v) => Number.isFinite(v));
+        if (others.length === 0) continue;
+        sawValidSample = true;
+        const maxOther = Math.max(...others);
+        const minOther = Math.min(...others);
+        // Interior means some other curve is strictly above vc AND some
+        // other is strictly below it - i.e. vc is neither the overall max
+        // nor the overall min, so it never forms the region's boundary.
+        if (!(vc < maxOther - 1e-9 && vc > minOther + 1e-9)) {
+          interiorEverywhere = false;
+        }
+      }
+      if (sawValidSample && interiorEverywhere) {
+        issues.push({
+          code: 'interior-curve',
+          severity: 'info',
+          message: `${spec.curves[c].label} lies inside the region and does not bound the solid`,
+          field: 'curves',
+        });
+      }
     }
   }
 

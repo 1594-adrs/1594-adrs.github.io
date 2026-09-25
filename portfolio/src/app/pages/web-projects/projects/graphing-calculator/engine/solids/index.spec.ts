@@ -301,6 +301,59 @@ describe('computeSolid', () => {
     expect(r.issues[0].severity).toBe('error');
   });
 
+  it('20: envelope x, x^2, x^3 on [0,1] about y=0 -> 4pi/21 (upper x, lower x^3)', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [curveFromExpr('x', 'f1'), curveFromExpr('x^2', 'f2'), curveFromExpr('x^3', 'f3')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const r = computeSolid(spec);
+    expect(r.pieces).toHaveLength(1);
+    expect(r.pieces[0].upperIndex).toBe(0);
+    expect(r.pieces[0].lowerIndex).toBe(2);
+    expect(relErr(r.volume!, (4 * Math.PI) / 21)).toBeLessThanOrEqual(1e-7);
+    expect(r.exact).toBe('4π/21');
+  });
+
+  it('21: shell y=x^2 on [0,1] about x=0.5 (axis inside domain) splits into 2 pieces, same volume', () => {
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('x^2')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0.5 },
+    };
+    const r = computeSolid(spec);
+    expect(r.pieces).toHaveLength(2);
+    // Hand-checked via Simpson's rule (1e6 panels): 2*pi*Integral(|x-0.5|*x^2, 0, 1) ~= 0.5890486225.
+    expect(relErr(r.volume!, 0.5890486225480873)).toBeLessThanOrEqual(1e-6);
+  });
+
+  it("22: computeSolid never throws with 6 curves (too-many-curves is validateSolidSpec's job)", () => {
+    const spec: SolidSpec = {
+      method: 'cross-section',
+      variable: 'x',
+      curves: [
+        curveFromExpr('x', 'f1'),
+        curveFromExpr('x+1', 'f2'),
+        curveFromExpr('x+2', 'f3'),
+        curveFromExpr('x+3', 'f4'),
+        curveFromExpr('x+4', 'f5'),
+        curveFromExpr('x+5', 'f6'),
+      ],
+      a: 0,
+      b: 1,
+      shape: 'square',
+    };
+    // computeSolid doesn't itself gate on curve count (that's validateSolidSpec's job), but it
+    // must still never throw with 6 curves.
+    expect(() => computeSolid(spec)).not.toThrow();
+  });
+
   it('never throws on a structurally odd spec (missing axis)', () => {
     const spec = {
       method: 'disk-washer',

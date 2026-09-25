@@ -80,4 +80,35 @@ describe('SolidPanelComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('π/3');
   });
+
+  it('shows the total surface area under the volume for y=x on [0,1] with disk/washer', () => {
+    const fixture = TestBed.createComponent(SolidPanelComponent);
+    const state = fixture.componentInstance.state;
+    state.connect(signal<MathExpression[]>([explicitFn('x')]));
+    state.toggleCurve(0);
+    state.setA('0');
+    state.setB('1');
+    state.setAxisValue('0');
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('S ≈');
+    expect(text).toContain('π(1+√2)');
+    expect(text).toContain('total surface');
+  });
+
+  it('does not show a surface line for a cross-section', () => {
+    const fixture = TestBed.createComponent(SolidPanelComponent);
+    const state = fixture.componentInstance.state;
+    state.connect(
+      signal<MathExpression[]>([explicitFn('sqrt(1-x^2)'), explicitFn('-sqrt(1-x^2)')]),
+    );
+    state.toggleCurve(0);
+    state.toggleCurve(1);
+    state.setMethod('cross-section');
+    state.setA('-1');
+    state.setB('1');
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('total surface');
+  });
 });
