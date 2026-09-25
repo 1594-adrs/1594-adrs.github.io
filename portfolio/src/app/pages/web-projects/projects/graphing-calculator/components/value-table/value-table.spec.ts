@@ -67,4 +67,13 @@ describe('ValueTable', () => {
     expect(rows.length).toBe(11);
     expect(rows[2].output).toBe('4.000000');
   });
+
+  it('formats the input column like a typed value, trimming trailing zeros', () => {
+    const fixture = create(makeExpr('x'));
+    const comp = fixture.componentInstance;
+    expect(comp.formatInput(1)).toBe('1');
+    expect(comp.formatInput(2.5)).toBe('2.5');
+    expect(comp.formatInput(-1)).toBe('-1');
+    expect(comp.formatInput(0)).toBe('0');
+  });
 });

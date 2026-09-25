@@ -100,8 +100,17 @@ export class ValueTable {
     this.rowsText.set(value);
   }
 
+  /** Formats the input (x or y) column like a typed value — e.g. "1", "2.5", "-0.25" —
+   *  rather than `formatValue`'s fixed 6-decimal display used for computed outputs. */
   formatInput(v: number): string {
-    return formatValue(v);
+    if (Number.isNaN(v)) return 'undefined';
+    if (!Number.isFinite(v)) return formatValue(v);
+    if (Math.abs(v) < 1e-10) return '0';
+    if (Math.abs(v) >= 1e12 || Math.abs(v) < 0.001) return formatValue(v);
+    return v
+      .toFixed(6)
+      .replace(/(\.\d*?)0+$/, '$1')
+      .replace(/\.$/, '');
   }
 }
 

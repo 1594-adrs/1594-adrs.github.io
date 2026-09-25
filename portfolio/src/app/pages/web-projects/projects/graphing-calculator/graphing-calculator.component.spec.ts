@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { GraphingCalculatorComponent } from './graphing-calculator.component';
+import { buildShareHash } from './state/share-state';
 
 describe('GraphingCalculatorComponent', () => {
   beforeEach(async () => {
@@ -9,6 +10,43 @@ describe('GraphingCalculatorComponent', () => {
       imports: [GraphingCalculatorComponent],
       providers: [provideRouter([])],
     }).compileComponents();
+  });
+
+  afterEach(() => {
+    window.location.hash = '';
+  });
+
+  it('restores functions/viewport from an initial #s= share hash on load', () => {
+    window.location.hash = buildShareHash({
+      v: 1,
+      functions: [{ raw: 'x^2-1', color: '#ff6b35', visible: true }],
+      viewport: { xMin: -5, xMax: 5, yMin: -5, yMax: 5 },
+      tool: { active: null },
+    });
+
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    fixture.detectChanges();
+    const comp = fixture.componentInstance;
+
+    expect(comp.functions().length).toBe(1);
+    expect(comp.functions()[0].raw).toBe('x^2-1');
+    expect(comp.functions()[0].color).toBe('#ff6b35');
+    expect(comp.viewport.xMin).toBe(-5);
+    expect(comp.viewport.xMax).toBe(5);
+    // The fragment is applied once and dropped from the URL.
+    expect(window.location.hash).toBe('');
+  });
+
+  it('ignores an invalid initial #s= share hash and shows a non-blocking notice', () => {
+    window.location.hash = '#s=not-valid-base64!!!';
+
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    fixture.detectChanges();
+    const comp = fixture.componentInstance;
+
+    expect(comp.functions().length).toBe(1);
+    expect(comp.functions()[0].raw).toBe('sin(x)');
+    expect(comp.shareNotice()).toContain('Ignored an invalid share link');
   });
 
   it('should create', () => {

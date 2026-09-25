@@ -131,6 +131,12 @@ function roundLimit(v: number): number {
 })
 export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
+  // Captured as early as possible (a field initializer runs in the constructor, before
+  // ngAfterViewInit and before any later router/hydration activity gets a chance to touch
+  // `location.hash`), so a share link survives even if something clears the hash later.
+  private pendingShareFragment: string | null = this.isBrowser
+    ? extractShareFragment(location.hash)
+    : null;
   private ngZone = inject(NgZone);
   private cdr = inject(ChangeDetectorRef);
   private titleService = inject(Title);
@@ -1247,11 +1253,13 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   private restoreFromShareLink(): void {
-    const fragment = extractShareFragment(location.hash);
+    const fragment = this.pendingShareFragment;
+    this.pendingShareFragment = null;
     if (!fragment) return;
     const state = parseShareState(fragment);
     if (!state) {
       this.announceShare('Ignored an invalid share link.');
+      this.clearShareHash();
       return;
     }
 
@@ -1294,7 +1302,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.solidToolState.setHeightRatio(tool.solid.heightRatio);
     }
 
+    this.clearShareHash();
     this.requestRender();
+  }
+
+  /** Drops the `#s=...` fragment from the URL once it's been applied (or rejected), so a
+   *  reload/back-navigation doesn't silently re-restore (or re-reject) stale shared state. */
+  private clearShareHash(): void {
+    if (!this.isBrowser || typeof history === 'undefined') return;
+    history.replaceState(null, '', location.pathname + location.search);
   }
 
   /** Exports the 2D canvas as a PNG, or the 3D view's canvas when it's the one on screen. */
