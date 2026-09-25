@@ -9,7 +9,6 @@ import type { DetectedCurveMode } from '../mode-detector';
 
 const SAMPLE_COUNT = 401;
 const MIN_UNDEFINED_RUN = 2;
-const HUGE_MAGNITUDE = 1e6;
 const ENDPOINT_EPS_FRACTION = 1e-6;
 
 function methodLabel(method: SolidMethod): string {
@@ -145,19 +144,13 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
     const values = samplesByCurve[c];
     const label = spec.curves[c].label;
 
+    // Infinite samples are not reported here: a pole does not imply a divergent volume
+    // (e.g. ln x on [0, 1] gives 2π). computeSolid's quadrature decides and reports 'divergent'.
     let runStart = -1;
     let undefinedAt: number | null = null;
-    let divergentAt: number | null = null;
 
-    for (let i = 0; i < SAMPLE_COUNT && (undefinedAt === null || divergentAt === null); i++) {
+    for (let i = 0; i < SAMPLE_COUNT && undefinedAt === null; i++) {
       const v = values[i];
-      const t = i === SAMPLE_COUNT - 1 ? b : a + i * dt;
-
-      if (divergentAt === null && (v === Infinity || v === -Infinity)) {
-        divergentAt = t;
-      } else if (divergentAt === null && Number.isFinite(v) && Math.abs(v) > HUGE_MAGNITUDE) {
-        divergentAt = t;
-      }
 
       if (Number.isNaN(v)) {
         if (runStart === -1) runStart = i;
@@ -173,14 +166,7 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
       undefinedAt = a + runStart * dt;
     }
 
-    if (divergentAt !== null) {
-      issues.push({
-        code: 'divergent',
-        severity: 'error',
-        message: `${label} diverges near ${spec.variable} ≈ ${divergentAt.toFixed(4)}`,
-        at: divergentAt,
-      });
-    } else if (undefinedAt !== null) {
+    if (undefinedAt !== null) {
       issues.push({
         code: 'undefined-domain',
         severity: 'error',

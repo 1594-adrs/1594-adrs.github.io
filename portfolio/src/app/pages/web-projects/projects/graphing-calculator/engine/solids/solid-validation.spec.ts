@@ -138,18 +138,12 @@ describe('validateSolidSpec', () => {
     expect(issues[0].at).toBeCloseTo(-1, 5);
   });
 
-  it('detects divergent for 1/x on [-1, 1]', () => {
-    const s = spec({
-      method: 'cross-section',
-      shape: 'square',
-      axis: undefined,
-      curves: [curve((x) => 1 / x)],
-      a: -1,
-      b: 1,
-    });
-    const issues = validateSolidSpec(s);
-    expect(issues).toEqual([expect.objectContaining({ code: 'divergent', severity: 'error' })]);
-    expect(issues[0].at).toBeCloseTo(0, 5);
+  it('leaves poles to the quadrature (1/x and ln x pass validation)', () => {
+    const base = { method: 'cross-section' as const, shape: 'square' as const, axis: undefined };
+    expect(
+      validateSolidSpec(spec({ ...base, curves: [curve((x) => 1 / x)], a: -1, b: 1 })),
+    ).toEqual([]);
+    expect(validateSolidSpec(spec({ ...base, curves: [curve(Math.log)], a: 0, b: 1 }))).toEqual([]);
   });
 
   it('detects curves-cross for x and x^2 on [0, 2] at x ≈ 1', () => {

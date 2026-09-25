@@ -35,10 +35,13 @@ Work on `develop`; `main` receives PRs from `develop` and deploys. Conventional 
 ## Graphing calculator (`src/app/pages/web-projects/projects/graphing-calculator/`)
 
 Keep the layers separate:
-- `engine/` — pure math, no DOM/Angular: lexer + recursive-descent `parser.ts` (AST cached, bounded by `MAX_AST_NODES`), `evaluator.ts`, `integrator.ts` (Simpson), `calculus.ts` (derivatives, washer/shell solids), `intersection-finder.ts`, `area-splitter.ts`, `conic-detector.ts`/`conic-solver.ts`, `asymptote-detector.ts`. Every file has a co-located spec.
-- `canvas/` — 2D rendering (`viewport.ts` transforms, grid/graph/implicit/solid renderers); `canvas/utils.ts` has the shared `tryEval` and `findAxisCrossings` — reuse them.
-- `canvas/solid-3d/` — Three.js viewer; dispose every geometry/material/renderer on teardown.
-- `models/calculator.models.ts` shared interfaces. `graphing-calculator.component.ts` is large (~1.5k lines) — put new logic in `engine/`/`canvas/`, not in the component.
+- `engine/` — pure math, no DOM/Angular, never imports `models/`: lexer + recursive-descent `parser.ts` (AST cached, bounded by `MAX_AST_NODES`; scientific notation only with uppercase `E`), `evaluator.ts` (real odd roots of negatives), `quadrature.ts` (adaptive Gauss–Kronrod with `'divergent'`/`'undefined'` status — all integration goes through it; `integrator.ts` delegates), `mode-detector.ts` (curve modes incl. `x = g(y)`), `intersection-finder.ts`, `area-splitter.ts`, conics, `asymptote-detector.ts`. Every file has a co-located spec.
+- `engine/solids/` — solids by integration. `solid.types.ts` is the contract (method disk-washer / shell / cross-section, variable x|y, pieces, issues); `validateSolidSpec` for input checks, `computeSolid` for volume + formula terms + exact form.
+- `state/solid-tool.state.ts` — signal state for the solids panel (axis orientation is derived from method + variable).
+- `canvas/` — 2D rendering (`viewport.ts`, grid/graph/implicit renderers, `solid-region-renderer.ts`); `canvas/utils.ts` has the shared `tryEval` and `findAxisCrossings` — reuse them.
+- `canvas/solid-3d/` — Three.js viewer (`solid-mesh-builder.ts`: lathe for revolution, `loft.ts` for cross-sections; sweep = clipping plane, no remesh). Dispose every geometry/material/renderer on teardown.
+- `components/` — `solid-panel`, `integral-formula`, `math-renderer`, `conic-assistant`. `graphing-calculator.component.ts` is large — put new logic in `engine/`/`state/`/`canvas/`, not in the component.
+- UI text is English.
 - Keyboard: `+`/`-` zoom, arrows pan, `R` reset.
 
 ## Skills & agents
