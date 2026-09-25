@@ -3,8 +3,10 @@ export interface Profile {
   shortName: string;
   title: string;
   level: string;
+  tagline: string;
   description: string;
   role: string;
+  resumeUrl?: string;
 }
 
 export interface NavLink {

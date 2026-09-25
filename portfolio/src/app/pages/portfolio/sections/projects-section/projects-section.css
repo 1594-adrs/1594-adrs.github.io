@@ -130,6 +130,17 @@
   border-color: var(--color-primary);
 }
 
+.btn-live {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.btn-live:hover {
+  background: var(--color-primary);
+  color: var(--color-bg-dark);
+}
+
 .web-projects-card {
   grid-column: 1 / -1;
   border-color: var(--color-primary);

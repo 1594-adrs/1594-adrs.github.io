@@ -14,6 +14,8 @@ export class HeroSection {
 
   name = PROFILE.shortName;
   role = PROFILE.role;
+  tagline = PROFILE.tagline;
+  resumeUrl = PROFILE.resumeUrl;
 
   onImageError() {
     this.imageFailed.set(true);
