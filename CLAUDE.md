@@ -47,5 +47,6 @@ Keep the layers separate:
 ## Skills & agents
 
 - Angular work: load `angular-developer` (and `angular-best-practices` for reviews). New UI: `frontend-design`; accessibility/UX review: `web-design-guidelines`.
-- Subagents in `.claude/agents/`: `analyst` (Sonnet, medium effort — single-module analysis/docs) and `deep-reviewer` (Sonnet, high effort — architecture, security, cross-module changes). Use Haiku for mechanical searches.
+- Subagents (`scout` / `analyst` / `deep-reviewer`) and the orchestration rules live in the user-level `~/.claude/`. In this repo, file ownership for parallel agents usually splits as: `engine/solids/` + `state/` + `components/solid-panel/` · rest of `engine/` + `canvas/utils.ts` · main component/template/CSS.
+- A PostToolUse hook (`.claude/hooks/format.mjs`) runs Prettier on every edited file under `portfolio/src`.
 - If `graphify-out/graph.json` exists, prefer `graphify query "<question>"` over broad file reads.
