@@ -128,7 +128,6 @@ export const PROJECTS: Project[] = [
       'This site. Built with Angular 21, standalone components, and signals. Scroll-reveal animations, lazy-loaded routes, and a custom IntersectionObserver directive. Deployed on GitHub Pages.',
     technologies: ['Angular', 'TypeScript', 'CSS', 'HTML'],
     githubUrl: 'https://github.com/1594-adrs/1594-adrs.github.io',
-    liveUrl: 'https://1594-adrs.github.io/',
   },
 ];
 

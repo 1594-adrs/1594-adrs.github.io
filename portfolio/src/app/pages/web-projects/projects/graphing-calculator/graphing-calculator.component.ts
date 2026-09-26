@@ -326,6 +326,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.sheetDragStartY = event.clientY;
     this.sheetDragStartHeight = this.currentSheetHeightPx();
     this.sheetDragMoved = false;
+    this.sheetPointerController?.abort();
     this.uiLayout.dragOffsetPx.set(this.sheetDragStartHeight);
     this.uiLayout.dragging.set(true);
     this.sheetPointerController = new AbortController();
@@ -426,6 +427,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       passive: false,
       signal,
     });
+    // Any scroll (page or ancestor) moves the canvas without resizing it, so the
+    // ResizeObserver misses it — drop the cached rect and re-read it lazily.
+    const invalidateRect = () => (this.cachedRect = null);
+    window.addEventListener('scroll', invalidateRect, { passive: true, capture: true, signal });
+    window.addEventListener('resize', invalidateRect, { passive: true, signal });
   }
 
   private requestRender(): void {

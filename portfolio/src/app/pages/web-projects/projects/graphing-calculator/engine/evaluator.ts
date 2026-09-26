@@ -413,6 +413,8 @@ function compileNode(node: ExpressionNode, angleUnit: 'rad' | 'deg'): CompiledEx
  * the AST node itself (and on `angleUnit`, since trig functions bake in the
  * deg/rad conversion at compile time). Call this once per expression edit —
  * not per sample — and reuse the returned function across an entire render.
+ * Unlike `evaluate()`, there is no MAX_EVAL_STEPS counter: the closure tree has
+ * one node per AST node, and the parser already bounds that via MAX_AST_NODES.
  */
 export function compileExpression(
   ast: ExpressionNode,
