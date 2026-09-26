@@ -627,6 +627,40 @@ export function drawInequality(
   ctx.restore();
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex);
+  if (!m) return [255, 255, 255];
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+function inequalityCheck(comparison: '>' | '<' | '>=' | '<=') {
+  switch (comparison) {
+    case '>':
+      return (val: number) => val > 0;
+    case '<':
+      return (val: number) => val < 0;
+    case '>=':
+      return (val: number) => val >= 0;
+    case '<=':
+      return (val: number) => val <= 0;
+  }
+}
+
+const INEQUALITY_CELL_PX = 3;
+const INEQUALITY_CELL_PX_COARSE = 6;
+
+interface InequalityCacheEntry {
+  key: string;
+  canvas: HTMLCanvasElement;
+}
+
+// Keyed on the eval fn's identity: a shaded region is filled once into a small
+// offscreen canvas (one fillRect-equivalent per coarse cell, via ImageData) and
+// then just blitted with drawImage on every subsequent frame with the same
+// viewport/size — instead of re-evaluating fn(x, y) at every 2px screen cell
+// (width*height/4 evaluations) every single frame.
+const inequalityCache = new WeakMap<object, InequalityCacheEntry>();
+
 export function drawImplicitInequality(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
@@ -635,39 +669,56 @@ export function drawImplicitInequality(
   color: string,
   width: number,
   height: number,
+  coarse = false,
 ): void {
-  const step = 2;
-  ctx.save();
-  ctx.globalAlpha = 0.15;
-  ctx.fillStyle = color;
+  if (width <= 0 || height <= 0) return;
+  const cellPx = coarse ? INEQUALITY_CELL_PX_COARSE : INEQUALITY_CELL_PX;
+  const cols = Math.max(1, Math.round(width / cellPx));
+  const rows = Math.max(1, Math.round(height / cellPx));
+  const key = `${viewport.xMin.toFixed(6)}:${viewport.xMax.toFixed(6)}:${viewport.yMin.toFixed(6)}:${viewport.yMax.toFixed(6)}:${cols}:${rows}:${comparison}:${color}`;
 
-  const check = (val: number): boolean => {
-    switch (comparison) {
-      case '>':
-        return val > 0;
-      case '<':
-        return val < 0;
-      case '>=':
-        return val >= 0;
-      case '<=':
-        return val <= 0;
-    }
-  };
+  let entry = inequalityCache.get(fn);
+  if (!entry || entry.key !== key) {
+    const small = document.createElement('canvas');
+    small.width = cols;
+    small.height = rows;
+    const sctx = small.getContext('2d');
+    if (!sctx) return;
 
-  for (let px = 0; px <= width; px += step) {
-    for (let py = 0; py <= height; py += step) {
-      const [wx, wy] = viewport.screenToWorld(px, py, width, height);
-      try {
-        const val = fn(wx, wy);
-        if (check(val)) {
-          ctx.fillRect(px, py, step, step);
+    const img = sctx.createImageData(cols, rows);
+    const [r, g, b] = hexToRgb(color);
+    const alpha = Math.round(0.15 * 255);
+    const check = inequalityCheck(comparison);
+
+    for (let row = 0; row < rows; row++) {
+      const py = ((row + 0.5) / rows) * height;
+      const base = row * cols;
+      for (let col = 0; col < cols; col++) {
+        const px = ((col + 0.5) / cols) * width;
+        const [wx, wy] = viewport.screenToWorld(px, py, width, height);
+        let val: number;
+        try {
+          val = fn(wx, wy);
+        } catch {
+          continue;
         }
-      } catch {
-        /* skip */
+        if (!check(val)) continue;
+        const idx = (base + col) * 4;
+        img.data[idx] = r;
+        img.data[idx + 1] = g;
+        img.data[idx + 2] = b;
+        img.data[idx + 3] = alpha;
       }
     }
+
+    sctx.putImageData(img, 0, 0);
+    entry = { key, canvas: small };
+    inequalityCache.set(fn, entry);
   }
 
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(entry.canvas, 0, 0, width, height);
   ctx.restore();
 }
 

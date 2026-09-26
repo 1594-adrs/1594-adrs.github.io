@@ -382,19 +382,7 @@
         />
       </div>
     } @else {
-      <canvas
-        #graphCanvas
-        (mousemove)="onCanvasMouseMove($event)"
-        (mouseleave)="onCanvasMouseLeave()"
-        (wheel)="onCanvasWheel($event)"
-        (mousedown)="onCanvasMouseDown($event)"
-        (mouseup)="onCanvasMouseUp()"
-        (click)="onCanvasClick($event)"
-        (touchstart)="onCanvasTouchStart($event)"
-        (touchmove)="onCanvasTouchMove($event)"
-        (touchend)="onCanvasTouchEnd($event)"
-        (touchcancel)="onCanvasTouchEnd($event)"
-      ></canvas>
+      <canvas #graphCanvas></canvas>
     }
     @if (showCanvasControls() && !show3DSolid()) {
       <div class="canvas-controls">

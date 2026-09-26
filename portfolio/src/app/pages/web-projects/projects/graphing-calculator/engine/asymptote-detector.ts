@@ -11,7 +11,40 @@ export type FunctionCategory =
   'rational' | 'trigonometric' | 'polynomial' | 'exponential' | 'logarithmic' | 'other';
 
 const CACHE_LIMIT = 32;
-const cache = new Map<string, Asymptote[]>();
+
+interface CacheEntry {
+  /** The (padded, wider-than-requested) range asymptotes were actually detected over. */
+  padXMin: number;
+  padXMax: number;
+  /** The width of the request that produced this entry (xMax - xMin at compute time). */
+  reqRange: number;
+  all: Asymptote[];
+}
+
+// One entry per function identity (not per viewport range): detection runs over a
+// padded window around the first requested range, and a pan/zoom that stays inside
+// that padding reuses it — filtered back down to the currently-visible bounds —
+// instead of re-running vertical/horizontal/oblique detection every frame.
+const cache = new Map<number, CacheEntry>();
+/** Padded window is (1 + 2*PAD_FACTOR) times the requested range, centered on it. */
+const PAD_FACTOR = 1.5;
+const PAD_MULTIPLIER = 1 + 2 * PAD_FACTOR;
+/** A cache entry is only reused while the requested range hasn't shrunk (zoomed in)
+ *  past this fraction of the range it was computed for — otherwise the padded sweep's
+ *  fixed sample count is too coarse over the now much-narrower visible range and a
+ *  close/tight asymptote could fall between samples and be missed entirely. */
+const MIN_REUSE_RANGE_RATIO = 1 / 3;
+/** Vertical detection's sample count at the (unpadded) baseline range. */
+const BASE_VERTICAL_STEPS = 2000;
+
+function filterToRange(all: Asymptote[], xMin: number, xMax: number): Asymptote[] {
+  const filtered = all.filter((a) => a.type !== 'vertical' || (a.value > xMin && a.value < xMax));
+  // Preserve reference equality when nothing was actually filtered out, so a
+  // repeated call with the same (still-in-padding) viewport returns the same
+  // array instance — callers that memoize on it (e.g. a redraw effect) don't
+  // see a spurious "change".
+  return filtered.length === all.length ? all : filtered;
+}
 
 // Object/function identity, not content, is the cache key component for the
 // AST (or the plain function when no AST is given) — two structurally equal
@@ -28,48 +61,60 @@ function identityKey(obj: object): number {
   return id;
 }
 
-/** Rounds a viewport bound so nearby pans/zooms still hit the cache. */
-function roundBound(v: number): number {
-  if (!isFinite(v)) return v;
-  const scale = Math.max(1, Math.abs(v));
-  const precision = Math.pow(10, Math.floor(Math.log10(scale)) - 2);
-  return Math.round(v / precision) * precision;
-}
-
 export function detectAsymptotes(
   fn: (x: number) => number,
   xMin: number,
   xMax: number,
   ast?: ExpressionNode,
 ): Asymptote[] {
-  const key = `${identityKey(ast ?? fn)}:${roundBound(xMin)}:${roundBound(xMax)}`;
-  const cached = cache.get(key);
-  if (cached) {
+  const id = identityKey(ast ?? fn);
+  const range = xMax - xMin;
+  const cached = cache.get(id);
+  if (
+    cached &&
+    xMin >= cached.padXMin &&
+    xMax <= cached.padXMax &&
+    range >= cached.reqRange * MIN_REUSE_RANGE_RATIO
+  ) {
     // Refresh recency for the simple LRU eviction below.
-    cache.delete(key);
-    cache.set(key, cached);
-    return cached;
+    cache.delete(id);
+    cache.set(id, cached);
+    return filterToRange(cached.all, xMin, xMax);
   }
+
+  const pad = range * PAD_FACTOR;
+  const padXMin = xMin - pad;
+  const padXMax = xMax + pad;
 
   const asymptotes: Asymptote[] = [];
 
-  detectVertical(fn, xMin, xMax, asymptotes);
+  // The padded sweep covers PAD_MULTIPLIER times the requested range, so its sample
+  // count is scaled up by the same factor — otherwise per-sample density over the
+  // actually-visible range would be PAD_MULTIPLIER times coarser than before padding
+  // was introduced, and a close/tight vertical asymptote could be missed.
+  detectVertical(
+    fn,
+    padXMin,
+    padXMax,
+    asymptotes,
+    Math.round(BASE_VERTICAL_STEPS * PAD_MULTIPLIER),
+  );
 
   if (canHaveHorizontalAsymptote(ast)) {
-    detectHorizontal(fn, xMin, xMax, asymptotes);
+    detectHorizontal(fn, padXMin, padXMax, asymptotes);
   }
 
   if (canHaveObliqueAsymptote(ast)) {
-    detectOblique(fn, xMin, xMax, asymptotes);
+    detectOblique(fn, padXMin, padXMax, asymptotes);
   }
 
-  cache.set(key, asymptotes);
+  cache.set(id, { padXMin, padXMax, reqRange: range, all: asymptotes });
   if (cache.size > CACHE_LIMIT) {
     const oldestKey = cache.keys().next().value;
     if (oldestKey !== undefined) cache.delete(oldestKey);
   }
 
-  return asymptotes;
+  return filterToRange(asymptotes, xMin, xMax);
 }
 
 /** Test-only: clears the memoization cache so specs don't leak state. */
@@ -224,8 +269,8 @@ function detectVertical(
   xMin: number,
   xMax: number,
   result: Asymptote[],
+  steps: number = BASE_VERTICAL_STEPS,
 ): void {
-  const steps = 2000;
   const dx = (xMax - xMin) / steps;
   let prevY = safeEval(fn, xMin);
 

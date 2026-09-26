@@ -263,6 +263,174 @@ export function evaluate(
   return evalNode(ast);
 }
 
+/**
+ * A compiled expression: `(a, b) => number`, where `a` stands in for whichever
+ * of `x`/`t` the expression uses (they're always bound to the same value at
+ * call sites — parametric curves evaluate a single parameter under both
+ * names) and `b` stands in for `y`. Matches `evaluate`'s semantics exactly
+ * (real odd roots of negatives, angle unit, NaN/Infinity on domain errors)
+ * but is built once per (AST, angle unit) and reused across many (x, y)
+ * samples without re-allocating a `variables` object or a fresh evalNode
+ * closure per call — the two allocations `evaluate` incurs on every call.
+ */
+export type CompiledExpr = (a: number, b: number) => number;
+
+interface CompileCacheEntry {
+  rad?: CompiledExpr;
+  deg?: CompiledExpr;
+}
+
+const compileCache = new WeakMap<ExpressionNode, CompileCacheEntry>();
+
+function unknownVariable(name: string): CompiledExpr {
+  return () => {
+    throw new Error(`Unknown variable: '${name}'`);
+  };
+}
+
+function unknownFunction(name: string): CompiledExpr {
+  return () => {
+    throw new Error(`Unknown function: '${name}'`);
+  };
+}
+
+function compileNode(node: ExpressionNode, angleUnit: 'rad' | 'deg'): CompiledExpr {
+  switch (node.type) {
+    case 'NumberLiteral': {
+      const v = node.value;
+      return () => v;
+    }
+
+    case 'Variable': {
+      const name = node.name;
+      if (name === 'x' || name === 't') return (a) => a;
+      if (name === 'y') return (_a, b) => b;
+      if (Object.hasOwn(CONSTANTS, name)) {
+        const v = CONSTANTS[name];
+        return () => v;
+      }
+      return unknownVariable(name);
+    }
+
+    case 'BinaryOp': {
+      const left = compileNode(node.left, angleUnit);
+      const right = compileNode(node.right, angleUnit);
+      switch (node.operator) {
+        case '+':
+          return (a, b) => left(a, b) + right(a, b);
+        case '-':
+          return (a, b) => left(a, b) - right(a, b);
+        case '*':
+          return (a, b) => left(a, b) * right(a, b);
+        case '/':
+          return (a, b) => left(a, b) / right(a, b);
+        case '^':
+          return (a, b) => signedRealPow(left(a, b), right(a, b));
+        case '<':
+          return (a, b) => (left(a, b) < right(a, b) ? 1 : 0);
+        case '>':
+          return (a, b) => (left(a, b) > right(a, b) ? 1 : 0);
+        case '<=':
+          return (a, b) => (left(a, b) <= right(a, b) ? 1 : 0);
+        case '>=':
+          return (a, b) => (left(a, b) >= right(a, b) ? 1 : 0);
+        case '==':
+          return (a, b) => (left(a, b) === right(a, b) ? 1 : 0);
+        case '!=':
+          return (a, b) => (left(a, b) !== right(a, b) ? 1 : 0);
+        default: {
+          const op = node.operator;
+          return () => {
+            throw new Error(`Unknown operator: '${op}'`);
+          };
+        }
+      }
+    }
+
+    case 'UnaryOp': {
+      const operand = compileNode(node.operand, angleUnit);
+      if (node.operator === '-') return (a, b) => -operand(a, b);
+      return operand;
+    }
+
+    case 'FunctionCall': {
+      const fn = FUNCTIONS[node.name];
+      if (!fn) return unknownFunction(node.name);
+      const argFn = compileNode(node.arg, angleUnit);
+      const isTrig = TRIG_FUNCTIONS.has(node.name);
+      const isInvTrig = INVERSE_TRIG_FUNCTIONS.has(node.name);
+      const toDeg = angleUnit === 'deg';
+      return (a, b) => {
+        let arg = argFn(a, b);
+        if (isTrig && toDeg) arg = (arg * Math.PI) / 180;
+        const result = fn(arg);
+        if (isInvTrig && toDeg) return (result * 180) / Math.PI;
+        return result;
+      };
+    }
+
+    case 'FunctionCallMultiArg': {
+      const mfn = MULTI_ARG_FUNCTIONS[node.name];
+      if (mfn) {
+        const argFns = node.args.map((arg) => compileNode(arg, angleUnit));
+        const isAtan2Deg = node.name === 'atan2' && angleUnit === 'deg';
+        return (a, b) => {
+          const result = mfn(...argFns.map((f) => f(a, b)));
+          return isAtan2Deg ? (result * 180) / Math.PI : result;
+        };
+      }
+      const tfn = TWO_ARG_FUNCTIONS[node.name];
+      if (tfn) {
+        const f0 = compileNode(node.args[0], angleUnit);
+        const f1 = compileNode(node.args[1], angleUnit);
+        return (a, b) => tfn(f0(a, b), f1(a, b));
+      }
+      return unknownFunction(node.name);
+    }
+
+    case 'PoweredFunctionCall': {
+      const fn = FUNCTIONS[node.name];
+      if (!fn) return unknownFunction(node.name);
+      const argFn = compileNode(node.arg, angleUnit);
+      const powerFn = compileNode(node.power, angleUnit);
+      const isTrig = TRIG_FUNCTIONS.has(node.name);
+      const isInvTrig = INVERSE_TRIG_FUNCTIONS.has(node.name);
+      const toDeg = angleUnit === 'deg';
+      return (a, b) => {
+        let arg = argFn(a, b);
+        if (isTrig && toDeg) arg = (arg * Math.PI) / 180;
+        const result = fn(arg);
+        const power = powerFn(a, b);
+        if (isInvTrig && toDeg) return signedRealPow((result * 180) / Math.PI, power);
+        return signedRealPow(result, power);
+      };
+    }
+  }
+}
+
+/**
+ * Compiles `ast` into a reusable `(a, b) => number` closure tree, cached on
+ * the AST node itself (and on `angleUnit`, since trig functions bake in the
+ * deg/rad conversion at compile time). Call this once per expression edit —
+ * not per sample — and reuse the returned function across an entire render.
+ */
+export function compileExpression(
+  ast: ExpressionNode,
+  angleUnit: 'rad' | 'deg' = 'rad',
+): CompiledExpr {
+  let entry = compileCache.get(ast);
+  if (!entry) {
+    entry = {};
+    compileCache.set(ast, entry);
+  }
+  const cached = angleUnit === 'deg' ? entry.deg : entry.rad;
+  if (cached) return cached;
+  const fn = compileNode(ast, angleUnit);
+  if (angleUnit === 'deg') entry.deg = fn;
+  else entry.rad = fn;
+  return fn;
+}
+
 export function evalExpression(
   rawOrAst: string | ExpressionNode,
   x: number,

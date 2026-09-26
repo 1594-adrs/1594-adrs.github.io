@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evalConstantExpression, evalExpression, evaluate } from './evaluator';
+import { compileExpression, evalConstantExpression, evalExpression, evaluate } from './evaluator';
 import { parse, type PoweredFunctionCall } from './parser';
 
 describe('evalConstantExpression', () => {
@@ -344,5 +344,75 @@ describe('evalConstantExpression', () => {
     it('lowercase e still means Euler constant: 2e-3 = 2*e - 3', () => {
       expect(evalConstantExpression('2e-3')).toBeCloseTo(2 * Math.E - 3, 10);
     });
+  });
+});
+
+describe('compileExpression', () => {
+  /** Table of (expr, x, y) samples whose compiled result must match evalExpression's,
+   *  in both angle units, across the domain-error / division-by-zero / real-odd-root cases. */
+  const cases: Array<{ expr: string; x: number; y?: number }> = [
+    { expr: 'x + y', x: 3, y: 4 },
+    { expr: 'x * y - 2', x: 2, y: 5 },
+    { expr: 'x^2 + y^2 - 1', x: 0.6, y: 0.8 },
+    { expr: 'sin(x)', x: Math.PI / 2 },
+    { expr: 'cos(x) + tan(x)', x: 1.2 },
+    { expr: 'sqrt(-1)', x: 0 },
+    { expr: '(-8)^(1/3)', x: 0 },
+    { expr: 'x^(1/3)', x: -8 },
+    { expr: 'x^(2/3)', x: -8 },
+    { expr: 'root(3, -27)', x: 0 },
+    { expr: '1/0', x: 0 },
+    { expr: '0/0', x: 0 },
+    { expr: 'ln(-1)', x: 0 },
+    { expr: 'log(0)', x: 0 },
+    { expr: 'sec(pi/2)', x: 0 },
+    { expr: 'min(x, y)', x: 3, y: 1 },
+    { expr: 'mod(x, 3)', x: -1 },
+    { expr: 'logb(2, x)', x: 8 },
+    { expr: 'ncr(5, 2)', x: 0 },
+    { expr: 'factorial(x)', x: 5 },
+    { expr: 'asin(x)', x: 2 },
+    { expr: 'cos(x)^(1/3)', x: Math.PI },
+  ];
+
+  for (const angleUnit of ['rad', 'deg'] as const) {
+    describe(`parity with evalExpression (${angleUnit})`, () => {
+      for (const { expr, x, y } of cases) {
+        it(`${expr} at x=${x}${y !== undefined ? `, y=${y}` : ''}`, () => {
+          const ast = parse(expr);
+          const compiled = compileExpression(ast, angleUnit);
+          const expected = evalExpression(ast, x, y, angleUnit);
+          const actual = compiled(x, y ?? 0);
+          if (Number.isNaN(expected)) {
+            expect(actual).toBeNaN();
+          } else {
+            expect(actual).toBe(expected);
+          }
+        });
+      }
+    });
+  }
+
+  it('caches the compiled function per (ast, angleUnit)', () => {
+    const ast = parse('x^2 + 1');
+    const a = compileExpression(ast, 'rad');
+    const b = compileExpression(ast, 'rad');
+    const c = compileExpression(ast, 'deg');
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+  });
+
+  it('maps t the same as x (parametric curves bind both to the same value)', () => {
+    const ast = parse('t^2');
+    const compiled = compileExpression(ast, 'rad');
+    expect(compiled(3, 0)).toBe(9);
+  });
+
+  it('trig respects angle unit like evalExpression', () => {
+    const ast = parse('sin(x)');
+    const rad = compileExpression(ast, 'rad');
+    const deg = compileExpression(ast, 'deg');
+    expect(rad(Math.PI / 2, 0)).toBeCloseTo(1, 10);
+    expect(deg(90, 0)).toBeCloseTo(1, 10);
   });
 });

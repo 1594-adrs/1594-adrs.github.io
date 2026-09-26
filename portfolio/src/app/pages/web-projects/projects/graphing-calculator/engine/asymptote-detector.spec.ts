@@ -168,4 +168,24 @@ describe('detectAsymptotes memoization', () => {
     expect(second).not.toBe(first);
     expect(second).toEqual(first);
   });
+
+  it('re-detects at full resolution after zooming far in, instead of reusing a stale coarse result', () => {
+    // 1/(x - 500.5): at the wide [-1000, 1000] request, the padded sweep samples on
+    // whole-integer x (padXMin = -1000 - 3000 = -4000, step = 1), so the two samples
+    // straddling the pole (500 and 501) each land exactly 0.5 away from it — giving
+    // |f| = 2 on both sides with a sign change but no >100 jump, which detectVertical
+    // doesn't treat as a pole. The wide call is expected to miss it.
+    const c = 500.5;
+    const fn = (x: number) => 1 / (x - c);
+    const ast = parse('1/(x-500.5)');
+
+    const wide = detectAsymptotes(fn, -1000, 1000, ast);
+    expect(wide.some((a) => a.type === 'vertical' && Math.abs(a.value - c) < 0.5)).toBe(false);
+
+    // Zooming into a tight window around the pole shrinks the requested range to well
+    // under 1/3 of the range the cached (coarse) result was computed for, so it must
+    // be recomputed at full density rather than just filtering the stale wide result.
+    const tight = detectAsymptotes(fn, 500, 501, ast);
+    expect(tight.some((a) => a.type === 'vertical' && Math.abs(a.value - c) < 0.01)).toBe(true);
+  });
 });

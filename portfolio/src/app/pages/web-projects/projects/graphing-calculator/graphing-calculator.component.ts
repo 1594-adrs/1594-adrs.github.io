@@ -34,13 +34,20 @@ import {
   drawExplicitY,
 } from './canvas/graph-renderer';
 import { drawImplicitCurve } from './canvas/implicit-renderer';
+import { drawConicCurve } from './canvas/conic-renderer';
 import { solveConicForY } from './engine/conic-solver';
-import { detectConicDomain } from './engine/conic-detector';
+import { detectConic, detectConicDomain } from './engine/conic-detector';
+import type { ConicInfo } from './engine/conic-detector';
 import { detectAsymptotes } from './engine/asymptote-detector';
 import { drawSolidRegion } from './canvas/solid-region-renderer';
 import { parse } from './engine/parser';
 import type { ExpressionNode } from './engine/parser';
-import { evalExpression, evaluate, evalConstantExpression } from './engine/evaluator';
+import {
+  evalExpression,
+  evaluate,
+  evalConstantExpression,
+  compileExpression,
+} from './engine/evaluator';
 import { integrateAdaptive } from './engine/quadrature';
 import { areaSingle } from './engine/calculus';
 import { findIntersections } from './engine/intersection-finder';
@@ -268,6 +275,80 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private touchAnchor: { x: number; y: number } | null = null;
   private touchPanEngaged = false;
 
+  /** Canvas size in CSS px (logical drawing space — what Viewport/renderers use) and
+   *  its bounding rect, cached by `measureCanvas()` (the ResizeObserver callback and
+   *  gesture starts) instead of re-measured on every pointer event/frame. */
+  private cssWidth = 0;
+  private cssHeight = 0;
+  private cachedRect: DOMRect | null = null;
+  /** Backing-store scale for crisp rendering on high-DPI screens; capped at 2x. */
+  private dpr = 1;
+  /** True while a pan/zoom/touch gesture is in progress — implicit curves and
+   *  point-of-interest keys use a coarser grid / skip work while this is set,
+   *  and settle to full detail once the gesture ends. */
+  private gestureActive = false;
+
+  /** Re-reads the canvas's CSS size, device-pixel ratio and bounding rect. Called from
+   *  the ResizeObserver and at the start of a drag/touch gesture — not per event/frame. */
+  private measureCanvas(): void {
+    const canvas = this.canvasRef()?.nativeElement;
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    const parentWidth = parent?.clientWidth ?? 0;
+    const parentHeight = parent?.clientHeight ?? 0;
+    // Falls back to the canvas element's own (attribute) size when the parent hasn't
+    // been laid out yet — e.g. jsdom in unit tests, which never computes real layout
+    // and leaves clientWidth/clientHeight at 0, so tests size against the canvas's
+    // default 300x150 the same way the pre-DPR-aware code implicitly did.
+    this.cssWidth = parentWidth > 0 ? parentWidth : canvas.width || 300;
+    this.cssHeight = parentHeight > 0 ? parentHeight : canvas.height || 150;
+    this.cachedRect = canvas.getBoundingClientRect();
+    this.dpr =
+      typeof devicePixelRatio !== 'undefined' && devicePixelRatio > 0
+        ? Math.min(2, devicePixelRatio)
+        : 1;
+  }
+
+  private getCanvasRect(canvas: HTMLCanvasElement): DOMRect {
+    if (!this.cachedRect) this.cachedRect = canvas.getBoundingClientRect();
+    return this.cachedRect;
+  }
+
+  private canvasListenerController: AbortController | null = null;
+
+  /** Attaches the canvas's pointer/wheel/touch handlers via addEventListener instead of
+   *  template bindings, with `{ passive: false }` on wheel/touch (they call
+   *  preventDefault to stop page scroll/zoom during a graph gesture) — a template
+   *  binding can't express that. All listeners share one AbortController, removed in
+   *  `ngOnDestroy`. */
+  private attachCanvasListeners(canvas: HTMLCanvasElement): void {
+    this.canvasListenerController = new AbortController();
+    const { signal } = this.canvasListenerController;
+
+    canvas.addEventListener('mousemove', (e) => this.onCanvasMouseMove(e), { signal });
+    canvas.addEventListener('mouseleave', () => this.onCanvasMouseLeave(), { signal });
+    canvas.addEventListener('wheel', (e) => this.onCanvasWheel(e), { passive: false, signal });
+    canvas.addEventListener('mousedown', (e) => this.onCanvasMouseDown(e), { signal });
+    canvas.addEventListener('mouseup', () => this.onCanvasMouseUp(), { signal });
+    canvas.addEventListener('click', (e) => this.onCanvasClick(e), { signal });
+    canvas.addEventListener('touchstart', (e) => this.onCanvasTouchStart(e), {
+      passive: false,
+      signal,
+    });
+    canvas.addEventListener('touchmove', (e) => this.onCanvasTouchMove(e), {
+      passive: false,
+      signal,
+    });
+    canvas.addEventListener('touchend', (e) => this.onCanvasTouchEnd(e), {
+      passive: false,
+      signal,
+    });
+    canvas.addEventListener('touchcancel', (e) => this.onCanvasTouchEnd(e), {
+      passive: false,
+      signal,
+    });
+  }
+
   private requestRender(): void {
     if (this.renderRequested) return;
     this.renderRequested = true;
@@ -280,6 +361,68 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** An evaluator closure for one "area between curves" function: an explicit curve
+   *  evaluates its compiled AST directly, an implicit conic uses its first solved
+   *  y-branch (matching `solveConicForY`, since `evalExpression`/`evaluate` don't
+   *  understand a raw `lhs = rhs` equation AST — evaluating one throws). */
+  private buildAreaEvalFn(
+    f: MathExpression & { ast: ExpressionNode },
+    au: 'rad' | 'deg',
+  ): (x: number) => number {
+    if (f.mode === 'explicit') {
+      const compiled = compileExpression(f.ast, au);
+      return (x) => compiled(x, 0);
+    }
+    const branches = solveConicForY(f.ast);
+    if (branches && branches.length > 0) {
+      const branchFn = branches[0].fn;
+      return (x) => branchFn(x) ?? NaN;
+    }
+    const compiled = compileExpression(f.ast, au);
+    return (x) => compiled(x, 0);
+  }
+
+  /** The "area between curves" tool's geometry (evaluator closures, intersections,
+   *  regions) — entirely viewport-independent, so it's memoized here rather than
+   *  recomputed on every pan/zoom render frame; `render()` only maps it to screen
+   *  coordinates each frame. */
+  private multiAreaGeometry = computed(() => {
+    const mArea = this.activeMultiArea();
+    if (!mArea) return null;
+    const au = this.angleUnit();
+
+    if (mArea.functionIndices.length >= 2) {
+      const fns = mArea.functionIndices
+        .map((i) => this.functions()[i])
+        .filter(
+          (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
+            !!e?.ast && e.visible && this.canUseWithTools(e),
+        );
+      if (fns.length < 2) return null;
+      const evalFns = fns.map((f) => this.buildAreaEvalFn(f, au));
+      const intersections = findIntersections(evalFns, mArea.a, mArea.b);
+      const regions = computeAreaRegions(evalFns, intersections, mArea.a, mArea.b);
+      return {
+        mode: 'multi' as const,
+        fns,
+        evalFns,
+        intersections,
+        regions,
+        a: mArea.a,
+        b: mArea.b,
+      };
+    }
+
+    if (mArea.functionIndices.length === 1) {
+      const expr = this.functions()[mArea.functionIndices[0]];
+      if (!expr?.ast || !expr.visible || !this.canUseWithTools(expr)) return null;
+      const fn = this.buildAreaEvalFn(expr as MathExpression & { ast: ExpressionNode }, au);
+      return { mode: 'single' as const, expr, fn, a: mArea.a, b: mArea.b };
+    }
+
+    return null;
+  });
+
   results = computed<IntegralResult[]>(() => {
     const res: IntegralResult[] = [];
     const au = this.angleUnit();
@@ -287,7 +430,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
       if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
-        const fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
+        const compiled = compileExpression(expr.ast, au);
+        const fn = (x: number) => compiled(x, 0);
         const result = integrateAdaptive(fn, intg.a, intg.b);
         const value =
           result.status === 'divergent'
@@ -301,51 +445,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     // Solid-of-revolution / cross-section results are shown inline by <app-solid-panel>
     // (via SolidToolState), not duplicated in this footer.
 
-    const mArea = this.activeMultiArea();
-    if (mArea && mArea.functionIndices.length >= 2) {
-      const fns = mArea.functionIndices
-        .map((i) => this.functions()[i])
-        .filter(
-          (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
-            !!e?.ast && e.visible && this.canUseWithTools(e),
-        );
-      if (fns.length >= 2) {
-        const evalFns = fns.map((f) => {
-          if (f.mode === 'explicit') {
-            return (x: number) => evalExpression(f.ast, x, undefined, au);
-          }
-          const branches = solveConicForY(f.ast);
-          if (branches && branches.length > 0) {
-            const branchFn = branches[0].fn;
-            return (x: number) => branchFn(x) ?? NaN;
-          }
-          return (x: number) => evalExpression(f.ast, x, undefined, au);
-        });
-        const intersections = findIntersections(evalFns, mArea.a, mArea.b);
-        const regions = computeAreaRegions(evalFns, intersections, mArea.a, mArea.b);
-        let total = 0;
-        for (const r of regions) total += r.area;
-        const labels = fns.map((f) => f.raw).join(', ');
-        res.push({ label: `A [${labels}]`, value: formatValue(total) });
-      }
-    } else if (mArea && mArea.functionIndices.length === 1) {
-      const expr = this.functions()[mArea.functionIndices[0]];
-      if (expr?.ast && expr.visible && this.canUseWithTools(expr)) {
-        let fn: (x: number) => number;
-        if (expr.mode === 'explicit') {
-          fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
-        } else {
-          const branches = solveConicForY(expr.ast!);
-          if (branches && branches.length > 0) {
-            const branchFn = branches[0].fn;
-            fn = (x: number) => branchFn(x) ?? NaN;
-          } else {
-            fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
-          }
-        }
-        const value = areaSingle(fn, mArea.a, mArea.b);
-        res.push({ label: `A [${expr.raw}]`, value: formatValue(value) });
-      }
+    const geom = this.multiAreaGeometry();
+    if (geom?.mode === 'multi') {
+      let total = 0;
+      for (const r of geom.regions) total += r.area;
+      const labels = geom.fns.map((f) => f.raw).join(', ');
+      res.push({ label: `A [${labels}]`, value: formatValue(total) });
+    } else if (geom?.mode === 'single') {
+      const value = areaSingle(geom.fn, geom.a, geom.b);
+      res.push({ label: `A [${geom.expr.raw}]`, value: formatValue(value) });
     }
 
     return res;
@@ -393,11 +501,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       if (typeof ResizeObserver !== 'undefined') {
-        this.resizeObserver = new ResizeObserver(() => this.requestRender());
+        this.resizeObserver = new ResizeObserver(() => {
+          this.measureCanvas();
+          this.requestRender();
+        });
         if (canvas.parentElement) {
           this.resizeObserver.observe(canvas.parentElement);
         }
       }
+      this.measureCanvas();
+      this.attachCanvasListeners(canvas);
       this.parseAll();
       this.render();
     });
@@ -405,6 +518,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    this.canvasListenerController?.abort();
     if (this.isBrowser) {
       cancelAnimationFrame(this.animFrameId);
       for (const id of this.pendingRafIds) cancelAnimationFrame(id);
@@ -421,6 +535,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.shareNoticeTimerId !== null) {
       clearTimeout(this.shareNoticeTimerId);
       this.shareNoticeTimerId = null;
+    }
+    if (this.wheelIdleTimerId !== null) {
+      clearTimeout(this.wheelIdleTimerId);
+      this.wheelIdleTimerId = null;
     }
   }
 
@@ -871,7 +989,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   onCanvasMouseMove(event: MouseEvent): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const rect = this.getCanvasRect(canvas);
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     this.mousePos.set({ x, y });
@@ -881,7 +999,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (last) {
         const dx = x - last.x;
         const dy = y - last.y;
-        this.viewport.pan(dx, dy, canvas.width, canvas.height);
+        this.viewport.pan(dx, dy, this.cssWidth, this.cssHeight);
       }
       this.lastDrag.set({ x, y });
     }
@@ -894,20 +1012,36 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.requestRender();
   }
 
+  private wheelIdleTimerId: ReturnType<typeof setTimeout> | null = null;
+
   onCanvasWheel(event: WheelEvent): void {
     event.preventDefault();
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const rect = this.getCanvasRect(canvas);
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
-    this.viewport.zoom(factor, x, y, canvas.width, canvas.height);
+    this.viewport.zoom(factor, x, y, this.cssWidth, this.cssHeight);
+
+    // A wheel/trackpad zoom fires many events in quick succession; treat it as one
+    // gesture (coarser implicit-curve grid, no POI recompute) until it's quiet.
+    this.gestureActive = true;
+    if (this.wheelIdleTimerId !== null) clearTimeout(this.wheelIdleTimerId);
+    this.wheelIdleTimerId = setTimeout(() => {
+      this.wheelIdleTimerId = null;
+      this.gestureActive = false;
+      this.requestRender();
+    }, 150);
+
     this.requestRender();
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
     if (event.button !== 0) return;
+    const canvas = this.canvasRef()?.nativeElement;
+    if (canvas) this.cachedRect = canvas.getBoundingClientRect();
+    this.gestureActive = true;
     this.isDragging.set(true);
     this.lastDrag.set(null);
   }
@@ -915,6 +1049,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   onCanvasMouseUp(): void {
     this.isDragging.set(false);
     this.lastDrag.set(null);
+    this.gestureActive = false;
+    this.requestRender();
   }
 
   /** Pins/unpins the nearest point of interest to a click/tap, within a wider hit
@@ -926,7 +1062,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const points = this.interactionState.pointsOfInterest();
     if (points.length === 0) return;
 
-    const rect = canvas.getBoundingClientRect();
+    const rect = this.getCanvasRect(canvas);
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -934,7 +1070,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     let best: { point: PointOfInterest; distance: number } | null = null;
     for (const p of points) {
-      const [sx, sy] = this.viewport.worldToScreen(p.x, p.y, canvas.width, canvas.height);
+      const [sx, sy] = this.viewport.worldToScreen(p.x, p.y, this.cssWidth, this.cssHeight);
       const distance = Math.hypot(sx - x, sy - y);
       if (distance <= hitRadius && (!best || distance < best.distance)) {
         best = { point: p, distance };
@@ -954,29 +1090,35 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     switch (event.key) {
       case '+':
       case '=':
-        this.viewport.zoom(1.15, canvas.width / 2, canvas.height / 2, canvas.width, canvas.height);
+        this.viewport.zoom(
+          1.15,
+          this.cssWidth / 2,
+          this.cssHeight / 2,
+          this.cssWidth,
+          this.cssHeight,
+        );
         break;
       case '-':
       case '_':
         this.viewport.zoom(
           1 / 1.15,
-          canvas.width / 2,
-          canvas.height / 2,
-          canvas.width,
-          canvas.height,
+          this.cssWidth / 2,
+          this.cssHeight / 2,
+          this.cssWidth,
+          this.cssHeight,
         );
         break;
       case 'ArrowLeft':
-        this.viewport.pan(PAN_STEP, 0, canvas.width, canvas.height);
+        this.viewport.pan(PAN_STEP, 0, this.cssWidth, this.cssHeight);
         break;
       case 'ArrowRight':
-        this.viewport.pan(-PAN_STEP, 0, canvas.width, canvas.height);
+        this.viewport.pan(-PAN_STEP, 0, this.cssWidth, this.cssHeight);
         break;
       case 'ArrowUp':
-        this.viewport.pan(0, PAN_STEP, canvas.width, canvas.height);
+        this.viewport.pan(0, PAN_STEP, this.cssWidth, this.cssHeight);
         break;
       case 'ArrowDown':
-        this.viewport.pan(0, -PAN_STEP, canvas.width, canvas.height);
+        this.viewport.pan(0, -PAN_STEP, this.cssWidth, this.cssHeight);
         break;
       case 'r':
       case 'R':
@@ -1019,10 +1161,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     event.preventDefault();
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
+    this.cachedRect = canvas.getBoundingClientRect();
+    this.gestureActive = true;
 
     if (event.touches.length === 1) {
       const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
+      const rect = this.cachedRect;
       const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
       this.touchAnchor = { x, y };
@@ -1047,7 +1191,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     if (event.touches.length === 1) {
       const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
+      const rect = this.getCanvasRect(canvas);
       const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
 
@@ -1066,7 +1210,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (last) {
           const dx = x - last.x;
           const dy = y - last.y;
-          this.viewport.pan(dx, dy, canvas.width, canvas.height);
+          this.viewport.pan(dx, dy, this.cssWidth, this.cssHeight);
         }
       }
       this.lastDrag.set({ x, y });
@@ -1084,11 +1228,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const factor = currentDist / lastDist;
         const centerX = (touch1.clientX + touch2.clientX) / 2;
         const centerY = (touch1.clientY + touch2.clientY) / 2;
-        const rect = canvas.getBoundingClientRect();
+        const rect = this.getCanvasRect(canvas);
         const cx = centerX - rect.left;
         const cy = centerY - rect.top;
         if (factor > 1.01 || factor < 0.99) {
-          this.viewport.zoom(factor, cx, cy, canvas.width, canvas.height);
+          this.viewport.zoom(factor, cx, cy, this.cssWidth, this.cssHeight);
           this.requestRender();
         }
       }
@@ -1103,12 +1247,13 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.touchAnchor = null;
       this.touchPanEngaged = false;
       this.mousePos.set(null);
+      this.gestureActive = false;
       this.requestRender();
     } else if (event.touches.length === 1) {
       const canvas = this.canvasRef()?.nativeElement;
       if (canvas) {
         const touch = event.touches[0];
-        const rect = canvas.getBoundingClientRect();
+        const rect = this.getCanvasRect(canvas);
         const x = touch.clientX - rect.left;
         const y = touch.clientY - rect.top;
         this.lastDrag.set({ x, y });
@@ -1124,14 +1269,20 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   zoomIn(): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
-    this.viewport.zoom(1.3, canvas.width / 2, canvas.height / 2, canvas.width, canvas.height);
+    this.viewport.zoom(1.3, this.cssWidth / 2, this.cssHeight / 2, this.cssWidth, this.cssHeight);
     this.requestRender();
   }
 
   zoomOut(): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
-    this.viewport.zoom(1 / 1.3, canvas.width / 2, canvas.height / 2, canvas.width, canvas.height);
+    this.viewport.zoom(
+      1 / 1.3,
+      this.cssWidth / 2,
+      this.cssHeight / 2,
+      this.cssWidth,
+      this.cssHeight,
+    );
     this.requestRender();
   }
 
@@ -1575,25 +1726,28 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     );
   }
 
-  /** Visible explicit / x=g(y) curves, as evaluator closures, for the trace search. */
+  /** Visible explicit / x=g(y) curves, as compiled evaluator closures (built once per
+   *  (ast, angle unit) and reused — see `compileExpression`), for the trace search. */
   private buildTraceCurves(): TraceCurve[] {
     const au = this.angleUnit();
     const curves: TraceCurve[] = [];
     this.functions().forEach((fn, index) => {
       if (!fn.visible || !fn.ast) return;
       if (fn.mode === 'explicit') {
+        const compiled = compileExpression(fn.ast, au);
         curves.push({
           index,
           color: fn.color,
           mode: 'explicit',
-          fn: (x: number) => evalExpression(fn.ast!, x, undefined, au),
+          fn: (x: number) => compiled(x, 0),
         });
       } else if (fn.mode === 'explicit-y') {
+        const compiled = compileExpression(fn.ast, au);
         curves.push({
           index,
           color: fn.color,
           mode: 'explicit-y',
-          fn: (y: number) => evaluate(fn.ast!, { y }, au),
+          fn: (y: number) => compiled(0, y),
         });
       }
     });
@@ -1606,9 +1760,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const curves: NamedCurve[] = [];
     this.functions().forEach((fn, index) => {
       if (!fn.visible || !fn.ast || fn.mode !== 'explicit') return;
+      const compiled = compileExpression(fn.ast, au);
       curves.push({
         label: `f${index + 1}`,
-        fn: (x: number) => evalExpression(fn.ast!, x, undefined, au),
+        fn: (x: number) => compiled(x, 0),
       });
     });
     return curves;
@@ -1623,8 +1778,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   /** Recomputes points of interest at most once per POI_RECOMPUTE_DELAY_MS, so panning
-   *  or zooming doesn't re-run root/extrema/intersection search every frame. */
+   *  or zooming doesn't re-run root/extrema/intersection search every frame. Skipped
+   *  entirely while a gesture is active — not just debounced — so the key string
+   *  itself isn't rebuilt every drag frame; the trailing recompute runs once the
+   *  gesture ends (mouseup/touchend/wheel-idle already trigger a render). */
   private schedulePoiRecompute(): void {
+    if (this.gestureActive) return;
     if (this.poiComputeKey() === this.poiKey) return;
     if (this.poiTimer !== null) return;
     this.poiTimer = setTimeout(() => {
@@ -1644,25 +1803,57 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.interactionState.setPoints(points);
   }
 
+  /** Parsed once per edit (keyed by the MathExpression object itself, which
+   *  `updateExpression` only replaces for the row actually being edited) instead of
+   *  re-splitting/re-parsing `"(lhs)-(rhs)"` from the raw text on every render frame. */
+  private implicitDiffAstCache = new WeakMap<MathExpression, ExpressionNode>();
+
+  /** `detectConic` is viewport-independent (only depends on the AST), so it's cached
+   *  per-AST here instead of re-run on every render frame for every implicit function. */
+  private conicInfoCache = new WeakMap<ExpressionNode, ConicInfo | null>();
+
+  private getConicInfo(ast: ExpressionNode): ConicInfo | null {
+    if (this.conicInfoCache.has(ast)) return this.conicInfoCache.get(ast) ?? null;
+    const info = detectConic(ast);
+    this.conicInfoCache.set(ast, info);
+    return info;
+  }
+
+  private getImplicitDiffAst(fn: MathExpression): ExpressionNode | null {
+    const cached = this.implicitDiffAstCache.get(fn);
+    if (cached) return cached;
+    const parts = fn.raw.split('=');
+    if (parts.length !== 2) return null;
+    try {
+      const expr = parse(`(${parts[0].trim()})-(${parts[1].trim()})`);
+      this.implicitDiffAstCache.set(fn, expr);
+      return expr;
+    } catch {
+      return null;
+    }
+  }
+
   private render(): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const parent = canvas.parentElement;
-    if (parent) {
-      const targetWidth = parent.clientWidth;
-      const targetHeight = parent.clientHeight;
-      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-      }
+    // Backing store is sized in device pixels (capped at 2x) for crisp rendering on
+    // high-DPI screens; every draw call below still works in CSS px (`w`/`h`), matching
+    // mouse/touch coordinates — ctx.setTransform bridges the two.
+    const targetWidth = Math.max(1, Math.round(this.cssWidth * this.dpr));
+    const targetHeight = Math.max(1, Math.round(this.cssHeight * this.dpr));
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
     }
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-    const w = canvas.width;
-    const h = canvas.height;
+    const w = this.cssWidth;
+    const h = this.cssHeight;
     const au = this.angleUnit();
+    const coarse = this.gestureActive;
 
     if (this.showGrid()) {
       drawGrid(ctx, this.viewport, w, h);
@@ -1676,49 +1867,62 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (!fn.visible || !fn.raw) continue;
       if (fn.mode === 'implicit') {
         if (fn.inequalityOp && fn.ast) {
+          const compiled = compileExpression(fn.ast, au);
           const isExplicit = /^\s*y\s*(>=|<=|>|<)/i.test(fn.raw);
           if (isExplicit) {
-            const evalFn = (x: number) => evalExpression(fn.ast!, x, undefined, au);
+            const evalFn = (x: number) => compiled(x, 0);
             drawInequality(ctx, this.viewport, evalFn, fn.inequalityOp, fn.color, w, h);
           } else {
-            const evalFn = (x: number, y: number) => evalExpression(fn.ast!, x, y, au);
-            drawImplicitInequality(ctx, this.viewport, evalFn, fn.inequalityOp, fn.color, w, h);
+            drawImplicitInequality(
+              ctx,
+              this.viewport,
+              compiled,
+              fn.inequalityOp,
+              fn.color,
+              w,
+              h,
+              coarse,
+            );
           }
         } else {
           if (!fn.raw.includes('=')) continue;
-          const parts = fn.raw.split('=');
-          if (parts.length !== 2) continue;
-          const lhs = parts[0].trim();
-          const rhs = parts[1].trim();
-          const exprStr = `(${lhs})-(${rhs})`;
-          try {
-            const expr = parse(exprStr);
-            const evalFn = (x: number, y: number) => evalExpression(expr, x, y, au);
-            drawImplicitCurve(ctx, this.viewport, evalFn, fn.color, w, h);
-          } catch {
-            /* skip */
+          // A recognized conic (circle/ellipse/parabola/hyperbola) is drawn
+          // parametrically — ~300 points — instead of the marching-squares grid;
+          // `fn.ast` is already the raw `lhs = rhs` equation detectConic expects.
+          const conic = fn.ast ? this.getConicInfo(fn.ast) : null;
+          if (conic && drawConicCurve(ctx, this.viewport, conic, fn.color, w, h)) {
+            continue;
           }
+          const diffAst = this.getImplicitDiffAst(fn);
+          if (!diffAst) continue;
+          const compiled = compileExpression(diffAst, au);
+          drawImplicitCurve(ctx, this.viewport, compiled, fn.color, w, h, coarse);
         }
       } else if (fn.mode === 'parametric') {
         if (!fn.paramX || !fn.paramY) continue;
-        const evalX = (tVal: number) => evaluate(fn.paramX!, { x: tVal, t: tVal }, au);
-        const evalY = (tVal: number) => evaluate(fn.paramY!, { x: tVal, t: tVal }, au);
+        const compiledX = compileExpression(fn.paramX, au);
+        const compiledY = compileExpression(fn.paramY, au);
+        const evalX = (tVal: number) => compiledX(tVal, 0);
+        const evalY = (tVal: number) => compiledY(tVal, 0);
         const tMin = this.evalRange(fn.tMin, 0);
         const tMax = this.evalRange(fn.tMax, 2 * Math.PI);
         drawParametric(ctx, this.viewport, evalX, evalY, tMin, tMax, fn.color, w, h);
       } else if (fn.mode === 'polar') {
         if (!fn.ast) continue;
-        const evalR = (theta: number) => evalExpression(fn.ast!, theta, undefined, au);
+        const compiled = compileExpression(fn.ast, au);
+        const evalR = (theta: number) => compiled(theta, 0);
         const thetaMin = this.evalRange(fn.thetaMin, 0);
         const thetaMax = this.evalRange(fn.thetaMax, 2 * Math.PI);
         drawPolar(ctx, this.viewport, evalR, thetaMin, thetaMax, fn.color, w, h);
       } else if (fn.mode === 'explicit-y') {
         if (!fn.ast) continue;
-        const evalG = (y: number) => evaluate(fn.ast!, { y }, au);
+        const compiled = compileExpression(fn.ast, au);
+        const evalG = (y: number) => compiled(0, y);
         drawExplicitY(ctx, this.viewport, evalG, fn.color, w, h);
       } else {
         if (!fn.ast) continue;
-        const evalFn = (x: number) => evalExpression(fn.ast!, x, undefined, au);
+        const compiled = compileExpression(fn.ast, au);
+        const evalFn = (x: number) => compiled(x, 0);
         drawFunction(ctx, this.viewport, evalFn, fn.color, w, h, fn.ast);
         const asymptotes = detectAsymptotes(evalFn, this.viewport.xMin, this.viewport.xMax, fn.ast);
         for (const a of asymptotes) {
@@ -1731,53 +1935,45 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
       if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
-        const fn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
+        const compiled = compileExpression(expr.ast, au);
+        const fn = (x: number) => compiled(x, 0);
         drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, expr.color, w, h);
       }
     }
 
-    const mArea = this.activeMultiArea();
-    if (mArea && mArea.functionIndices.length >= 2) {
-      const fns = mArea.functionIndices
-        .map((i) => this.functions()[i])
-        .filter(
-          (e): e is MathExpression & { ast: NonNullable<MathExpression['ast']> } =>
-            !!e?.ast && e.visible && this.canUseWithTools(e),
-        );
-      if (fns.length >= 2) {
-        const evalFns = fns.map((f) => (x: number) => evalExpression(f.ast, x, undefined, au));
-        const intersections = findIntersections(evalFns, mArea.a, mArea.b);
-        const regions = computeAreaRegions(evalFns, intersections, mArea.a, mArea.b);
-
-        for (const region of regions) {
-          const topFn = evalFns[region.topFunctionIndex];
-          const bottomFn = evalFns[region.bottomFunctionIndex];
-          const topColor = fns[region.topFunctionIndex].color;
-          drawAreaBetween(ctx, this.viewport, topFn, bottomFn, region.a, region.b, topColor, w, h);
-        }
-
-        for (const pt of intersections) {
-          const [sx, sy] = this.viewport.worldToScreen(pt.x, pt.y, w, h);
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff40';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([3, 3]);
-          ctx.beginPath();
-          ctx.moveTo(sx, 0);
-          ctx.lineTo(sx, h);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
+    // Geometry (evaluator closures / intersections / regions) is memoized in
+    // `multiAreaGeometry` — viewport-independent, so it isn't recomputed here on
+    // every pan/zoom frame; this just maps it to the current screen coordinates.
+    // Also fixes a bug where an implicit conic's evalFn always went through
+    // `evalExpression` on the raw `lhs = rhs` AST (an unsupported operator, so it
+    // threw) instead of branching through `solveConicForY` like `buildAreaEvalFn` does.
+    const geom = this.multiAreaGeometry();
+    if (geom?.mode === 'multi') {
+      const { fns, evalFns, intersections, regions } = geom;
+      for (const region of regions) {
+        const topFn = evalFns[region.topFunctionIndex];
+        const bottomFn = evalFns[region.bottomFunctionIndex];
+        const topColor = fns[region.topFunctionIndex].color;
+        drawAreaBetween(ctx, this.viewport, topFn, bottomFn, region.a, region.b, topColor, w, h);
       }
-    } else if (mArea && mArea.functionIndices.length === 1) {
-      const expr = this.functions()[mArea.functionIndices[0]];
-      if (expr?.ast && expr.visible && this.canUseWithTools(expr)) {
-        const fn = (x: number) => evalExpression(expr.ast!, x);
-        drawIntegralArea(ctx, this.viewport, fn, mArea.a, mArea.b, expr.color, w, h);
+
+      for (const pt of intersections) {
+        const [sx, sy] = this.viewport.worldToScreen(pt.x, pt.y, w, h);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff40';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(sx, 0);
+        ctx.lineTo(sx, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
+    } else if (geom?.mode === 'single') {
+      drawIntegralArea(ctx, this.viewport, geom.fn, geom.a, geom.b, geom.expr.color, w, h);
     }
 
     if (this.showSolidTool()) {
@@ -1839,7 +2035,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (intgFn) {
           const expr = this.functions()[intgFn.fnIndex];
           if (expr?.ast && expr.visible) {
-            activeFn = (x: number) => evalExpression(expr.ast!, x, undefined, au);
+            const compiled = compileExpression(expr.ast, au);
+            activeFn = (x: number) => compiled(x, 0);
           }
         }
         drawCrosshair(ctx, this.viewport, mouse.x, mouse.y, activeFn, '#666680', w, h);
