@@ -2,7 +2,6 @@ import {
   Component,
   ChangeDetectionStrategy,
   output,
-  HostListener,
   ElementRef,
   inject,
   AfterViewInit,
@@ -12,6 +11,10 @@ import {
 @Component({
   selector: 'app-help-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(document:keydown.escape)': 'onEscapeKey()',
+    '(document:keydown.tab)': 'onTabKey($event)',
+  },
   template: `
     <div class="modal-backdrop" role="dialog" aria-modal="true" (click)="close.emit()">
       <div
@@ -52,6 +55,10 @@ import {
             <span class="key-hint">^</span><span>Power (e.g. x^2)</span>
             <span class="key-hint">()</span><span>Grouping</span>
           </div>
+          <p class="help-note">
+            x = g(y): switch a row's mode to "x" to plot a curve as x in terms of y (e.g. x=y^2);
+            integral/area/solid tools don't support these rows yet.
+          </p>
         </div>
 
         <div class="help-section">
@@ -172,12 +179,10 @@ export class HelpModalComponent implements AfterViewInit {
     }
   }
 
-  @HostListener('document:keydown.escape')
   onEscapeKey(): void {
     this.close.emit();
   }
 
-  @HostListener('document:keydown.tab', ['$event'])
   onTabKey(event: Event): void {
     const keyboardEvent = event as KeyboardEvent;
     const modal = this.el.nativeElement.querySelector('.modal-content') as HTMLElement | null;

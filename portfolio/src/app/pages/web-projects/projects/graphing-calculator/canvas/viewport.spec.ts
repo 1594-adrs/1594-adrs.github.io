@@ -145,4 +145,54 @@ describe('Viewport', () => {
       expect(viewport.yMax).toBe(7);
     });
   });
+
+  describe('equal axis scale', () => {
+    const unitsPerPx = (v: Viewport, w: number, h: number) => [
+      (v.xMax - v.xMin) / w,
+      (v.yMax - v.yMin) / h,
+    ];
+
+    it('fitAspect makes x and y units equal and still shows the whole region', () => {
+      const v = new Viewport(-10, 10, -7, 7);
+      v.fitAspect(390, 844); // tall phone canvas
+      const [ux, uy] = unitsPerPx(v, 390, 844);
+      expect(ux).toBeCloseTo(uy, 12);
+      expect(v.xMin).toBeLessThanOrEqual(-10);
+      expect(v.xMax).toBeGreaterThanOrEqual(10);
+      expect(v.yMin).toBeLessThanOrEqual(-7);
+      expect(v.yMax).toBeGreaterThanOrEqual(7);
+      expect((v.xMin + v.xMax) / 2).toBeCloseTo(0, 12);
+      expect((v.yMin + v.yMax) / 2).toBeCloseTo(0, 12);
+    });
+
+    it('fitAspect keeps an off-origin centre', () => {
+      const v = new Viewport(0, 4, 10, 12);
+      v.fitAspect(800, 600);
+      expect((v.xMin + v.xMax) / 2).toBeCloseTo(2, 12);
+      expect((v.yMin + v.yMax) / 2).toBeCloseTo(11, 12);
+      const [ux, uy] = unitsPerPx(v, 800, 600);
+      expect(ux).toBeCloseTo(uy, 12);
+    });
+
+    it('fitAspect ignores a zero-sized canvas', () => {
+      const v = new Viewport(-10, 10, -7, 7);
+      v.fitAspect(0, 500);
+      expect([v.xMin, v.xMax, v.yMin, v.yMax]).toEqual([-10, 10, -7, 7]);
+    });
+
+    it('keepScaleOnResize keeps centre and zoom level', () => {
+      const v = new Viewport(-10, 10, -7, 7);
+      v.fitAspect(1000, 700);
+      const [before] = unitsPerPx(v, 1000, 700);
+      v.keepScaleOnResize(1000, 500, 900);
+      const [ux, uy] = unitsPerPx(v, 500, 900);
+      expect(ux).toBeCloseTo(before, 12);
+      expect(uy).toBeCloseTo(before, 12);
+      expect((v.xMin + v.xMax) / 2).toBeCloseTo(0, 12);
+      // Growing back restores the original bounds (no cumulative zoom drift).
+      v.keepScaleOnResize(500, 1000, 700);
+      expect(v.xMin).toBeCloseTo(-10, 12);
+      expect(v.xMax).toBeCloseTo(10, 12);
+    });
+  });
 });

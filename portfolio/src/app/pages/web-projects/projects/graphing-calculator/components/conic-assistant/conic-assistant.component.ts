@@ -112,10 +112,10 @@ export class ConicAssistantComponent {
           { label: 'Area', value: `${(PI * p.a * p.a).toFixed(4)}` },
           { label: 'Circumference', value: `${(2 * PI * p.a).toFixed(4)}` },
           {
-            label: 'Rev. Volume (x-axis)',
+            label: 'Volume of revolution (x-axis)',
             value: `${((4 / 3) * PI * p.a * p.a * p.a).toFixed(4)}`,
           },
-          { label: 'Rev. Surface (x-axis)', value: `${(4 * PI * p.a * p.a).toFixed(4)}` },
+          { label: 'Surface of revolution (x-axis)', value: `${(4 * PI * p.a * p.a).toFixed(4)}` },
         ];
       case 'ellipse': {
         const c = Math.sqrt(Math.abs(p.a * p.a - p.b * p.b));
@@ -138,8 +138,8 @@ export class ConicAssistantComponent {
           { label: 'Focal dist (c)', value: `${c.toFixed(4)}` },
           { label: 'Eccentricity', value: `${ecc.toFixed(4)}` },
           { label: 'Area', value: `${(PI * p.a * p.b).toFixed(4)}` },
-          { label: 'Rev. Volume (x-axis)', value: revVol.toFixed(4) },
-          { label: 'Rev. Surface (x-axis)', value: revSA },
+          { label: 'Volume of revolution (x-axis)', value: revVol.toFixed(4) },
+          { label: 'Surface of revolution (x-axis)', value: revSA },
         ];
       }
       case 'parabola':

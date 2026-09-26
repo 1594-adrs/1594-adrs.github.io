@@ -51,7 +51,7 @@
             <div class="skills-grid">
               @for (category of skills; track category.title) {
                 <div class="skill-category">
-                  <h5 class="category-title">[{{ category.title }}]</h5>
+                  <h4 class="category-title">[{{ category.title }}]</h4>
                   <div class="skill-tags">
                     @for (skill of category.skills; track skill) {
                       <span class="skill-tag">{{ skill }}</span>
@@ -92,7 +92,7 @@
             <div class="education-list">
               @for (edu of education; track edu.degree) {
                 <div class="education-item">
-                  <h5 class="edu-degree">{{ edu.degree }}</h5>
+                  <h4 class="edu-degree">{{ edu.degree }}</h4>
                   <p class="edu-institution">{{ edu.institution }}</p>
                   <p class="edu-period">{{ edu.period }}</p>
                   <p class="edu-detail">{{ edu.detail }}</p>

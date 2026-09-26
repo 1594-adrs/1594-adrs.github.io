@@ -1,0 +1,272 @@
+import { describe, it, expect } from 'vitest';
+import { buildTerms } from './solid-formula';
+import { computePieces, sliceArea } from './solid-integrand';
+import { evaluate } from '../evaluator';
+import { parse } from '../parser';
+import type { SolidCurve, SolidSpec } from './solid.types';
+
+function symbolicCurve(expr: string, label: string): SolidCurve {
+  const ast = parse(expr);
+  return {
+    fn: (t: number) => evaluate(ast, { x: t, y: t }),
+    ast,
+    label,
+    color: '#000',
+  };
+}
+
+/** coefficient (or 1 if null) evaluated numerically. */
+function coeffValue(coefficient: SolidCurve['ast']): number {
+  return coefficient ? evaluate(coefficient, {}) : 1;
+}
+
+describe('buildTerms', () => {
+  it('builds one term per piece, matching sliceArea at the piece midpoint (disk, single curve)', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [symbolicCurve('x', 'f1')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const pieces = computePieces(spec);
+    const terms = buildTerms(spec, pieces);
+    const area = sliceArea(spec, pieces);
+
+    expect(terms).toHaveLength(1);
+    expect(terms[0].variable).toBe('x');
+    expect(terms[0].coefficient).toEqual({ type: 'Variable', name: 'π' });
+
+    const t = 0.5;
+    const fromTerm = coeffValue(terms[0].coefficient) * evaluate(terms[0].integrand, { x: t });
+    expect(fromTerm).toBeCloseTo(area(t), 10);
+  });
+
+  it('omits the r² term for a single curve (no baseline subtraction artefact)', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [symbolicCurve('x', 'f1')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const [term] = buildTerms(spec, computePieces(spec));
+    // (x - 0)^2 simplifies to x^2, not (x - 0)^2 - 0^2.
+    expect(term.integrand).toEqual({
+      type: 'BinaryOp',
+      operator: '^',
+      left: { type: 'Variable', name: 'x' },
+      right: { type: 'NumberLiteral', value: 2 },
+    });
+  });
+
+  it('omits the r² term for a single curve entirely below the axis (1/x on [-1,-0.1])', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [symbolicCurve('1/x', 'f1')],
+      a: -1,
+      b: -0.1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const pieces = computePieces(spec);
+    expect(pieces[0].upperIndex).toBeNull(); // baseline (y=0) is upper here
+    expect(pieces[0].lowerIndex).toBe(0); // curve (negative) is lower
+    const [term] = buildTerms(spec, pieces);
+    // (1/x)^2, not 0^2 - (1/x)^2: the baseline is the "near" radius regardless of
+    // whether it's the piece's upper or lower boundary, since it's always exactly
+    // at the axis (distance 0), so it must be the omitted one, never the curve.
+    expect(term.integrand).toEqual({
+      type: 'BinaryOp',
+      operator: '^',
+      left: {
+        type: 'BinaryOp',
+        operator: '/',
+        left: { type: 'NumberLiteral', value: 1 },
+        right: { type: 'Variable', name: 'x' },
+      },
+      right: { type: 'NumberLiteral', value: 2 },
+    });
+  });
+
+  it('simplifies "A - (-B)" to "A + B" instead of a double negative (cross-section width)', () => {
+    const spec: SolidSpec = {
+      method: 'cross-section',
+      variable: 'x',
+      curves: [symbolicCurve('sqrt(1-x^2)', 'f1'), symbolicCurve('-sqrt(1-x^2)', 'f2')],
+      a: -1,
+      b: 1,
+      shape: 'square',
+    };
+    const [term] = buildTerms(spec, computePieces(spec));
+    // width = upper - lower = sqrt(1-x^2) - (-sqrt(1-x^2)), which must render as a sum,
+    // never as "sqrt(1-x^2) - -(sqrt(1-x^2))".
+    expect(term.integrand).toMatchObject({
+      type: 'BinaryOp',
+      operator: '^',
+      left: { type: 'BinaryOp', operator: '+' },
+    });
+    const width = (term.integrand as { left: { operator: string } }).left;
+    expect(width.operator).toBe('+');
+  });
+
+  it('builds a washer term matching sliceArea (two curves)', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [symbolicCurve('x', 'f1'), symbolicCurve('x^2', 'f2')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const pieces = computePieces(spec);
+    const terms = buildTerms(spec, pieces);
+    const area = sliceArea(spec, pieces);
+
+    expect(terms).toHaveLength(1);
+    const t = 0.5;
+    const fromTerm = coeffValue(terms[0].coefficient) * evaluate(terms[0].integrand, { x: t });
+    expect(fromTerm).toBeCloseTo(area(t), 10);
+  });
+
+  it('builds two terms with swapped upper/lower after a crossing (spec 17 scenario)', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [symbolicCurve('x', 'f1'), symbolicCurve('x^2', 'f2')],
+      a: 0,
+      b: 2,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const pieces = computePieces(spec);
+    const terms = buildTerms(spec, pieces);
+    const area = sliceArea(spec, pieces);
+
+    expect(terms).toHaveLength(2);
+    for (const [i, term] of terms.entries()) {
+      const t = 0.5 * (pieces[i].a + pieces[i].b);
+      const fromTerm = coeffValue(term.coefficient) * evaluate(term.integrand, { x: t });
+      expect(fromTerm).toBeCloseTo(area(t), 8);
+    }
+  });
+
+  it('builds a shell term with coefficient 2π and the correct (t-k)/(k-t) sign', () => {
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [symbolicCurve('x^2', 'f1')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'vertical', value: 2 },
+    };
+    const pieces = computePieces(spec);
+    const [term] = buildTerms(spec, pieces);
+    const area = sliceArea(spec, pieces);
+
+    expect(term.coefficient).toEqual({
+      type: 'BinaryOp',
+      operator: '*',
+      left: { type: 'NumberLiteral', value: 2 },
+      right: { type: 'Variable', name: 'π' },
+    });
+
+    const t = 0.5;
+    const fromTerm = coeffValue(term.coefficient) * evaluate(term.integrand, { x: t });
+    expect(fromTerm).toBeCloseTo(area(t), 10);
+    // axis (k=2) is to the right of the whole domain [0,1], so the sign
+    // should be written as (k - t), not (t - k).
+    expect(term.integrand).toMatchObject({ type: 'BinaryOp', operator: '*' });
+  });
+
+  it('splits a shell term in two with opposite (t-k)/(k-t) orientation when k is inside (a,b)', () => {
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [symbolicCurve('x^2', 'f1')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0.5 },
+    };
+    const pieces = computePieces(spec);
+    const terms = buildTerms(spec, pieces);
+    const area = sliceArea(spec, pieces);
+
+    expect(pieces).toHaveLength(2);
+    expect(terms).toHaveLength(2);
+    // First half: mid < k, so the term is written (k - t); second half: (t - k).
+    expect(terms[0].integrand).toMatchObject({
+      type: 'BinaryOp',
+      operator: '*',
+      left: { type: 'BinaryOp', operator: '-', left: { type: 'NumberLiteral', value: 0.5 } },
+    });
+    expect(terms[1].integrand).toMatchObject({
+      type: 'BinaryOp',
+      operator: '*',
+      left: { type: 'BinaryOp', operator: '-', right: { type: 'NumberLiteral', value: 0.5 } },
+    });
+
+    for (const [i, term] of terms.entries()) {
+      const t = 0.5 * (pieces[i].a + pieces[i].b);
+      const fromTerm = coeffValue(term.coefficient) * evaluate(term.integrand, { x: t });
+      expect(fromTerm).toBeCloseTo(area(t), 8);
+    }
+  });
+
+  it('builds cross-section terms with the shape-specific coefficient', () => {
+    const base: Omit<SolidSpec, 'shape' | 'heightRatio'> = {
+      method: 'cross-section',
+      variable: 'x',
+      curves: [symbolicCurve('sqrt(1-x^2)', 'f1'), symbolicCurve('-sqrt(1-x^2)', 'f2')],
+      a: -1,
+      b: 1,
+    };
+
+    const cases: Array<{ shape: SolidSpec['shape']; heightRatio?: number; coeffValue: number }> = [
+      { shape: 'square', coeffValue: 1 },
+      { shape: 'rectangle', heightRatio: 3, coeffValue: 3 },
+      { shape: 'equilateral-triangle', coeffValue: Math.sqrt(3) / 4 },
+      { shape: 'right-isosceles-leg', coeffValue: 0.5 },
+      { shape: 'right-isosceles-hypotenuse', coeffValue: 0.25 },
+      { shape: 'semicircle', coeffValue: Math.PI / 8 },
+    ];
+
+    for (const c of cases) {
+      const spec: SolidSpec = { ...base, shape: c.shape, heightRatio: c.heightRatio };
+      const pieces = computePieces(spec);
+      const [term] = buildTerms(spec, pieces);
+      const area = sliceArea(spec, pieces);
+
+      if (c.coeffValue === 1) {
+        expect(term.coefficient).toBeNull();
+      }
+      const t = 0.3;
+      const fromTerm = coeffValue(term.coefficient) * evaluate(term.integrand, { x: t });
+      expect(fromTerm).toBeCloseTo(area(t), 8);
+      expect(coeffValue(term.coefficient)).toBeCloseTo(c.coeffValue, 10);
+    }
+  });
+
+  it('falls back to a function-call-like node when a curve has no AST', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [{ fn: (t) => t, ast: null, label: 'p₁', color: '#000' }],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const [term] = buildTerms(spec, computePieces(spec));
+    expect(term.integrand).toEqual({
+      type: 'BinaryOp',
+      operator: '^',
+      left: {
+        type: 'FunctionCall',
+        name: 'p₁',
+        arg: { type: 'Variable', name: 'x' },
+      },
+      right: { type: 'NumberLiteral', value: 2 },
+    });
+  });
+});

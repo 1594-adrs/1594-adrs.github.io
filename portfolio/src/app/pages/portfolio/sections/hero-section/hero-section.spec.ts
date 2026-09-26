@@ -19,7 +19,7 @@ describe('HeroSection', () => {
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.name')?.textContent).toContain('Andrés Rincón');
-    expect(compiled.querySelector('.role')?.textContent).toContain('Full Stack Developer');
+    expect(compiled.querySelector('.role')?.textContent).toContain('Software Developer');
   });
 
   it('should hide image on error', () => {

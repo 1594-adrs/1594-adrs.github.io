@@ -1,0 +1,208 @@
+<div class="solid-panel">
+  <fieldset class="method-group">
+    <legend class="range-label">method</legend>
+    @for (m of methods; track m) {
+      <label class="method-option" [class.selected]="state.method() === m">
+        <span class="method-option-head">
+          <input
+            type="radio"
+            name="solid-method"
+            [value]="m"
+            [checked]="state.method() === m"
+            (change)="state.setMethod(m)"
+          />
+          {{ m === 'disk-washer' ? 'Disk / Washer' : m === 'shell' ? 'Shell' : 'Cross-section' }}
+        </span>
+        <span class="method-guidance">{{ methodGuidance(m) }}</span>
+      </label>
+    }
+  </fieldset>
+
+  <div class="range-section curve-section">
+    <span class="range-label">curves (max 5)</span>
+    <div class="bounded-fn-selects">
+      @for (opt of state.curveOptions(); track opt.index) {
+        <label
+          class="range-field multi-fn-toggle"
+          [class.disabled]="!opt.compatible"
+          [title]="opt.reason"
+        >
+          <input
+            type="checkbox"
+            [checked]="opt.selected"
+            [disabled]="!opt.compatible"
+            (change)="state.toggleCurve(opt.index)"
+          />
+          <span class="color-swatch" [style.background]="opt.fn.color"></span>
+          f{{ opt.index + 1 }}
+        </label>
+      }
+    </div>
+    <p class="variable-readout">variable: d{{ state.variable() }}</p>
+    @if (state.fieldErrors().curves) {
+      <p class="field-error" role="alert">{{ state.fieldErrors().curves }}</p>
+    }
+  </div>
+
+  <div class="range-section">
+    <span class="range-label">bounds</span>
+    <div class="range-inputs">
+      <label class="range-field">
+        a =
+        <input
+          type="text"
+          [value]="state.aText()"
+          (input)="state.setA($any($event.target).value)"
+          [class.input-error]="!!state.fieldErrors().a"
+          [attr.aria-invalid]="state.fieldErrors().a ? true : null"
+          [attr.aria-describedby]="state.fieldErrors().a ? 'solid-a-error' : null"
+        />
+      </label>
+      <label class="range-field">
+        b =
+        <input
+          type="text"
+          [value]="state.bText()"
+          (input)="state.setB($any($event.target).value)"
+          [class.input-error]="!!state.fieldErrors().b"
+          [attr.aria-invalid]="state.fieldErrors().b ? true : null"
+          [attr.aria-describedby]="state.fieldErrors().b ? 'solid-b-error' : null"
+        />
+      </label>
+    </div>
+    @if (state.fieldErrors().a) {
+      <p id="solid-a-error" class="field-error" role="alert">{{ state.fieldErrors().a }}</p>
+    }
+    @if (state.fieldErrors().b) {
+      <p id="solid-b-error" class="field-error" role="alert">{{ state.fieldErrors().b }}</p>
+    }
+  </div>
+
+  @if (state.method() === 'disk-washer' || state.method() === 'shell') {
+    <div class="range-section axis-config">
+      <span class="range-label">axis of revolution</span>
+      <div class="range-inputs">
+        <label class="range-field">
+          {{ axisPrefix() }}
+          <input
+            type="text"
+            [value]="state.axisValueText()"
+            (input)="state.setAxisValue($any($event.target).value)"
+            [class.input-error]="!!state.fieldErrors().axis"
+            [attr.aria-invalid]="state.fieldErrors().axis ? true : null"
+            [attr.aria-describedby]="state.fieldErrors().axis ? 'solid-axis-error' : null"
+          />
+        </label>
+      </div>
+      @if (state.fieldErrors().axis) {
+        <p id="solid-axis-error" class="field-error" role="alert">{{ state.fieldErrors().axis }}</p>
+      }
+    </div>
+  } @else {
+    <div class="range-section">
+      <span class="range-label">cross-section shape</span>
+      <select
+        class="axis-select"
+        aria-label="Cross-section shape"
+        [value]="state.shape()"
+        (change)="state.setShape($any($event.target).value)"
+      >
+        @for (s of shapes; track s) {
+          <option [value]="s">{{ shapeLabel(s) }}</option>
+        }
+      </select>
+      @if (state.fieldErrors().shape) {
+        <p class="field-error" role="alert">{{ state.fieldErrors().shape }}</p>
+      }
+      @if (state.shape() === 'rectangle') {
+        <label class="range-field" style="margin-top: 0.4rem">
+          height ratio =
+          <input
+            type="text"
+            [value]="state.heightRatioText()"
+            (input)="state.setHeightRatio($any($event.target).value)"
+            [class.input-error]="!!state.fieldErrors().ratio"
+            [attr.aria-invalid]="state.fieldErrors().ratio ? true : null"
+            [attr.aria-describedby]="state.fieldErrors().ratio ? 'solid-ratio-error' : null"
+          />
+        </label>
+        @if (state.fieldErrors().ratio) {
+          <p id="solid-ratio-error" class="field-error" role="alert">
+            {{ state.fieldErrors().ratio }}
+          </p>
+        }
+      }
+    </div>
+  }
+
+  @if (state.issues().length > 0) {
+    <ul class="issue-list" aria-live="polite">
+      @for (issue of state.issues(); track $index) {
+        @if (issue.severity !== 'error' || !issue.field) {
+          <li
+            class="issue-row"
+            [class.warning]="issue.severity === 'warning'"
+            [class.error]="issue.severity === 'error'"
+            role="alert"
+          >
+            {{ issue.message }}
+          </li>
+        }
+      }
+    </ul>
+  }
+
+  @if (state.result(); as result) {
+    <div class="range-section solid-result">
+      <span class="range-label">volume</span>
+      <app-integral-formula [terms]="result.terms" />
+      @if (result.volume !== null) {
+        <p class="volume-line">
+          V ≈ {{ formatVolume(result.volume) }}
+          @if (result.exact) {
+            <span class="exact"> = {{ result.exact }}</span>
+          }
+          @if (result.errorEstimate > 1e-9) {
+            <span class="error-estimate"> ± {{ formatVolume(result.errorEstimate) }}</span>
+          }
+        </p>
+        @if (result.surfaceArea !== null) {
+          <p class="volume-line">
+            S ≈ {{ formatVolume(result.surfaceArea) }}
+            @if (result.surfaceExact) {
+              <span class="exact"> = {{ result.surfaceExact }}</span>
+            }
+            <span> (total surface)</span>
+          </p>
+        }
+
+        <div class="sweep-controls">
+          <input
+            type="range"
+            class="sweep-slider"
+            [min]="state.a()"
+            [max]="state.b()"
+            [step]="(state.b() - state.a()) / 200"
+            [value]="state.sweepT() ?? state.a()"
+            (input)="onSweepInput($any($event.target).value)"
+            [attr.aria-valuetext]="sweepValueText()"
+            aria-label="Sweep position"
+          />
+          <div class="sweep-buttons">
+            <button
+              class="t-btn sweep-btn"
+              type="button"
+              (click)="togglePlay()"
+              [attr.aria-pressed]="state.playing()"
+            >
+              {{ state.playing() ? '⏸ pause' : '▶ play' }}
+            </button>
+            <button class="t-btn sweep-btn" type="button" (click)="state.reset()">↺ reset</button>
+          </div>
+        </div>
+      } @else {
+        <p class="volume-line">Volume could not be computed — see the messages above.</p>
+      }
+    </div>
+  }
+</div>

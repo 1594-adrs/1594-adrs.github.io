@@ -60,7 +60,7 @@
 
 .project-card.featured:hover {
   border-color: var(--color-primary);
-  box-shadow: 4px 4px 0 rgba(0, 255, 136, 0.2);
+  box-shadow: 4px 4px 0 var(--color-glow-20);
 }
 
 .card-topbar {
@@ -128,6 +128,17 @@
   background: var(--color-primary);
   color: var(--color-bg-dark);
   border-color: var(--color-primary);
+}
+
+.btn-live {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.btn-live:hover {
+  background: var(--color-primary);
+  color: var(--color-bg-dark);
 }
 
 .web-projects-card {

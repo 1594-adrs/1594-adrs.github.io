@@ -69,21 +69,3 @@
   color: var(--color-primary);
   animation: blink 1s step-end infinite;
 }
-
-@keyframes loadBar {
-  0% {
-    width: 0%;
-  }
-  20% {
-    width: 15%;
-  }
-  50% {
-    width: 60%;
-  }
-  80% {
-    width: 90%;
-  }
-  100% {
-    width: 100%;
-  }
-}

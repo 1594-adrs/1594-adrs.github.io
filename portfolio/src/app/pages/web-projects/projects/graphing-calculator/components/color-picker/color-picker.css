@@ -1,0 +1,95 @@
+.color-picker {
+  position: relative;
+  display: inline-flex;
+}
+/* The button's own box is the tap target (18px, 44px on coarse pointers); the visible
+   colored swatch is a fixed-size ::after so growing the tap target never grows the
+   painted swatch or lets it bleed into neighboring content. */
+.color-swatch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.color-swatch-btn::after {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--swatch-color);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.15s;
+}
+.color-swatch-btn:hover::after {
+  border-color: var(--color-border-hover);
+}
+.color-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: transparent;
+}
+.color-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--color-bg-dark);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.color-presets {
+  display: flex;
+  gap: 4px;
+}
+.color-preset {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  padding: 0;
+}
+.color-preset.selected {
+  outline: 2px solid var(--color-text);
+  outline-offset: 1px;
+}
+.color-custom-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  gap: 6px;
+}
+.color-custom-input {
+  width: 28px;
+  height: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .color-swatch-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .color-preset {
+    width: 44px;
+    height: 44px;
+  }
+}

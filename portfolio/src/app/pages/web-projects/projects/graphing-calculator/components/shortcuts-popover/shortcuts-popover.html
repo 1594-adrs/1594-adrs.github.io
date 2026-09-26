@@ -1,0 +1,21 @@
+<div class="shortcuts-card">
+  <div class="shortcuts-header">
+    <span class="shortcuts-title">Keyboard shortcuts</span>
+    <button
+      type="button"
+      class="shortcuts-close"
+      (click)="close.emit()"
+      aria-label="Close shortcuts"
+    >
+      <app-icon name="x" />
+    </button>
+  </div>
+  <ul class="shortcuts-list">
+    @for (s of shortcuts; track s.action) {
+      <li class="shortcuts-row">
+        <span class="shortcuts-keys">{{ s.keys }}</span>
+        <span class="shortcuts-action">{{ s.action }}</span>
+      </li>
+    }
+  </ul>
+</div>

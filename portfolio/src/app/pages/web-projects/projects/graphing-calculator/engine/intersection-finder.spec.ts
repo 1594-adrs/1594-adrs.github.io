@@ -97,4 +97,24 @@ describe('findIntersections', () => {
       expect(result[i].x).toBeGreaterThanOrEqual(result[i - 1].x);
     }
   });
+
+  it('should find only pi/4 for tan(x) vs 1 on [0, 2] (rejecting the pole jump at pi/2)', () => {
+    const fns = [Math.tan, (_x: number) => 1];
+    const result = findIntersections(fns, 0, 2);
+    expect(result.length).toBe(1);
+    expect(result[0].x).toBeCloseTo(PI / 4, 2);
+  });
+
+  it('should find the tangent point x=0 for x^2 vs 0 on [-1.3, 1.1] (touch, no sign change)', () => {
+    const fns = [(x: number) => x * x, (_x: number) => 0];
+    const result = findIntersections(fns, -1.3, 1.1);
+    expect(result.length).toBe(1);
+    expect(result[0].x).toBeCloseTo(0, 4);
+  });
+
+  it('should find the tangent point x=pi/2 for sin(x) vs 1 (touch, no sign change)', () => {
+    const fns = [Math.sin, (_x: number) => 1];
+    const result = findIntersections(fns, 0, 2 * PI);
+    expect(result.some((p) => Math.abs(p.x - PI / 2) < 0.01)).toBe(true);
+  });
 });

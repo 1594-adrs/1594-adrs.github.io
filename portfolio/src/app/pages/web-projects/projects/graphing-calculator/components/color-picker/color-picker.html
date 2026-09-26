@@ -1,0 +1,39 @@
+<div class="color-picker" (keydown)="onKeydown($event)">
+  <button
+    type="button"
+    class="color-swatch-btn"
+    [style.--swatch-color]="color()"
+    (click)="toggle()"
+    [attr.aria-expanded]="open()"
+    [attr.aria-label]="label()"
+    title="Change color"
+  ></button>
+
+  @if (open()) {
+    <div class="color-popover-backdrop" (click)="open.set(false)"></div>
+    <div class="color-popover" role="dialog" [attr.aria-label]="label() + ' picker'">
+      <div class="color-presets">
+        @for (preset of presets; track preset) {
+          <button
+            type="button"
+            class="color-preset"
+            [style.background]="preset"
+            [class.selected]="preset === color()"
+            (click)="choose(preset)"
+            [attr.aria-label]="'Use color ' + preset"
+          ></button>
+        }
+      </div>
+      <label class="color-custom-label">
+        custom
+        <input
+          type="color"
+          class="color-custom-input"
+          [value]="color()"
+          (input)="onCustomColor($any($event.target).value)"
+          [attr.aria-label]="label() + ' custom color'"
+        />
+      </label>
+    </div>
+  }
+</div>

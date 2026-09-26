@@ -1,13 +1,8 @@
 import type { ExpressionNode } from '../engine/parser';
 
-type RotationAxisType = 'x' | 'y' | 'custom';
+export type { ConicType } from '../engine/types';
 
-export interface RotationAxis {
-  type: RotationAxisType;
-  value: number;
-}
-
-export type CurveMode = 'explicit' | 'implicit' | 'parametric' | 'polar';
+export type CurveMode = 'explicit' | 'explicit-y' | 'implicit' | 'parametric' | 'polar';
 export type OverlapMode = 'pairwise' | 'all';
 
 export interface MathExpression {
@@ -23,23 +18,13 @@ export interface MathExpression {
   thetaMin?: string;
   thetaMax?: string;
   inequalityOp?: '>' | '<' | '>=' | '<=';
+  /** Inline validation message (parse or unknown-variable/function), or null when valid. */
+  error: string | null;
 }
 
 export interface IntegralResult {
   label: string;
   value: string;
-}
-
-export interface SolidConfig {
-  functionIndices: number[];
-  a: number;
-  b: number;
-  axis: RotationAxis;
-  overlapMode: OverlapMode;
-  tMin?: string;
-  tMax?: string;
-  thetaMin?: string;
-  thetaMax?: string;
 }
 
 export interface MultiFunctionAreaConfig {
@@ -49,5 +34,3 @@ export interface MultiFunctionAreaConfig {
   autoDetectIntersections: boolean;
   overlapMode: OverlapMode;
 }
-
-export type ConicType = 'circle' | 'ellipse' | 'parabola' | 'hyperbola';

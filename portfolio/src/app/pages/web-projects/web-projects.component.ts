@@ -10,7 +10,7 @@ import { IconComponent } from '../../shared/icons/icon.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, IconComponent],
   templateUrl: './web-projects.component.html',
-  styleUrls: ['./web-projects.component.css', './web-projects-cards.css'],
+  styleUrls: ['./web-projects.component.css'],
 })
 export class WebProjectsComponent implements OnInit {
   private titleService = inject(Title);

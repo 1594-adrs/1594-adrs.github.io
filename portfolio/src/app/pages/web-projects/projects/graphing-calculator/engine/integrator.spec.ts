@@ -43,13 +43,19 @@ describe('integrator', () => {
     expect(result).toBeLessThan(2.5);
   });
 
-  it('should handle function that throws at some interior points', () => {
+  it('should return NaN when a function throws across a whole sub-interval (undefined there, not just at a point)', () => {
+    // Updated for the adaptive Gauss-Kronrod integrator (quadrature.ts): the
+    // old Simpson-based integrator silently skipped throwing samples and
+    // approximated ~2 by ignoring the excluded band. The new integrator
+    // treats a non-finite result that persists over a genuine sub-interval
+    // (here [-0.01, 0.01], not just an isolated point) as outside the
+    // function's domain there, matching e.g. sqrt(x) on a negative range.
     const f = (x: number) => {
       if (Math.abs(x) < 0.01) throw new Error('singularity');
       return 1;
     };
     const result = integrate(f, -1, 1);
-    expect(result).toBeCloseTo(2, 0);
+    expect(result).toBeNaN();
   });
 
   it('should detect divergent integral (1/x^2 from -1 to 1)', () => {

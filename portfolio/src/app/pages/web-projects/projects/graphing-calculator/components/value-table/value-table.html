@@ -1,0 +1,85 @@
+<div class="value-table-panel" role="group" aria-label="Table of values">
+  <div class="value-table-header">
+    <span class="range-label">table of values</span>
+    <button
+      class="action-btn"
+      (click)="close.emit()"
+      aria-label="Close table of values"
+      title="Close"
+    >
+      ×
+    </button>
+  </div>
+
+  <div class="value-table-controls">
+    <label class="range-field-inline">
+      start =
+      <input
+        type="text"
+        class="range-input-inline"
+        [value]="startText()"
+        (change)="setStart($any($event.target).value)"
+        [attr.aria-invalid]="startError() ? true : null"
+        [attr.aria-describedby]="startError() ? 'vt-start-error-' + index() : null"
+      />
+    </label>
+    <label class="range-field-inline">
+      step =
+      <input
+        type="text"
+        class="range-input-inline"
+        [value]="stepText()"
+        (change)="setStep($any($event.target).value)"
+        [attr.aria-invalid]="stepError() ? true : null"
+        [attr.aria-describedby]="stepError() ? 'vt-step-error-' + index() : null"
+      />
+    </label>
+    <label class="range-field-inline">
+      rows =
+      <input
+        type="text"
+        class="range-input-inline"
+        [value]="rowsText()"
+        (change)="setRows($any($event.target).value)"
+        [attr.aria-invalid]="rowsError() ? true : null"
+        [attr.aria-describedby]="rowsError() ? 'vt-rows-error-' + index() : null"
+      />
+    </label>
+  </div>
+
+  @if (startError()) {
+    <p [id]="'vt-start-error-' + index()" role="alert" class="fn-error">{{ startError() }}</p>
+  }
+  @if (stepError()) {
+    <p [id]="'vt-step-error-' + index()" role="alert" class="fn-error">{{ stepError() }}</p>
+  }
+  @if (rowsError()) {
+    <p [id]="'vt-rows-error-' + index()" role="alert" class="fn-error">{{ rowsError() }}</p>
+  }
+
+  @if (rows().length > 0) {
+    <div class="value-table-scroll">
+      <table class="value-table">
+        <caption>
+          {{
+            caption()
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ inputVariable() }}</th>
+            <th scope="col">{{ inputVariable() === 'y' ? 'g(y)' : 'f(x)' }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track $index) {
+            <tr>
+              <td>{{ formatInput(row.input) }}</td>
+              <td>{{ row.output }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

@@ -1,5 +1,6 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { Eye } from '../../../../shared/components/eye/eye';
+import { PROFILE } from '../../../../shared/data/portfolio.data';
 
 @Component({
   selector: 'app-hero-section',
@@ -10,6 +11,11 @@ import { Eye } from '../../../../shared/components/eye/eye';
 })
 export class HeroSection {
   imageFailed = signal(false);
+
+  name = PROFILE.shortName;
+  role = PROFILE.role;
+  tagline = PROFILE.tagline;
+  resumeUrl = PROFILE.resumeUrl;
 
   onImageError() {
     this.imageFailed.set(true);

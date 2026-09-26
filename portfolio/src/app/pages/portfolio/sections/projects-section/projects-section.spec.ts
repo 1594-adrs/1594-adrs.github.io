@@ -24,11 +24,12 @@ describe('ProjectsSection', () => {
     expect(compiled.querySelectorAll('.project-card').length).toBe(PROJECTS.length + 1);
   });
 
-  it('should render project titles', () => {
+  it('should render the featured web-projects card first, then data-driven projects', () => {
     const fixture = TestBed.createComponent(ProjectsSection);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     const titles = compiled.querySelectorAll('.project-title');
-    expect(titles[0]?.textContent).toContain(PROJECTS[0].title);
+    expect(titles[0]?.textContent).toContain('Graphing Calculator');
+    expect(titles[1]?.textContent).toContain(PROJECTS[0].title);
   });
 });

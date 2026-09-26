@@ -120,7 +120,12 @@ export class MathRendererComponent {
     if (
       node.type === 'NumberLiteral' ||
       node.type === 'Variable' ||
-      node.type === 'FunctionCall' ||
+      // A plain function call (sin(x), ln(x), ...) reads fine unparenthesised before a
+      // superscript, e.g. sin(x)²; a radical does not - its vinculum has no fixed "cap
+      // height", so an outer exponent placed right after it visually collides with
+      // whatever sits at the top of the radical's own content (e.g. an inner x²).
+      // Wrapping it in parentheses gives the superscript a normal glyph to attach after.
+      (node.type === 'FunctionCall' && node.name !== 'sqrt') ||
       node.type === 'FunctionCallMultiArg'
     ) {
       return this.renderNode(node);

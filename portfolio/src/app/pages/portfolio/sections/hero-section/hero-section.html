@@ -4,8 +4,18 @@
   <div class="hero-content">
     <div class="staggered-text">
       <p class="greeting animate-fade-up">&gt; Hello, I am</p>
-      <h1 class="name animate-fade-up-delay" data-text="Andrés Rincón">Andrés Rincón</h1>
-      <p class="role animate-fade-up-delay-2">Full Stack Developer<span class="cursor">_</span></p>
+      <h1 class="name animate-fade-up-delay" [attr.data-text]="name">{{ name }}</h1>
+      <p class="role animate-fade-up-delay-2">{{ role }}<span class="cursor">_</span></p>
+      <p class="tagline animate-fade-up-delay-2">{{ tagline }}</p>
+
+      <div class="hero-cta animate-fade-up-delay-2">
+        <a class="btn btn-primary" href="#projects">View Projects</a>
+        @if (resumeUrl) {
+          <a class="btn btn-outline" [href]="resumeUrl" target="_blank" rel="noopener noreferrer">
+            Download CV
+          </a>
+        }
+      </div>
     </div>
 
     <div class="profile-image-container">

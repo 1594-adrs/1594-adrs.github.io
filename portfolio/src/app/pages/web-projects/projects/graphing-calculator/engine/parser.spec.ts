@@ -324,6 +324,60 @@ describe('parser', () => {
     });
   });
 
+  describe('implicit multiplication of concatenated single-letter variables', () => {
+    it('xy should parse as x*y', () => {
+      const ast = parse('xy');
+      expect(evaluate(ast, { x: 3, y: 4 })).toBe(12);
+    });
+
+    it('2xy should parse as 2*x*y', () => {
+      const ast = parse('2xy');
+      expect(evaluate(ast, { x: 3, y: 4 })).toBe(24);
+    });
+
+    it('xt should parse as x*t (both single-letter variables)', () => {
+      const ast = parse('xt');
+      expect(evaluate(ast, { x: 5, t: 2 })).toBe(10);
+    });
+
+    it('yx should parse as y*x', () => {
+      const ast = parse('yx');
+      expect(evaluate(ast, { x: 3, y: 4 })).toBe(12);
+    });
+
+    it('xy(3) should parse as x*y*(3)', () => {
+      const ast = parse('xy(3)');
+      expect(evaluate(ast, { x: 2, y: 5 })).toBe(30);
+    });
+
+    it('sinx should stay intact as a single unknown variable (not split)', () => {
+      const ast = parse('sinx');
+      expect(ast.type).toBe('Variable');
+      expect(evaluate(ast, { sinx: 7 })).toBe(7);
+    });
+
+    it('pi should stay intact as the constant (not split into p*i)', () => {
+      const ast = parse('pi');
+      expect(evaluate(ast, {})).toBeCloseTo(Math.PI, 10);
+    });
+
+    it('theta should stay intact as a single unknown variable (not split)', () => {
+      const ast = parse('theta');
+      expect(ast.type).toBe('Variable');
+      expect(evaluate(ast, { theta: 9 })).toBe(9);
+    });
+
+    it('e should stay intact as the constant', () => {
+      const ast = parse('e');
+      expect(evaluate(ast, {})).toBeCloseTo(Math.E, 10);
+    });
+
+    it('function names stay intact: sin(x) is still a FunctionCall', () => {
+      const ast = parse('sin(x)');
+      expect(ast.type).toBe('FunctionCall');
+    });
+  });
+
   describe('chained powers (right-associative)', () => {
     it('2^3^2 should be 2^(3^2) = 512', () => {
       const ast = parse('2^3^2');
@@ -475,12 +529,100 @@ describe('parser', () => {
       }
       expect(evaluate(ast, { x: Math.PI / 4 })).toBeCloseTo(1, 10);
     });
+
+    it('should parse a parenthesized fractional power cos^(1/3)(pi) as PoweredFunctionCall, not cos^(1/3) * (pi)', () => {
+      const ast = parse('cos^(1/3)(pi)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('cos');
+        expect(ast.arg.type).toBe('Variable');
+        expect(ast.power.type).toBe('BinaryOp');
+      }
+    });
+
+    it('should evaluate cos^(1/3)(pi) = -1 (real cube root, like the ^ operator)', () => {
+      const ast = parse('cos^(1/3)(pi)');
+      expect(evaluate(ast, {})).toBeCloseTo(-1, 9);
+    });
+
+    it('should parse a parenthesized integer power sin^(2)(pi/2) as PoweredFunctionCall', () => {
+      const ast = parse('sin^(2)(pi/2)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      if (ast.type === 'PoweredFunctionCall') {
+        expect(ast.name).toBe('sin');
+        expect(ast.power.type).toBe('NumberLiteral');
+      }
+    });
+
+    it('should evaluate sin^(2)(pi/2) = 1', () => {
+      const ast = parse('sin^(2)(pi/2)');
+      expect(evaluate(ast, {})).toBeCloseTo(1, 10);
+    });
+
+    it('sin^2(x) (bare, unparenthesized power) should still parse and evaluate the same as before', () => {
+      const ast = parse('sin^2(x)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      expect(evaluate(ast, { x: Math.PI / 2 })).toBeCloseTo(1, 10);
+    });
+  });
+
+  describe('multiplication is unaffected by the power-group fix', () => {
+    it('(x+1)(x-1) should still parse as (x+1)*(x-1)', () => {
+      const ast = parse('(x+1)(x-1)');
+      expect(evaluate(ast, { x: 3 })).toBe(8);
+    });
+
+    it('2(x) should still parse as 2*x', () => {
+      const ast = parse('2(x)');
+      expect(evaluate(ast, { x: 5 })).toBe(10);
+    });
+
+    it('x(x+1) should still parse as x*(x+1)', () => {
+      const ast = parse('x(x+1)');
+      expect(evaluate(ast, { x: 3 })).toBe(12);
+    });
   });
 
   describe('complexity limit', () => {
     it('should throw on expression exceeding 500 nodes', () => {
       const expr = Array(251).fill('1+').join('') + '1';
       expect(() => parse(expr)).toThrow('Expression too complex');
+    });
+  });
+
+  describe('uppercase-E scientific notation', () => {
+    it('should parse 1E-3 as 0.001', () => {
+      const ast = parse('1E-3');
+      expect(ast.type).toBe('NumberLiteral');
+      expect(evaluate(ast, {})).toBeCloseTo(0.001, 12);
+    });
+
+    it('should parse 2.5E4 as 25000', () => {
+      const ast = parse('2.5E4');
+      expect(evaluate(ast, {})).toBe(25000);
+    });
+
+    it('should parse 1E+2 as 100', () => {
+      const ast = parse('1E+2');
+      expect(evaluate(ast, {})).toBe(100);
+    });
+
+    it('should parse .5E1 as 5', () => {
+      const ast = parse('.5E1');
+      expect(evaluate(ast, {})).toBe(5);
+    });
+
+    it('should keep lowercase e as Euler constant: 2e-3 = 2*e - 3', () => {
+      const ast = parse('2e-3');
+      expect(evaluate(ast, {})).toBeCloseTo(2 * Math.E - 3, 10);
+    });
+
+    it('should leave a bare trailing E as an unknown variable (no exponent digits follow)', () => {
+      expect(() => evaluate(parse('5E'), {})).toThrow(/Unknown variable/);
+    });
+
+    it('should leave E followed by a non-digit as an unknown variable', () => {
+      expect(() => evaluate(parse('5E+x'), {})).toThrow();
     });
   });
 });

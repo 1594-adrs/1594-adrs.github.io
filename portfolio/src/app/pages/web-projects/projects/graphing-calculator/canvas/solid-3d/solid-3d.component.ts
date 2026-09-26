@@ -9,27 +9,36 @@ import {
   inject,
   input,
   effect,
+  signal,
   PLATFORM_ID,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { SolidScene } from './solid-scene';
-import { generateRevolutionMeshMulti } from './solid-geometry';
-import type { RotationAxis } from '../../models/calculator.models';
-import type { SolidRegion } from '../../engine/calculus';
+import { buildSolidGeometry } from './solid-mesh-builder';
+import { buildSliceGeometry } from './slice-geometry';
+import type { SolidPiece, SolidSpec } from '../../engine/solids/solid.types';
+
+const SLICE_HIGHLIGHT_COLOR = '#ffcc00';
 
 @Component({
   selector: 'app-solid-3d',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<canvas
-    #threeCanvas
-    class="solid-3d-canvas"
-    tabindex="0"
-    aria-label="3D solid view"
-    (keydown)="onKeyDown($event)"
-  ></canvas>`,
+      #threeCanvas
+      class="solid-3d-canvas"
+      tabindex="0"
+      aria-label="3D solid view"
+      (keydown)="onKeyDown($event)"
+    ></canvas>
+    @if (webglUnavailable()) {
+      <p class="solid-3d-fallback" role="status">
+        The 3D view needs WebGL, which isn't available in this browser.
+      </p>
+    }`,
   styles: [
     `
       :host {
+        position: relative;
         display: block;
         width: 100%;
         height: 100%;
@@ -38,6 +47,18 @@ import type { SolidRegion } from '../../engine/calculus';
         width: 100%;
         height: 100%;
         display: block;
+        touch-action: none;
+      }
+      .solid-3d-fallback {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        padding: 1rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--color-text-subtle);
       }
     `,
   ],
@@ -48,13 +69,19 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('threeCanvas');
 
-  functions = input<Array<(x: number) => number>>([]);
-  regions = input<SolidRegion[]>([]);
-  axis = input<RotationAxis>({ type: 'x', value: 0 });
   color = input('#00ff88');
   visible = input(false);
 
+  /** Spec-driven "solids by integration" inputs. */
+  spec = input<SolidSpec | null>(null);
+  pieces = input<SolidPiece[]>([]);
+  sweepT = input<number | null>(null);
+
+  /** Set when the WebGL context can't be created (old devices, disabled GPU, jsdom). */
+  webglUnavailable = signal(false);
+
   private scene: SolidScene | null = null;
+  private pinchDistance: number | null = null;
   private isDragging = false;
   private lastMouse = { x: 0, y: 0 };
   private resizeObserver: ResizeObserver | null = null;
@@ -83,14 +110,70 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     this.scene?.render();
   };
 
+  private onTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      this.isDragging = true;
+      this.pinchDistance = null;
+      this.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) {
+      this.isDragging = false;
+      this.pinchDistance = touchDistance(e.touches);
+    }
+  };
+  private onTouchMove = (e: TouchEvent) => {
+    if (!this.scene) return;
+    e.preventDefault();
+    if (e.touches.length === 2 && this.pinchDistance !== null) {
+      const d = touchDistance(e.touches);
+      // Fingers apart → zoom in (negative delta), same sign convention as the wheel.
+      this.scene.zoomCamera((this.pinchDistance - d) * 2);
+      this.pinchDistance = d;
+      this.scene.render();
+    } else if (e.touches.length === 1 && this.isDragging) {
+      const t = e.touches[0];
+      this.scene.rotateCamera(t.clientX - this.lastMouse.x, t.clientY - this.lastMouse.y);
+      this.lastMouse = { x: t.clientX, y: t.clientY };
+      this.scene.render();
+    }
+  };
+  private onTouchEnd = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      // Lifting one finger of a pinch continues as a rotate from the remaining one.
+      this.isDragging = true;
+      this.pinchDistance = null;
+      this.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 0) {
+      this.isDragging = false;
+      this.pinchDistance = null;
+    }
+  };
+
   constructor() {
     this.ngZone.runOutsideAngular(() => {
+      // Mesh rebuild — only on spec/pieces change (color handled separately below).
       effect(() => {
-        const _fns = this.functions();
-        const _regions = this.regions();
-        const _axis = this.axis();
-        const _color = this.color();
-        this.updateGeometry();
+        const spec = this.spec();
+        const pieces = this.pieces();
+        if (!spec) {
+          this.scene?.clearSpecMesh();
+          return;
+        }
+        this.rebuildSolidMesh(spec, pieces);
+      });
+
+      // Color updates, independent of geometry rebuilds.
+      effect(() => {
+        const spec = this.spec();
+        const color = this.color();
+        if (spec) this.scene?.setSolidColor(color);
+      });
+
+      // Sweep clipping + representative slice — independent of the geometry rebuild above.
+      effect(() => {
+        const spec = this.spec();
+        const pieces = this.pieces();
+        const t = this.sweepT();
+        this.updateSweep(spec, pieces, t);
       });
     });
   }
@@ -106,7 +189,12 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
       canvas.height = parent.clientHeight;
     }
 
-    this.scene = new SolidScene(canvas);
+    try {
+      this.scene = new SolidScene(canvas);
+    } catch {
+      this.webglUnavailable.set(true);
+      return;
+    }
 
     if (parent && typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => {
@@ -124,20 +212,46 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     canvas.addEventListener('mouseup', this.onMouseUp);
     canvas.addEventListener('mouseleave', this.onMouseLeave);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
+    canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', this.onTouchEnd);
+    canvas.addEventListener('touchcancel', this.onTouchEnd);
 
     this.ngZone.runOutsideAngular(() => {
-      this.updateGeometry();
+      const spec = this.spec();
+      if (spec) this.rebuildSolidMesh(spec, this.pieces());
+      this.updateSweep(spec, this.pieces(), this.sweepT());
       this.scene?.render();
     });
   }
 
-  private updateGeometry(): void {
+  /** Renders one fresh frame and returns the underlying canvas, for PNG export. */
+  exportCanvas(): HTMLCanvasElement | null {
+    if (!this.scene) return null;
+    this.scene.render();
+    return this.canvasRef()?.nativeElement ?? null;
+  }
+
+  private rebuildSolidMesh(spec: SolidSpec, pieces: SolidPiece[]): void {
     if (!this.scene) return;
-    const fns = this.functions();
-    const regs = this.regions();
-    if (fns.length === 0 || regs.length === 0) return;
-    const meshes = generateRevolutionMeshMulti(fns, regs, this.axis());
-    this.scene.updateMesh(meshes, this.color());
+    const geometries = buildSolidGeometry(spec, pieces);
+    this.scene.updateSolidPieces(geometries, this.color());
+    this.scene.updateAxisLine(spec.axis ?? null);
+    this.scene.render();
+  }
+
+  private updateSweep(spec: SolidSpec | null, pieces: SolidPiece[], t: number | null): void {
+    if (!this.scene) return;
+    if (!spec || t === null || !Number.isFinite(t)) {
+      this.scene.setSweepClip(null);
+      this.scene.updateSliceMesh(null, SLICE_HIGHLIGHT_COLOR);
+      this.scene.render();
+      return;
+    }
+    const normal: [number, number, number] = spec.variable === 'x' ? [-1, 0, 0] : [0, -1, 0];
+    this.scene.setSweepClip({ normal, constant: t });
+    const sliceGeometry = buildSliceGeometry(spec, pieces, t);
+    this.scene.updateSliceMesh(sliceGeometry, SLICE_HIGHLIGHT_COLOR);
     this.scene.render();
   }
 
@@ -150,6 +264,10 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
       canvas.removeEventListener('mouseup', this.onMouseUp);
       canvas.removeEventListener('mouseleave', this.onMouseLeave);
       canvas.removeEventListener('wheel', this.onWheel);
+      canvas.removeEventListener('touchstart', this.onTouchStart);
+      canvas.removeEventListener('touchmove', this.onTouchMove);
+      canvas.removeEventListener('touchend', this.onTouchEnd);
+      canvas.removeEventListener('touchcancel', this.onTouchEnd);
     }
     this.scene?.dispose();
   }
@@ -183,4 +301,11 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     event.preventDefault();
     this.scene.render();
   }
+}
+
+function touchDistance(touches: TouchList): number {
+  return Math.hypot(
+    touches[0].clientX - touches[1].clientX,
+    touches[0].clientY - touches[1].clientY,
+  );
 }

@@ -98,6 +98,12 @@ const MULTI_ARG_REQUIRED_ARGS = new Map([
 
 const MAX_AST_NODES = 500;
 
+// Single-letter names the evaluator binds directly (explicit x/y, parametric
+// t) — used to split a concatenated run like `xy` or `2xt` into implicit
+// multiplication. Deliberately small: it must not swallow `pi`, `e`, `theta`
+// or an unknown identifier like `sinx`/`foo`.
+const SINGLE_LETTER_VARIABLES = new Set(['x', 'y', 't']);
+
 class Lexer {
   private pos = 0;
   private tokens: Token[] = [];
@@ -119,7 +125,7 @@ class Lexer {
         this.tokens.push({ type: 'variable', value: 'π' });
         this.pos++;
       } else if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_') {
-        this.tokens.push(this.readIdentifier(input));
+        this.tokens.push(...this.readIdentifier(input));
       } else if (ch === '(') {
         this.tokens.push({ type: 'lparen', value: '(' });
         this.pos++;
@@ -169,6 +175,12 @@ class Lexer {
   }
 
   private insertImplicitMultiplication(): void {
+    // `func ^ (...)` is the powered-function exponent group (`sin^(1/3)(x)`,
+    // `cos^(2)(x)`): the rparen closing it is immediately followed by the
+    // function's own argument lparen, which must NOT be read as
+    // multiplication (unlike e.g. `(2)(3)` or `x(x+1)`).
+    const powerGroupCloses = this.findPowerGroupCloses();
+
     const result: Token[] = [];
     for (let i = 0; i < this.tokens.length; i++) {
       const tok = this.tokens[i];
@@ -184,6 +196,7 @@ class Lexer {
 
       if (tokIsValue && nextIsValue) {
         if (tok.type === 'variable' && isKnownFunction(tok.value)) continue;
+        if (tok.type === 'rparen' && powerGroupCloses.has(i)) continue;
         if (
           tok.type === 'number' &&
           next.type === 'lparen' &&
@@ -196,6 +209,39 @@ class Lexer {
       }
     }
     this.tokens = result;
+  }
+
+  /**
+   * Indices of rparen tokens that close a `<knownFunction> ^ ( ... )`
+   * exponent group — e.g. the `)` in `sin^(1/3)` — tracked by paren depth so
+   * nested parens inside the exponent (`sin^(1/(2+3))`) are handled too.
+   */
+  private findPowerGroupCloses(): Set<number> {
+    const marked = new Set<number>();
+    for (let i = 0; i < this.tokens.length; i++) {
+      const tok = this.tokens[i];
+      if (
+        tok.type === 'variable' &&
+        isKnownFunction(tok.value) &&
+        this.tokens[i + 1]?.type === 'operator' &&
+        this.tokens[i + 1].value === '^' &&
+        this.tokens[i + 2]?.type === 'lparen'
+      ) {
+        let depth = 0;
+        for (let j = i + 2; j < this.tokens.length; j++) {
+          if (this.tokens[j].type === 'lparen') {
+            depth++;
+          } else if (this.tokens[j].type === 'rparen') {
+            depth--;
+            if (depth === 0) {
+              marked.add(j);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return marked;
   }
 
   private skipWhitespace(): void {
@@ -218,10 +264,31 @@ class Lexer {
       num += input[this.pos];
       this.pos++;
     }
+
+    // Uppercase-E scientific notation only (e.g. 1E-3, 2.5E4, 1E+2). Lowercase
+    // 'e' is left alone since it means Euler's constant elsewhere in the grammar.
+    if (input[this.pos] === 'E') {
+      let peek = this.pos + 1;
+      let sign = '';
+      if (input[peek] === '+' || input[peek] === '-') {
+        sign = input[peek];
+        peek++;
+      }
+      if (input[peek] >= '0' && input[peek] <= '9') {
+        let exponent = 'E' + sign;
+        this.pos = peek;
+        while (this.pos < input.length && input[this.pos] >= '0' && input[this.pos] <= '9') {
+          exponent += input[this.pos];
+          this.pos++;
+        }
+        num += exponent;
+      }
+    }
+
     return { type: 'number', value: num };
   }
 
-  private readIdentifier(input: string): Token {
+  private readIdentifier(input: string): Token[] {
     let id = '';
     while (
       this.pos < input.length &&
@@ -235,9 +302,18 @@ class Lexer {
     }
     const lower = id.toLowerCase();
     if (KNOWN_FUNCTIONS.has(lower)) {
-      return { type: 'variable', value: lower };
+      return [{ type: 'variable', value: lower }];
     }
-    return { type: 'variable', value: id };
+    // Split a run of concatenated single-letter variables (e.g. `xy` -> x, y;
+    // `2xy` -> 2, x, y) into individual variable tokens so implicit
+    // multiplication (below) joins them back with `*`. Only when every
+    // character is one of the evaluator's known single-letter variables —
+    // `sinx`, `theta`, `pi`, `e` and the like all fail this (mixed/unknown
+    // letters) and stay intact as a single identifier, unchanged.
+    if (id.length > 1 && [...id].every((c) => SINGLE_LETTER_VARIABLES.has(c))) {
+      return [...id].map((c) => ({ type: 'variable' as const, value: c }));
+    }
+    return [{ type: 'variable', value: id }];
   }
 }
 

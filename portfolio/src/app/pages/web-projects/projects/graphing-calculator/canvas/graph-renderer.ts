@@ -1,5 +1,5 @@
 import { Viewport } from './viewport';
-import { tryEval } from './utils';
+import { tryEval, findAxisCrossings } from './utils';
 import { detectAsymptotes } from '../engine/asymptote-detector';
 import type { Asymptote } from '../engine/asymptote-detector';
 import type { ExpressionNode } from '../engine/parser';
@@ -174,6 +174,65 @@ export function drawFunction(
   }
 }
 
+/** Draws x = g(y): samples y across the visible viewport range and plots (g(y), y). */
+export function drawExplicitY(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  fn: (y: number) => number,
+  color: string,
+  width: number,
+  height: number,
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const yMin = viewport.yMin;
+  const yMax = viewport.yMax;
+  const samples = Math.max(200, height * 2);
+  const dy = (yMax - yMin) / samples;
+
+  ctx.beginPath();
+  let drawing = false;
+  let prevSx: number | null = null;
+  let prevSy: number | null = null;
+
+  for (let i = 0; i <= samples; i++) {
+    const y = yMin + i * dy;
+    const x = tryEval(fn, y);
+
+    if (isNaN(x)) {
+      drawing = false;
+      prevSx = null;
+      prevSy = null;
+      continue;
+    }
+
+    const [sx, sy] = viewport.worldToScreen(x, y, width, height);
+
+    if (!drawing) {
+      ctx.moveTo(sx, sy);
+      drawing = true;
+    } else if (prevSx !== null && prevSy !== null) {
+      const dxPix = Math.abs(sx - prevSx);
+      const dyPix = Math.abs(sy - prevSy);
+      if (dyPix > 0 && dxPix / dyPix > width * 0.5) {
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+      } else {
+        ctx.lineTo(sx, sy);
+      }
+    } else {
+      ctx.lineTo(sx, sy);
+    }
+    prevSx = sx;
+    prevSy = sy;
+  }
+  ctx.stroke();
+}
+
 export function drawIntegralArea(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
@@ -256,32 +315,14 @@ export function drawAreaBetween(
   height: number,
 ): void {
   const steps = Math.max(200, Math.abs(b - a) * 20);
-  const h = (b - a) / steps;
-
   const subIntervals: Array<{ start: number; end: number; topIsUpper: boolean }> = [];
-  const crossPoints: number[] = [];
-  const EPS = 1e-12;
-  let prevDiff = NaN;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    const yU = tryEval(fUpper, x);
-    const yL = tryEval(fLower, x);
-    if (isNaN(yU) || isNaN(yL)) {
-      prevDiff = NaN;
-      continue;
-    }
-    const diff = yU - yL;
-    if (Math.abs(diff) < EPS) {
-      crossPoints.push(x);
-      prevDiff = diff;
-      continue;
-    }
-    if (isFinite(prevDiff) && Math.abs(prevDiff) >= EPS && prevDiff * diff < 0) {
-      const t = prevDiff / (prevDiff - diff);
-      crossPoints.push(a + (i - 1) * h + t * h);
-    }
-    prevDiff = diff;
-  }
+  const crossPoints = findAxisCrossings(
+    (x) => tryEval(fUpper, x) - tryEval(fLower, x),
+    a,
+    b,
+    0,
+    steps,
+  );
 
   const boundaries = [a, ...crossPoints, b];
   for (let i = 0; i < boundaries.length - 1; i++) {
@@ -586,6 +627,40 @@ export function drawInequality(
   ctx.restore();
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex);
+  if (!m) return [255, 255, 255];
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+function inequalityCheck(comparison: '>' | '<' | '>=' | '<=') {
+  switch (comparison) {
+    case '>':
+      return (val: number) => val > 0;
+    case '<':
+      return (val: number) => val < 0;
+    case '>=':
+      return (val: number) => val >= 0;
+    case '<=':
+      return (val: number) => val <= 0;
+  }
+}
+
+const INEQUALITY_CELL_PX = 3;
+const INEQUALITY_CELL_PX_COARSE = 6;
+
+interface InequalityCacheEntry {
+  key: string;
+  canvas: HTMLCanvasElement;
+}
+
+// Keyed on the eval fn's identity: a shaded region is filled once into a small
+// offscreen canvas (one fillRect-equivalent per coarse cell, via ImageData) and
+// then just blitted with drawImage on every subsequent frame with the same
+// viewport/size — instead of re-evaluating fn(x, y) at every 2px screen cell
+// (width*height/4 evaluations) every single frame.
+const inequalityCache = new WeakMap<object, InequalityCacheEntry>();
+
 export function drawImplicitInequality(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
@@ -594,39 +669,56 @@ export function drawImplicitInequality(
   color: string,
   width: number,
   height: number,
+  coarse = false,
 ): void {
-  const step = 2;
-  ctx.save();
-  ctx.globalAlpha = 0.15;
-  ctx.fillStyle = color;
+  if (width <= 0 || height <= 0) return;
+  const cellPx = coarse ? INEQUALITY_CELL_PX_COARSE : INEQUALITY_CELL_PX;
+  const cols = Math.max(1, Math.round(width / cellPx));
+  const rows = Math.max(1, Math.round(height / cellPx));
+  const key = `${viewport.xMin.toFixed(6)}:${viewport.xMax.toFixed(6)}:${viewport.yMin.toFixed(6)}:${viewport.yMax.toFixed(6)}:${cols}:${rows}:${comparison}:${color}`;
 
-  const check = (val: number): boolean => {
-    switch (comparison) {
-      case '>':
-        return val > 0;
-      case '<':
-        return val < 0;
-      case '>=':
-        return val >= 0;
-      case '<=':
-        return val <= 0;
-    }
-  };
+  let entry = inequalityCache.get(fn);
+  if (!entry || entry.key !== key) {
+    const small = document.createElement('canvas');
+    small.width = cols;
+    small.height = rows;
+    const sctx = small.getContext('2d');
+    if (!sctx) return;
 
-  for (let px = 0; px <= width; px += step) {
-    for (let py = 0; py <= height; py += step) {
-      const [wx, wy] = viewport.screenToWorld(px, py, width, height);
-      try {
-        const val = fn(wx, wy);
-        if (check(val)) {
-          ctx.fillRect(px, py, step, step);
+    const img = sctx.createImageData(cols, rows);
+    const [r, g, b] = hexToRgb(color);
+    const alpha = Math.round(0.15 * 255);
+    const check = inequalityCheck(comparison);
+
+    for (let row = 0; row < rows; row++) {
+      const py = ((row + 0.5) / rows) * height;
+      const base = row * cols;
+      for (let col = 0; col < cols; col++) {
+        const px = ((col + 0.5) / cols) * width;
+        const [wx, wy] = viewport.screenToWorld(px, py, width, height);
+        let val: number;
+        try {
+          val = fn(wx, wy);
+        } catch {
+          continue;
         }
-      } catch {
-        /* skip */
+        if (!check(val)) continue;
+        const idx = (base + col) * 4;
+        img.data[idx] = r;
+        img.data[idx + 1] = g;
+        img.data[idx + 2] = b;
+        img.data[idx + 3] = alpha;
       }
     }
+
+    sctx.putImageData(img, 0, 0);
+    entry = { key, canvas: small };
+    inequalityCache.set(fn, entry);
   }
 
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(entry.canvas, 0, 0, width, height);
   ctx.restore();
 }
 
