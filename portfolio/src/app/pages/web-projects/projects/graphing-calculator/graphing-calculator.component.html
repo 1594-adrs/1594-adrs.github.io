@@ -1,374 +1,10 @@
 <div class="calculator-layout">
-  <aside class="sidebar" [class.expanded]="isSidebarExpanded()">
-    <div class="sidebar-header">
-      <a routerLink="/web-projects" class="back-link">&lt; back</a>
-      <img src="LOGO.png" alt="A.D.R.S." class="sidebar-logo" />
-      <span class="header-title">functions</span>
-      <button
-        type="button"
-        class="sidebar-expand-toggle"
-        [attr.aria-expanded]="isSidebarExpanded()"
-        (click)="toggleSidebarExpanded()"
-      >
-        {{ isSidebarExpanded() ? '▼ show graph' : '▲ expand panel' }}
-      </button>
-    </div>
-
-    <div class="functions-list">
-      @for (fn of functions(); track $index) {
-        <div
-          class="function-row"
-          [class.selected]="focusedInputIndex() === $index"
-          draggable="true"
-          (dragstart)="onDragStart($index, $event)"
-          (dragover)="onDragOver($index, $event)"
-          (drop)="onDrop($index, $event)"
-          (dragend)="onDragEnd()"
-        >
-          <div class="fn-gutter">
-            <app-color-picker
-              [color]="fn.color"
-              [label]="'Color for f' + ($index + 1)"
-              (colorChange)="updateColor($index, $event)"
-            />
-            <span class="fn-index">{{ $index + 1 }}</span>
-          </div>
-          <div class="fn-expression">
-            @if (fn.ast && focusedInputIndex() !== $index && fn.raw) {
-              <div class="math-rendered" (click)="onInputFocus($index)">
-                <app-math-renderer [ast]="fn.ast" [fontSize]="14" />
-              </div>
-            }
-            <input
-              #fnInput
-              class="fn-input"
-              [class.hidden-input]="fn.ast && focusedInputIndex() !== $index && fn.raw"
-              [class.input-error]="fn.error"
-              [id]="'fn-input-' + $index"
-              [value]="fn.raw"
-              [attr.aria-label]="'Function ' + ($index + 1) + ' expression'"
-              [attr.aria-describedby]="fn.error ? 'fn-error-' + $index : null"
-              [attr.aria-invalid]="fn.error ? true : null"
-              (input)="updateExpression($index, $any($event.target).value)"
-              (focus)="onInputFocus($index)"
-              (blur)="onInputBlur()"
-              (keydown)="onFnInputKeyDown($index, $event)"
-              [placeholder]="
-                fn.mode === 'implicit'
-                  ? 'e.g. x^2+y^2=1'
-                  : fn.mode === 'explicit-y'
-                    ? 'e.g. x=y^2'
-                    : fn.mode === 'parametric'
-                      ? 'e.g. cos(t),sin(t)'
-                      : fn.mode === 'polar'
-                        ? 'e.g. r=cos(3*theta)'
-                        : 'e.g. sin(x)'
-              "
-              spellcheck="false"
-            />
-          </div>
-          <div class="fn-actions">
-            <button
-              class="action-btn move-btn"
-              (click)="moveFunctionUp($index)"
-              [disabled]="!canMoveFunctionUp($index)"
-              [attr.aria-label]="'Move ' + functionLabel($index) + ' up'"
-              title="Move up (Alt+ArrowUp)"
-            >
-              ↑
-            </button>
-            <button
-              class="action-btn move-btn"
-              (click)="moveFunctionDown($index)"
-              [disabled]="!canMoveFunctionDown($index)"
-              [attr.aria-label]="'Move ' + functionLabel($index) + ' down'"
-              title="Move down (Alt+ArrowDown)"
-            >
-              ↓
-            </button>
-            <button class="action-btn mode-btn" (click)="cycleMode($index)" [title]="fn.mode">
-              {{
-                fn.mode === 'implicit'
-                  ? '='
-                  : fn.mode === 'explicit-y'
-                    ? 'x'
-                    : fn.mode === 'parametric'
-                      ? 't'
-                      : fn.mode === 'polar'
-                        ? 'r'
-                        : 'y'
-              }}
-            </button>
-            <button
-              class="action-btn"
-              (click)="toggleVisibility($index)"
-              [title]="fn.visible ? 'Hide' : 'Show'"
-            >
-              {{ fn.visible ? '◉' : '○' }}
-            </button>
-            @if (canShowValueTable(fn)) {
-              <button
-                class="action-btn"
-                (click)="toggleValueTable($index)"
-                [class.active]="tableOpenIndex() === $index"
-                [attr.aria-expanded]="tableOpenIndex() === $index"
-                title="Table of values"
-                [attr.aria-label]="'Table of values for function ' + ($index + 1)"
-              >
-                ⊡
-              </button>
-            }
-            <button class="action-btn delete" (click)="removeFunction($index)" title="Remove">
-              ×
-            </button>
-          </div>
-        </div>
-        @if (fn.error) {
-          <p [id]="'fn-error-' + $index" role="alert" aria-live="polite" class="fn-error">
-            {{ fn.error }}
-          </p>
-        }
-        @if (tableOpenIndex() === $index && canShowValueTable(fn)) {
-          <app-value-table
-            [expr]="fn"
-            [index]="$index"
-            [angleUnit]="angleUnit()"
-            (close)="tableOpenIndex.set(null)"
-          />
-        }
-        @if (fn.mode === 'parametric') {
-          <div class="range-row">
-            <label class="range-field-inline">
-              t_min =
-              <input
-                type="text"
-                [value]="fn.tMin || '0'"
-                (change)="updateParamRange($index, 'tMin', $any($event.target).value)"
-                placeholder="0"
-                class="range-input-inline"
-              />
-            </label>
-            <label class="range-field-inline">
-              t_max =
-              <input
-                type="text"
-                [value]="fn.tMax || '2*pi'"
-                (change)="updateParamRange($index, 'tMax', $any($event.target).value)"
-                placeholder="2*pi"
-                class="range-input-inline"
-              />
-            </label>
-          </div>
-        }
-        @if (fn.mode === 'polar') {
-          <div class="range-row">
-            <label class="range-field-inline">
-              θ_min =
-              <input
-                type="text"
-                [value]="fn.thetaMin || '0'"
-                (change)="updateParamRange($index, 'thetaMin', $any($event.target).value)"
-                placeholder="0"
-                class="range-input-inline"
-              />
-            </label>
-            <label class="range-field-inline">
-              θ_max =
-              <input
-                type="text"
-                [value]="fn.thetaMax || '2*pi'"
-                (change)="updateParamRange($index, 'thetaMax', $any($event.target).value)"
-                placeholder="2*pi"
-                class="range-input-inline"
-              />
-            </label>
-          </div>
-        }
-      }
-    </div>
-
-    <p class="sr-only" role="status" aria-live="polite">{{ moveAnnouncement() }}</p>
-
-    @if (functions().length < 5) {
-      <button class="t-btn" (click)="addFunction()">+ add_function</button>
-    }
-
-    <div class="mode-section">
-      <span class="mode-label">tools</span>
-      <div class="mode-buttons">
-        <button class="t-btn" (click)="activateIntegral()" [class.active]="activeIntegral()">
-          ∫ integral
-        </button>
-        <button class="t-btn" (click)="toggleSolidTool()" [class.active]="showSolidTool()">
-          ↻ solid_rev
-        </button>
-        <button class="t-btn" (click)="activateMultiArea()" [class.active]="activeMultiArea()">
-          ▲ area
-        </button>
-        <button
-          class="t-btn"
-          (click)="showConicAssistant.set(!showConicAssistant())"
-          [class.active]="showConicAssistant()"
-        >
-          ◇ conics
-        </button>
-      </div>
-      @if (functions().some((f) => f.mode === 'explicit-y')) {
-        <p class="tool-note">x = g(y) rows aren't supported by the ∫ or area tools yet.</p>
-      }
-    </div>
-
-    @if (showConicAssistant()) {
-      <app-conic-assistant
-        (addGraph)="addConicToGraph($event)"
-        (close)="showConicAssistant.set(false)"
-      />
-    }
-
-    @if (activeIntegral()) {
-      <div class="range-section">
-        <span class="range-label">integral range</span>
-        <div class="range-inputs">
-          <label class="range-field">
-            a =
-            <input
-              type="text"
-              [value]="activeIntegral()!.a"
-              (change)="updateIntegralA($any($event.target).value)"
-              placeholder="pi"
-              [class.input-error]="limitErrors()['integralA']"
-            />
-          </label>
-          <label class="range-field">
-            b =
-            <input
-              type="text"
-              [value]="activeIntegral()!.b"
-              (change)="updateIntegralB($any($event.target).value)"
-              placeholder="e/2"
-              [class.input-error]="limitErrors()['integralB']"
-            />
-          </label>
-        </div>
-      </div>
-    }
-
-    @if (showSolidTool()) {
-      <app-solid-panel />
-      <div class="range-section">
-        <div class="solid-view-toggle">
-          <button class="t-btn" [class.active]="!show3DSolid()" (click)="show3DSolid.set(false)">
-            2D cross-section
-          </button>
-          <button
-            class="t-btn"
-            [class.active]="show3DSolid()"
-            [disabled]="!hasSolidResult()"
-            (click)="show3DSolid.set(true)"
-          >
-            3D view
-          </button>
-        </div>
-      </div>
-    }
-
-    @if (activeMultiArea()) {
-      <div class="range-section">
-        <span class="range-label">multi-function area</span>
-        <div class="bounded-fn-selects">
-          @for (fn of functions(); track $index) {
-            <label class="range-field multi-fn-toggle">
-              <input
-                type="checkbox"
-                [checked]="activeMultiArea()!.functionIndices.includes($index)"
-                (change)="toggleMultiAreaFunction($index)"
-              />
-              <span class="color-swatch" [style.background]="fn.color"></span>
-              f{{ $index + 1 }}
-            </label>
-          }
-        </div>
-        @if (activeMultiArea()!.functionIndices.length >= 2) {
-          <label class="range-field">
-            <input
-              type="checkbox"
-              [checked]="activeMultiArea()!.overlapMode === 'all'"
-              (change)="updateMultiAreaOverlapMode($any($event.target).checked)"
-            />
-            only where ALL overlap
-          </label>
-        }
-        <div class="range-inputs">
-          <label class="range-field">
-            a =
-            <input
-              type="text"
-              [value]="activeMultiArea()!.a"
-              (change)="updateMultiAreaA($any($event.target).value)"
-              placeholder="0"
-              [class.input-error]="limitErrors()['multiA']"
-            />
-          </label>
-          <label class="range-field">
-            b =
-            <input
-              type="text"
-              [value]="activeMultiArea()!.b"
-              (change)="updateMultiAreaB($any($event.target).value)"
-              placeholder="2*pi"
-              [class.input-error]="limitErrors()['multiB']"
-            />
-          </label>
-        </div>
-      </div>
-    }
-
-    <div class="evaluate-section">
-      <span class="eval-label">evaluate at x =</span>
-      <input
-        type="text"
-        class="eval-input"
-        [value]="evalPoint()"
-        (input)="evalPoint.set($any($event.target).value)"
-        placeholder="0"
-      />
-      @if (evalResults().length > 0) {
-        <div class="eval-results">
-          @for (r of evalResults(); track r.fnIndex) {
-            <span class="eval-row">
-              <span class="eval-dot" [style.background]="r.color"></span>
-              f{{ r.fnIndex + 1 }}({{ evalPoint() }}) =
-              <span class="eval-value">{{ r.value }}</span>
-            </span>
-          }
-        </div>
-      }
-    </div>
-
-    <div class="sidebar-footer">
-      <button class="t-btn" (click)="toggleAngleUnit()">angle: {{ angleUnit() }}</button>
-      <button class="t-btn" (click)="toggleKeyboard()" [class.active]="showKeyboard()">
-        keyboard
-      </button>
-      <button class="t-btn" (click)="share()">share</button>
-      <button class="t-btn" (click)="exportPng()">export png</button>
-      <button class="t-btn" #helpBtn (click)="showHelp.set(true)">? help</button>
-    </div>
-    <p class="sr-only" role="status" aria-live="polite">{{ shareNotice() }}</p>
-
-    @if (showKeyboard()) {
-      <app-onscreen-keyboard (keyPress)="onKeyPress($event)" (keyAction)="onKeyAction($event)" />
-    }
-  </aside>
-
   <main
     class="canvas-container"
     tabindex="0"
     aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset, P to cycle points of interest, Escape to clear pinned labels."
     aria-describedby="canvas-graph-description"
     (keydown)="onCanvasKeyDown($event)"
-    (mouseenter)="showCanvasControls.set(true)"
-    (mouseleave)="showCanvasControls.set(false)"
   >
     <span id="canvas-graph-description" class="sr-only">{{ canvasDescription() }}</span>
     @if (show3DSolid() && hasSolidResult()) {
@@ -384,43 +20,514 @@
     } @else {
       <canvas #graphCanvas></canvas>
     }
-    @if (showCanvasControls() && !show3DSolid()) {
+    @if (!show3DSolid()) {
       <div class="canvas-controls">
-        <button class="canvas-ctrl-btn" (click)="zoomIn()" title="Zoom in">+</button>
-        <button class="canvas-ctrl-btn" (click)="zoomOut()" title="Zoom out">−</button>
-        <button class="canvas-ctrl-btn" (click)="resetView()" title="Reset view">⌂</button>
+        <button class="canvas-ctrl-btn" (click)="zoomIn()" aria-label="Zoom in" title="Zoom in (+)">
+          <app-icon name="zoom-in" />
+        </button>
+        <button
+          class="canvas-ctrl-btn"
+          (click)="zoomOut()"
+          aria-label="Zoom out"
+          title="Zoom out (-)"
+        >
+          <app-icon name="zoom-out" />
+        </button>
+        <button
+          class="canvas-ctrl-btn"
+          (click)="resetView()"
+          aria-label="Reset view"
+          title="Reset view (R)"
+        >
+          <app-icon name="home" />
+        </button>
         <button
           class="canvas-ctrl-btn"
           [class.active]="showGrid()"
           (click)="toggleGrid()"
+          [attr.aria-pressed]="showGrid()"
+          aria-label="Toggle grid"
           title="Toggle grid"
         >
-          ⊞
+          <app-icon name="grid" />
         </button>
         <button
           class="canvas-ctrl-btn"
           [class.active]="interactionState.showPointsOfInterest()"
           (click)="togglePointsOfInterest()"
-          title="Points of interest"
+          [attr.aria-pressed]="interactionState.showPointsOfInterest()"
           aria-label="Toggle points of interest"
+          title="Points of interest (P)"
         >
-          ◦
+          <app-icon name="target" />
         </button>
+        <div class="canvas-ctrl-shortcuts-anchor">
+          <button
+            class="canvas-ctrl-btn"
+            [class.active]="uiLayout.showShortcuts()"
+            (click)="uiLayout.showShortcuts.set(!uiLayout.showShortcuts())"
+            [attr.aria-expanded]="uiLayout.showShortcuts()"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts"
+          >
+            <app-icon name="help" />
+          </button>
+          @if (uiLayout.showShortcuts()) {
+            <app-shortcuts-popover (close)="uiLayout.showShortcuts.set(false)" />
+          }
+        </div>
       </div>
     }
   </main>
 
-  @if (results().length > 0) {
-    <footer class="results-panel">
-      @for (r of results(); track r.label) {
-        <div class="result-row">
-          <span class="result-label">{{ r.label }}</span>
-          <span class="result-eq">=</span>
-          <span class="result-value">{{ r.value }}</span>
+  <aside
+    class="panel"
+    [class.snap-peek]="!uiLayout.dragging() && uiLayout.sheetSnap() === 'peek'"
+    [class.snap-half]="!uiLayout.dragging() && uiLayout.sheetSnap() === 'half'"
+    [class.snap-full]="!uiLayout.dragging() && uiLayout.sheetSnap() === 'full'"
+    [style.height.px]="uiLayout.dragging() ? uiLayout.dragOffsetPx() : null"
+  >
+    <button
+      type="button"
+      class="panel-handle"
+      [attr.aria-expanded]="uiLayout.sheetSnap() !== 'peek'"
+      aria-label="Resize expressions panel"
+      (pointerdown)="onSheetHandlePointerDown($event)"
+      (click)="onSheetHandleClick()"
+    >
+      <span class="handle-bar"></span>
+    </button>
+
+    <div class="panel-header">
+      <a routerLink="/web-projects" class="back-link">Back</a>
+      <img src="LOGO.png" alt="A.D.R.S." class="panel-logo" />
+      <span class="header-title">Expressions</span>
+      <button
+        type="button"
+        class="header-help-btn"
+        #helpBtn
+        (click)="showHelp.set(true)"
+        aria-label="Open help"
+      >
+        <app-icon name="help" />
+      </button>
+    </div>
+
+    <div class="panel-scroll">
+      <div class="functions-list">
+        @for (fn of functions(); track $index) {
+          <div
+            class="function-row"
+            [class.selected]="focusedInputIndex() === $index"
+            draggable="true"
+            (dragstart)="onDragStart($index, $event)"
+            (dragover)="onDragOver($index, $event)"
+            (drop)="onDrop($index, $event)"
+            (dragend)="onDragEnd()"
+          >
+            <div class="fn-gutter">
+              <button
+                type="button"
+                class="visibility-dot"
+                [class.visible]="fn.visible"
+                [style.--dot-color]="fn.color"
+                (click)="toggleVisibility($index)"
+                [attr.aria-pressed]="fn.visible"
+                [attr.aria-label]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
+                [title]="fn.visible ? 'Hide' : 'Show'"
+              ></button>
+              <app-color-picker
+                [color]="fn.color"
+                [label]="'Color for f' + ($index + 1)"
+                (colorChange)="updateColor($index, $event)"
+              />
+            </div>
+            <div class="fn-expression">
+              @if (fn.ast && focusedInputIndex() !== $index && fn.raw) {
+                <div class="math-rendered" (click)="onInputFocus($index)">
+                  <app-math-renderer [ast]="fn.ast" [fontSize]="14" />
+                </div>
+              }
+              <input
+                #fnInput
+                class="fn-input"
+                [class.hidden-input]="fn.ast && focusedInputIndex() !== $index && fn.raw"
+                [class.input-error]="fn.error"
+                [id]="'fn-input-' + $index"
+                [value]="fn.raw"
+                [attr.aria-label]="'Function ' + ($index + 1) + ' expression'"
+                [attr.aria-describedby]="fn.error ? 'fn-error-' + $index : null"
+                [attr.aria-invalid]="fn.error ? true : null"
+                (input)="updateExpression($index, $any($event.target).value)"
+                (focus)="onInputFocus($index)"
+                (blur)="onInputBlur()"
+                (keydown)="onFnInputKeyDown($index, $event)"
+                [placeholder]="
+                  fn.mode === 'implicit'
+                    ? 'e.g. x^2+y^2=1'
+                    : fn.mode === 'explicit-y'
+                      ? 'e.g. x=y^2'
+                      : fn.mode === 'parametric'
+                        ? 'e.g. cos(t),sin(t)'
+                        : fn.mode === 'polar'
+                          ? 'e.g. r=cos(3*theta)'
+                          : 'e.g. sin(x)'
+                "
+                spellcheck="false"
+              />
+            </div>
+            <div class="fn-actions">
+              <button
+                class="action-btn move-btn"
+                (click)="moveFunctionUp($index)"
+                [disabled]="!canMoveFunctionUp($index)"
+                [attr.aria-label]="'Move ' + functionLabel($index) + ' up'"
+                title="Move up (Alt+ArrowUp)"
+              >
+                <app-icon name="arrow-up" />
+              </button>
+              <button
+                class="action-btn move-btn"
+                (click)="moveFunctionDown($index)"
+                [disabled]="!canMoveFunctionDown($index)"
+                [attr.aria-label]="'Move ' + functionLabel($index) + ' down'"
+                title="Move down (Alt+ArrowDown)"
+              >
+                <app-icon name="arrow-down" />
+              </button>
+              <button
+                class="action-btn mode-btn"
+                (click)="cycleMode($index)"
+                [attr.aria-label]="
+                  'Cycle curve type for ' + functionLabel($index) + ', currently ' + fn.mode
+                "
+                [title]="'Curve type: ' + fn.mode"
+              >
+                {{
+                  fn.mode === 'implicit'
+                    ? '='
+                    : fn.mode === 'explicit-y'
+                      ? 'x'
+                      : fn.mode === 'parametric'
+                        ? 't'
+                        : fn.mode === 'polar'
+                          ? 'r'
+                          : 'y'
+                }}
+              </button>
+              @if (canShowValueTable(fn)) {
+                <button
+                  class="action-btn"
+                  (click)="toggleValueTable($index)"
+                  [class.active]="tableOpenIndex() === $index"
+                  [attr.aria-expanded]="tableOpenIndex() === $index"
+                  title="Table of values"
+                  [attr.aria-label]="'Table of values for ' + functionLabel($index)"
+                >
+                  <app-icon name="table" />
+                </button>
+              }
+              <button
+                class="action-btn delete"
+                (click)="removeFunction($index)"
+                [attr.aria-label]="'Remove ' + functionLabel($index)"
+                title="Remove"
+              >
+                <app-icon name="trash" />
+              </button>
+            </div>
+          </div>
+          @if (fn.error) {
+            <p [id]="'fn-error-' + $index" role="alert" aria-live="polite" class="fn-error">
+              {{ fn.error }}
+            </p>
+          }
+          @if (tableOpenIndex() === $index && canShowValueTable(fn)) {
+            <app-value-table
+              [expr]="fn"
+              [index]="$index"
+              [angleUnit]="angleUnit()"
+              (close)="tableOpenIndex.set(null)"
+            />
+          }
+          @if (fn.mode === 'parametric') {
+            <div class="range-row">
+              <label class="range-field-inline">
+                t_min =
+                <input
+                  type="text"
+                  [value]="fn.tMin || '0'"
+                  (input)="updateParamRange($index, 'tMin', $any($event.target).value)"
+                  placeholder="0"
+                  class="range-input-inline"
+                />
+              </label>
+              <label class="range-field-inline">
+                t_max =
+                <input
+                  type="text"
+                  [value]="fn.tMax || '2*pi'"
+                  (input)="updateParamRange($index, 'tMax', $any($event.target).value)"
+                  placeholder="2*pi"
+                  class="range-input-inline"
+                />
+              </label>
+            </div>
+          }
+          @if (fn.mode === 'polar') {
+            <div class="range-row">
+              <label class="range-field-inline">
+                θ_min =
+                <input
+                  type="text"
+                  [value]="fn.thetaMin || '0'"
+                  (input)="updateParamRange($index, 'thetaMin', $any($event.target).value)"
+                  placeholder="0"
+                  class="range-input-inline"
+                />
+              </label>
+              <label class="range-field-inline">
+                θ_max =
+                <input
+                  type="text"
+                  [value]="fn.thetaMax || '2*pi'"
+                  (input)="updateParamRange($index, 'thetaMax', $any($event.target).value)"
+                  placeholder="2*pi"
+                  class="range-input-inline"
+                />
+              </label>
+            </div>
+          }
+        }
+      </div>
+
+      <p class="sr-only" role="status" aria-live="polite">{{ moveAnnouncement() }}</p>
+
+      <button
+        class="add-expression-btn"
+        (click)="addFunction()"
+        [disabled]="functions().length >= 5"
+        [attr.aria-label]="
+          functions().length >= 5
+            ? 'Add expression, limit of 5 expressions reached'
+            : 'Add expression'
+        "
+        [title]="functions().length >= 5 ? 'Limit of 5 expressions reached' : 'Add expression'"
+      >
+        <app-icon name="plus" />
+        <span>{{ functions().length >= 5 ? 'Limit of 5 reached' : 'Add expression' }}</span>
+      </button>
+
+      <div class="tool-tabs" role="tablist" aria-label="Graph tools">
+        <button
+          type="button"
+          role="tab"
+          class="tool-tab"
+          [class.active]="uiLayout.activeTool() === 'none'"
+          [attr.aria-selected]="uiLayout.activeTool() === 'none'"
+          (click)="selectTool('none')"
+        >
+          Graph
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="tool-tab"
+          [class.active]="uiLayout.activeTool() === 'integral'"
+          [attr.aria-selected]="uiLayout.activeTool() === 'integral'"
+          (click)="selectTool('integral')"
+        >
+          Integral
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="tool-tab"
+          [class.active]="uiLayout.activeTool() === 'area'"
+          [attr.aria-selected]="uiLayout.activeTool() === 'area'"
+          (click)="selectTool('area')"
+        >
+          Area
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="tool-tab"
+          [class.active]="uiLayout.activeTool() === 'solids'"
+          [attr.aria-selected]="uiLayout.activeTool() === 'solids'"
+          (click)="selectTool('solids')"
+        >
+          Solids
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="tool-tab"
+          [class.active]="uiLayout.activeTool() === 'conics'"
+          [attr.aria-selected]="uiLayout.activeTool() === 'conics'"
+          (click)="selectTool('conics')"
+        >
+          Conics
+        </button>
+      </div>
+      @if (functions().some((f) => f.mode === 'explicit-y')) {
+        <p class="tool-note">x = g(y) rows aren't supported by the integral or area tools yet.</p>
+      }
+
+      @if (showConicAssistant()) {
+        <app-conic-assistant
+          (addGraph)="addConicToGraph($event)"
+          (close)="showConicAssistant.set(false)"
+        />
+      }
+
+      @if (activeIntegral()) {
+        <div class="range-section">
+          <span class="range-label">Integral range</span>
+          <div class="range-inputs">
+            <label class="range-field">
+              a =
+              <input
+                type="text"
+                [value]="activeIntegral()!.a"
+                (input)="updateIntegralA($any($event.target).value)"
+                placeholder="pi"
+                [class.input-error]="limitErrors()['integralA']"
+              />
+            </label>
+            <label class="range-field">
+              b =
+              <input
+                type="text"
+                [value]="activeIntegral()!.b"
+                (input)="updateIntegralB($any($event.target).value)"
+                placeholder="e/2"
+                [class.input-error]="limitErrors()['integralB']"
+              />
+            </label>
+          </div>
         </div>
       }
-    </footer>
-  }
+
+      @if (showSolidTool()) {
+        <app-solid-panel />
+        <div class="range-section">
+          <div class="solid-view-toggle">
+            <button class="t-btn" [class.active]="!show3DSolid()" (click)="show3DSolid.set(false)">
+              2D cross-section
+            </button>
+            <button
+              class="t-btn"
+              [class.active]="show3DSolid()"
+              [disabled]="!hasSolidResult()"
+              (click)="show3DSolid.set(true)"
+            >
+              3D view
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (activeMultiArea()) {
+        <div class="range-section">
+          <span class="range-label">Area between curves</span>
+          <div class="bounded-fn-selects">
+            @for (fn of functions(); track $index) {
+              <label class="range-field multi-fn-toggle">
+                <input
+                  type="checkbox"
+                  [checked]="activeMultiArea()!.functionIndices.includes($index)"
+                  (change)="toggleMultiAreaFunction($index)"
+                />
+                <span class="color-swatch" [style.background]="fn.color"></span>
+                f{{ $index + 1 }}
+              </label>
+            }
+          </div>
+          @if (activeMultiArea()!.functionIndices.length >= 2) {
+            <label class="range-field">
+              <input
+                type="checkbox"
+                [checked]="activeMultiArea()!.overlapMode === 'all'"
+                (change)="updateMultiAreaOverlapMode($any($event.target).checked)"
+              />
+              Only where all overlap
+            </label>
+          }
+          <div class="range-inputs">
+            <label class="range-field">
+              a =
+              <input
+                type="text"
+                [value]="activeMultiArea()!.a"
+                (input)="updateMultiAreaA($any($event.target).value)"
+                placeholder="0"
+                [class.input-error]="limitErrors()['multiA']"
+              />
+            </label>
+            <label class="range-field">
+              b =
+              <input
+                type="text"
+                [value]="activeMultiArea()!.b"
+                (input)="updateMultiAreaB($any($event.target).value)"
+                placeholder="2*pi"
+                [class.input-error]="limitErrors()['multiB']"
+              />
+            </label>
+          </div>
+        </div>
+      }
+
+      <div class="evaluate-section">
+        <span class="eval-label">Evaluate at x =</span>
+        <input
+          type="text"
+          class="eval-input"
+          [value]="evalPoint()"
+          (input)="evalPoint.set($any($event.target).value)"
+          placeholder="0"
+        />
+        @if (evalResults().length > 0) {
+          <div class="eval-results">
+            @for (r of evalResults(); track r.fnIndex) {
+              <span class="eval-row">
+                <span class="eval-dot" [style.background]="r.color"></span>
+                f{{ r.fnIndex + 1 }}({{ evalPoint() }}) =
+                <span class="eval-value">{{ r.value }}</span>
+              </span>
+            }
+          </div>
+        }
+      </div>
+
+      @if (results().length > 0) {
+        <div class="results-panel">
+          @for (r of results(); track r.label) {
+            <div class="result-row">
+              <span class="result-label">{{ r.label }}</span>
+              <span class="result-eq">=</span>
+              <span class="result-value">{{ r.value }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      <div class="panel-footer">
+        <button class="t-btn" (click)="toggleAngleUnit()">Angle: {{ angleUnit() }}</button>
+        <button class="t-btn" (click)="toggleKeyboard()" [class.active]="showKeyboard()">
+          Keyboard
+        </button>
+        <button class="t-btn" (click)="share()">Share</button>
+        <button class="t-btn" (click)="exportPng()">Export PNG</button>
+      </div>
+      <p class="sr-only" role="status" aria-live="polite">{{ shareNotice() }}</p>
+
+      @if (showKeyboard()) {
+        <app-onscreen-keyboard (keyPress)="onKeyPress($event)" (keyAction)="onKeyAction($event)" />
+      }
+    </div>
+  </aside>
 </div>
 
 @if (showHelp()) {

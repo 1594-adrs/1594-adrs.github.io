@@ -124,11 +124,11 @@ describe('GraphingCalculatorComponent', () => {
     expect(compiled.querySelector('canvas')).toBeTruthy();
   });
 
-  it('should render sidebar', () => {
+  it('should render the expressions panel', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.sidebar')).toBeTruthy();
+    expect(compiled.querySelector('.panel')).toBeTruthy();
   });
 
   it('should produce a single curve adapter for an implicit conic', () => {

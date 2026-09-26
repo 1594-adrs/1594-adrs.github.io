@@ -69,6 +69,10 @@ import { ValueTable } from './components/value-table/value-table';
 import { ColorPicker } from './components/color-picker/color-picker';
 import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
+import { UiLayoutState } from './state/ui-layout.state';
+import type { ToolTab, SheetSnap } from './state/ui-layout.state';
+import { IconComponent } from '../../../../shared/icons/icon.component';
+import { ShortcutsPopover } from './components/shortcuts-popover/shortcuts-popover';
 import {
   buildShareHash,
   extractShareFragment,
@@ -126,8 +130,10 @@ function roundLimit(v: number): number {
     SolidPanelComponent,
     ValueTable,
     ColorPicker,
+    IconComponent,
+    ShortcutsPopover,
   ],
-  providers: [SolidToolState, GraphInteractionState],
+  providers: [SolidToolState, GraphInteractionState, UiLayoutState],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
     './graphing-calculator.component.css',
@@ -149,6 +155,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private titleService = inject(Title);
   solidToolState = inject(SolidToolState);
   interactionState = inject(GraphInteractionState);
+  uiLayout = inject(UiLayoutState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   fnInputs = viewChildren<ElementRef<HTMLInputElement>>('fnInput');
@@ -174,7 +181,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   showKeyboard = signal(false);
   show3DSolid = signal(false);
   showHelp = signal(false);
-  showCanvasControls = signal(false);
   showConicAssistant = signal(false);
   showGrid = signal(true);
   focusedInputIndex = signal<number | null>(null);
@@ -185,20 +191,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   tableOpenIndex = signal<number | null>(null);
   shareNotice = signal<string>('');
   private shareNoticeTimerId: ReturnType<typeof setTimeout> | null = null;
-
-  /** Manual override for the mobile sidebar's expanded/collapsed height (see `isSidebarExpanded`). */
-  sidebarExpanded = signal(false);
-
-  /** On narrow screens the sidebar defaults to a short strip; it expands automatically while
-   *  a tool panel is open (solid/integral/area/conics), or when the user toggles it manually. */
-  isSidebarExpanded = computed(
-    () =>
-      this.sidebarExpanded() ||
-      this.showSolidTool() ||
-      this.activeIntegral() !== null ||
-      this.activeMultiArea() !== null ||
-      this.showConicAssistant(),
-  );
 
   /** Accessible description of what's currently on the canvas, for aria-describedby. */
   canvasDescription = computed(() => {
@@ -315,6 +307,93 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   private canvasListenerController: AbortController | null = null;
+
+  // --- Mobile bottom-sheet drag (handle pointer events; see UiLayoutState for snap state) ---
+  private sheetDragStartY = 0;
+  private sheetDragStartHeight = 0;
+  private sheetDragMoved = false;
+  private sheetPointerController: AbortController | null = null;
+
+  private currentSheetHeightPx(): number {
+    if (!this.isBrowser) return 0;
+    const vh = window.innerHeight;
+    const snap = this.uiLayout.sheetSnap();
+    return snap === 'full' ? vh * 0.92 : snap === 'half' ? vh * 0.5 : vh * 0.16;
+  }
+
+  onSheetHandlePointerDown(event: PointerEvent): void {
+    if (!this.isBrowser) return;
+    this.sheetDragStartY = event.clientY;
+    this.sheetDragStartHeight = this.currentSheetHeightPx();
+    this.sheetDragMoved = false;
+    this.uiLayout.dragOffsetPx.set(this.sheetDragStartHeight);
+    this.uiLayout.dragging.set(true);
+    this.sheetPointerController = new AbortController();
+    const { signal } = this.sheetPointerController;
+    window.addEventListener('pointermove', (e) => this.onSheetPointerMove(e), { signal });
+    window.addEventListener('pointerup', () => this.onSheetPointerUp(), { signal });
+    window.addEventListener('pointercancel', () => this.onSheetPointerUp(), { signal });
+  }
+
+  private onSheetPointerMove(event: PointerEvent): void {
+    const deltaY = this.sheetDragStartY - event.clientY;
+    if (Math.abs(deltaY) > 6) this.sheetDragMoved = true;
+    if (!this.sheetDragMoved) return;
+    const vh = window.innerHeight;
+    const next = Math.min(vh * 0.92, Math.max(vh * 0.12, this.sheetDragStartHeight + deltaY));
+    this.uiLayout.dragOffsetPx.set(next);
+  }
+
+  private onSheetPointerUp(): void {
+    this.sheetPointerController?.abort();
+    this.sheetPointerController = null;
+    this.uiLayout.dragging.set(false);
+    if (this.sheetDragMoved) {
+      const vh = window.innerHeight;
+      const h = this.uiLayout.dragOffsetPx();
+      const targets: Array<[SheetSnap, number]> = [
+        ['peek', vh * 0.16],
+        ['half', vh * 0.5],
+        ['full', vh * 0.92],
+      ];
+      let best = targets[0][0];
+      let bestDist = Infinity;
+      for (const [snap, target] of targets) {
+        const d = Math.abs(h - target);
+        if (d < bestDist) {
+          bestDist = d;
+          best = snap;
+        }
+      }
+      this.uiLayout.setSheet(best);
+    }
+    this.uiLayout.dragOffsetPx.set(0);
+  }
+
+  /** Tap (as opposed to drag) on the sheet handle: cycle to the next snap height.
+   *  A prior drag already committed a snap in `onSheetPointerUp`, so this no-ops then. */
+  onSheetHandleClick(): void {
+    if (this.sheetDragMoved) {
+      this.sheetDragMoved = false;
+      return;
+    }
+    this.uiLayout.cycleSheet();
+  }
+
+  /** Opens/closes a tool panel via the tab bar, closing any other active tool first —
+   *  the underlying activate/toggle methods remain the single source of truth. */
+  selectTool(tab: ToolTab): void {
+    const target = tab === this.uiLayout.activeTool() ? 'none' : tab;
+    if (this.activeIntegral() && target !== 'integral') this.activeIntegral.set(null);
+    if (this.showSolidTool() && target !== 'solids') this.toggleSolidTool();
+    if (this.activeMultiArea() && target !== 'area') this.activeMultiArea.set(null);
+    if (this.showConicAssistant() && target !== 'conics') this.showConicAssistant.set(false);
+    if (target === 'integral' && !this.activeIntegral()) this.activateIntegral();
+    else if (target === 'solids' && !this.showSolidTool()) this.toggleSolidTool();
+    else if (target === 'area' && !this.activeMultiArea()) this.activateMultiArea();
+    else if (target === 'conics') this.showConicAssistant.set(true);
+    this.requestRender();
+  }
 
   /** Attaches the canvas's pointer/wheel/touch handlers via addEventListener instead of
    *  template bindings, with `{ passive: false }` on wheel/touch (they call
@@ -461,6 +540,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
     this.solidToolState.connect(this.functions, this.angleUnit);
+    this.uiLayout.connect(
+      this.activeIntegral,
+      this.showSolidTool,
+      this.activeMultiArea,
+      this.showConicAssistant,
+    );
 
     // The 2D canvas is drawn imperatively (not from template bindings), so solid-panel
     // edits (method/axis/bounds/curve selection) need an explicit trigger to redraw —
@@ -519,6 +604,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
     this.canvasListenerController?.abort();
+    this.sheetPointerController?.abort();
     if (this.isBrowser) {
       cancelAnimationFrame(this.animFrameId);
       for (const id of this.pendingRafIds) cancelAnimationFrame(id);
@@ -1298,11 +1384,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   toggleAngleUnit(): void {
     this.angleUnit.update((u) => (u === 'deg' ? 'rad' : 'deg'));
-  }
-
-  /** Mobile-only: expands/collapses the sidebar between a short strip and most of the screen. */
-  toggleSidebarExpanded(): void {
-    this.sidebarExpanded.update((v) => !v);
   }
 
   /** Opens/closes the table-of-values panel for a function row (toggles closed if already open). */

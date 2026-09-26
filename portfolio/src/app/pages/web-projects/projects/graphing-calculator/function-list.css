@@ -6,13 +6,8 @@
 }
 .fn-error {
   margin: -1px 0.75rem 3px 2.6rem;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-corruption);
-}
-.tool-note {
-  padding: 0.3rem 0.75rem 0;
-  font-size: 10px;
-  color: var(--color-text-muted);
 }
 .functions-list {
   padding: 0.5rem 0.75rem;
@@ -22,7 +17,7 @@
 }
 .function-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto;
+  grid-template-columns: 44px 1fr auto;
   align-items: center;
   padding: 5px 8px;
   border-radius: 6px;
@@ -40,20 +35,37 @@
 .fn-gutter {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
+
+/* Desmos-style visibility toggle: a colored circle, filled when the curve is visible,
+   hollow (just an outline) when hidden. The color-picker swatch stays reachable next
+   to it for changing the curve color. */
+.visibility-dot {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--dot-color, var(--color-text-muted));
+  background: var(--dot-color, transparent);
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.visibility-dot:not(.visible) {
+  background: transparent;
+  opacity: 0.55;
+}
+.visibility-dot:hover {
+  opacity: 1;
+}
+
 .color-swatch {
   width: 12px;
   height: 12px;
   border-radius: 3px;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-}
-.fn-index {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
 }
 .fn-expression {
   min-width: 0;
@@ -64,7 +76,7 @@
   font-size: 14px;
   cursor: text;
   padding: 2px 0;
-  min-height: 22px;
+  min-height: 24px;
   display: flex;
   align-items: center;
 }
@@ -84,8 +96,8 @@
     Fira Code,
     Consolas,
     monospace;
-  font-size: 12px;
-  padding: 3px 6px;
+  font-size: 13px;
+  padding: 4px 6px;
   outline: none;
   transition:
     border-color 0.15s,
@@ -122,25 +134,32 @@
   border: none;
   color: var(--color-text-muted);
   cursor: pointer;
-  font-size: 11px;
-  padding: 2px 4px;
+  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   transition: color 0.15s;
   border-radius: 3px;
+}
+.action-btn app-icon {
+  font-size: 13px;
 }
 .action-btn:hover {
   color: var(--color-text);
   background: rgba(255, 255, 255, 0.05);
 }
-.action-btn.move-btn {
-  font-size: 10px;
+.action-btn.move-btn app-icon {
+  font-size: 11px;
 }
 .action-btn.move-btn:disabled {
   opacity: 0.25;
   cursor: not-allowed;
 }
 .action-btn.mode-btn {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   width: 20px;
   text-align: center;
@@ -164,7 +183,7 @@
 }
 .range-field-inline {
   flex: 1;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
@@ -177,7 +196,7 @@
   border-radius: 3px;
   color: var(--color-text);
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 10px;
+  font-size: 11px;
   padding: 1px 4px;
   outline: none;
   transition: border-color 0.15s;
@@ -188,7 +207,8 @@
 
 /* Touch target >=44x44px for row action buttons and text inputs on coarse pointers. */
 @media (pointer: coarse) {
-  .action-btn {
+  .action-btn,
+  .visibility-dot {
     min-width: 44px;
     min-height: 44px;
   }
@@ -200,16 +220,12 @@
 
 @media (max-width: 375px) {
   .function-row {
-    grid-template-columns: 28px 1fr auto;
+    grid-template-columns: 40px 1fr auto;
     padding: 4px;
     gap: 4px;
   }
 }
 
-/* The color-picker's tap target grows to 44px on coarse pointers (see color-picker.css);
-   size the gutter column to its actual content instead of a fixed px so the button never
-   bleeds into the expression column. Placed after the max-width:375 rule so it wins when
-   both match (a narrow touch screen). */
 @media (pointer: coarse) {
   .function-row {
     grid-template-columns: auto 1fr auto;
