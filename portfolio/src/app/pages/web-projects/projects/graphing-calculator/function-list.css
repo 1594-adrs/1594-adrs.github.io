@@ -42,19 +42,36 @@
    hollow (just an outline) when hidden. The color-picker swatch stays reachable next
    to it for changing the curve color. */
 .visibility-dot {
+  position: relative;
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+  border: none;
   border-radius: 50%;
-  border: 2px solid var(--dot-color, var(--color-text-muted));
-  background: var(--dot-color, transparent);
+  background: none;
   padding: 0;
   cursor: pointer;
   transition: opacity 0.15s;
 }
+/* The dot is drawn by a pseudo-element so the button's hit area can grow on touch
+   screens without the circle itself ballooning. */
+.visibility-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--dot-color, var(--color-text-muted));
+  background: var(--dot-color, transparent);
+}
 .visibility-dot:not(.visible) {
-  background: transparent;
   opacity: 0.55;
+}
+.visibility-dot:not(.visible)::before {
+  background: transparent;
 }
 .visibility-dot:hover {
   opacity: 1;
@@ -79,6 +96,10 @@
   min-height: 24px;
   display: flex;
   align-items: center;
+  /* Long expressions scroll inside their column instead of running under the buttons. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
 .math-rendered:hover {
   background: rgba(255, 255, 255, 0.02);
@@ -229,5 +250,31 @@
 @media (pointer: coarse) {
   .function-row {
     grid-template-columns: auto 1fr auto;
+  }
+  .visibility-dot::before {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Narrow touch screens: five 44px actions can't share a line with the expression, so
+   the expression gets the full width and the actions move to a second line. */
+@media (pointer: coarse) and (max-width: 480px) {
+  .function-row {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      'gutter expr'
+      'actions actions';
+    row-gap: 0;
+  }
+  .fn-gutter {
+    grid-area: gutter;
+  }
+  .fn-expression {
+    grid-area: expr;
+  }
+  .fn-actions {
+    grid-area: actions;
+    justify-content: flex-end;
   }
 }

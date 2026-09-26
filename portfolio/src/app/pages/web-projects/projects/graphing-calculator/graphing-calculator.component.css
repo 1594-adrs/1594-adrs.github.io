@@ -44,7 +44,9 @@
   .calculator-layout {
     display: block;
   }
-  .canvas-container {
+  /* Scoped under the layout so it outranks canvas.css's base `position: relative`,
+     which loads later with the same specificity. */
+  .calculator-layout > .canvas-container {
     position: absolute;
     inset: 0;
   }

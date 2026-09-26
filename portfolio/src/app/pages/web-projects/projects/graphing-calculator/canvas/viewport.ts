@@ -44,6 +44,32 @@ export class Viewport {
     this.yMax += worldDy;
   }
 
+  /** Makes one x unit and one y unit the same length on screen (circles look round),
+   *  keeping the centre and showing at least the current region. */
+  fitAspect(width: number, height: number): void {
+    if (!(width > 0 && height > 0)) return;
+    const unitsPerPx = Math.max((this.xMax - this.xMin) / width, (this.yMax - this.yMin) / height);
+    this.setScale(unitsPerPx, width, height);
+  }
+
+  /** Keeps the centre and the current on-screen scale when the canvas is resized,
+   *  so a resize reveals/hides area instead of stretching or re-zooming the graph. */
+  keepScaleOnResize(prevWidth: number, width: number, height: number): void {
+    if (!(prevWidth > 0 && width > 0 && height > 0)) return;
+    this.setScale((this.xMax - this.xMin) / prevWidth, width, height);
+  }
+
+  private setScale(unitsPerPx: number, width: number, height: number): void {
+    const cx = (this.xMin + this.xMax) / 2;
+    const cy = (this.yMin + this.yMax) / 2;
+    const halfW = (unitsPerPx * width) / 2;
+    const halfH = (unitsPerPx * height) / 2;
+    this.xMin = cx - halfW;
+    this.xMax = cx + halfW;
+    this.yMin = cy - halfH;
+    this.yMax = cy + halfH;
+  }
+
   reset(): void {
     this.xMin = -10;
     this.xMax = 10;

@@ -5,6 +5,7 @@ import {
   signal,
   computed,
   effect,
+  afterRenderEffect,
   ElementRef,
   viewChild,
   viewChildren,
@@ -292,14 +293,26 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     // been laid out yet — e.g. jsdom in unit tests, which never computes real layout
     // and leaves clientWidth/clientHeight at 0, so tests size against the canvas's
     // default 300x150 the same way the pre-DPR-aware code implicitly did.
+    const prevWidth = this.cssWidth;
+    const prevHeight = this.cssHeight;
     this.cssWidth = parentWidth > 0 ? parentWidth : canvas.width || 300;
     this.cssHeight = parentHeight > 0 ? parentHeight : canvas.height || 150;
     this.cachedRect = canvas.getBoundingClientRect();
+    // Equal x/y scale, like Desmos/GeoGebra: fit once on the first measurement (the
+    // initial or share-link view), then keep the user's zoom across resizes.
+    if (!this.aspectFitted) {
+      this.viewport.fitAspect(this.cssWidth, this.cssHeight);
+      this.aspectFitted = true;
+    } else if (prevWidth !== this.cssWidth || prevHeight !== this.cssHeight) {
+      this.viewport.keepScaleOnResize(prevWidth, this.cssWidth, this.cssHeight);
+    }
     this.dpr =
       typeof devicePixelRatio !== 'undefined' && devicePixelRatio > 0
         ? Math.min(2, devicePixelRatio)
         : 1;
   }
+
+  private aspectFitted = false;
 
   private getCanvasRect(canvas: HTMLCanvasElement): DOMRect {
     if (!this.cachedRect) this.cachedRect = canvas.getBoundingClientRect();
@@ -545,6 +558,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   });
 
   constructor() {
+    // Re-bind whenever the <canvas> element itself changes (dev-server HMR swaps the
+    // template DOM without re-running ngAfterViewInit; any future @if around the canvas
+    // would do the same). No-op while it's the element we're already bound to.
+    afterRenderEffect(() => {
+      const canvas = this.canvasRef()?.nativeElement;
+      if (canvas && canvas !== this.boundCanvas && this.viewInitialized) {
+        this.ngZone.runOutsideAngular(() => this.bindCanvas(canvas));
+      }
+    });
+
     this.solidToolState.connect(this.functions, this.angleUnit);
     this.uiLayout.connect(
       this.activeIntegral,
@@ -598,15 +621,31 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           this.measureCanvas();
           this.requestRender();
         });
-        if (canvas.parentElement) {
-          this.resizeObserver.observe(canvas.parentElement);
-        }
       }
-      this.measureCanvas();
-      this.attachCanvasListeners(canvas);
+      this.bindCanvas(canvas);
+      this.viewInitialized = true;
       this.parseAll();
       this.render();
     });
+  }
+
+  private boundCanvas: HTMLCanvasElement | null = null;
+  private viewInitialized = false;
+
+  /** Points listeners, the ResizeObserver and cached measurements at `canvas`,
+   *  releasing whatever element they were bound to before. */
+  private bindCanvas(canvas: HTMLCanvasElement): void {
+    if (canvas === this.boundCanvas) return;
+    this.canvasListenerController?.abort();
+    this.boundCanvas = canvas;
+    this.cachedRect = null;
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      if (canvas.parentElement) this.resizeObserver.observe(canvas.parentElement);
+    }
+    this.measureCanvas();
+    this.attachCanvasListeners(canvas);
+    this.requestRender();
   }
 
   ngOnDestroy(): void {
@@ -1357,6 +1396,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   resetView(): void {
     this.viewport.reset();
+    this.viewport.fitAspect(this.cssWidth, this.cssHeight);
     this.render();
   }
 

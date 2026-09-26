@@ -31,8 +31,15 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.functions().length).toBe(1);
     expect(comp.functions()[0].raw).toBe('x^2-1');
     expect(comp.functions()[0].color).toBe('#ff6b35');
-    expect(comp.viewport.xMin).toBe(-5);
-    expect(comp.viewport.xMax).toBe(5);
+    // The shared region is fully visible (widened to keep x/y units equal on this
+    // canvas's aspect ratio), centred where the sharer left it.
+    const v = comp.viewport;
+    expect(v.xMin).toBeLessThanOrEqual(-5);
+    expect(v.xMax).toBeGreaterThanOrEqual(5);
+    expect(v.yMin).toBeLessThanOrEqual(-5);
+    expect(v.yMax).toBeGreaterThanOrEqual(5);
+    expect((v.xMin + v.xMax) / 2).toBeCloseTo(0, 9);
+    expect(Math.min(v.xMax - v.xMin, v.yMax - v.yMin)).toBeCloseTo(10, 9);
     // The fragment is applied once and dropped from the URL.
     expect(window.location.hash).toBe('');
   });
@@ -184,6 +191,25 @@ describe('GraphingCalculatorComponent', () => {
     const after = comp.canvasRef()?.nativeElement;
     expect(after).toBe(before);
     expect(after!.isConnected).toBe(true);
+  });
+
+  it('pans the 2D view with a mouse drag on the canvas', () => {
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    const comp = fixture.componentInstance;
+    fixture.detectChanges();
+    const canvas = comp.canvasRef()!.nativeElement;
+    const xMin = comp.viewport.xMin;
+
+    const mouse = (type: string, x: number, y: number) =>
+      canvas.dispatchEvent(
+        new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true }),
+      );
+    mouse('mousedown', 100, 100);
+    mouse('mousemove', 100, 100);
+    mouse('mousemove', 160, 100);
+    mouse('mouseup', 160, 100);
+
+    expect(comp.viewport.xMin).toBeLessThan(xMin);
   });
 
   describe('detectMode', () => {
