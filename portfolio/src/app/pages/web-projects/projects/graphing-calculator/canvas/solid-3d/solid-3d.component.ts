@@ -9,6 +9,7 @@ import {
   inject,
   input,
   effect,
+  signal,
   PLATFORM_ID,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
@@ -23,15 +24,21 @@ const SLICE_HIGHLIGHT_COLOR = '#ffcc00';
   selector: 'app-solid-3d',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<canvas
-    #threeCanvas
-    class="solid-3d-canvas"
-    tabindex="0"
-    aria-label="3D solid view"
-    (keydown)="onKeyDown($event)"
-  ></canvas>`,
+      #threeCanvas
+      class="solid-3d-canvas"
+      tabindex="0"
+      aria-label="3D solid view"
+      (keydown)="onKeyDown($event)"
+    ></canvas>
+    @if (webglUnavailable()) {
+      <p class="solid-3d-fallback" role="status">
+        The 3D view needs WebGL, which isn't available in this browser.
+      </p>
+    }`,
   styles: [
     `
       :host {
+        position: relative;
         display: block;
         width: 100%;
         height: 100%;
@@ -40,6 +47,18 @@ const SLICE_HIGHLIGHT_COLOR = '#ffcc00';
         width: 100%;
         height: 100%;
         display: block;
+        touch-action: none;
+      }
+      .solid-3d-fallback {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        padding: 1rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--color-text-subtle);
       }
     `,
   ],
@@ -58,7 +77,11 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
   pieces = input<SolidPiece[]>([]);
   sweepT = input<number | null>(null);
 
+  /** Set when the WebGL context can't be created (old devices, disabled GPU, jsdom). */
+  webglUnavailable = signal(false);
+
   private scene: SolidScene | null = null;
+  private pinchDistance: number | null = null;
   private isDragging = false;
   private lastMouse = { x: 0, y: 0 };
   private resizeObserver: ResizeObserver | null = null;
@@ -85,6 +108,44 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     e.preventDefault();
     this.scene?.zoomCamera(e.deltaY);
     this.scene?.render();
+  };
+
+  private onTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      this.isDragging = true;
+      this.pinchDistance = null;
+      this.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 2) {
+      this.isDragging = false;
+      this.pinchDistance = touchDistance(e.touches);
+    }
+  };
+  private onTouchMove = (e: TouchEvent) => {
+    if (!this.scene) return;
+    e.preventDefault();
+    if (e.touches.length === 2 && this.pinchDistance !== null) {
+      const d = touchDistance(e.touches);
+      // Fingers apart → zoom in (negative delta), same sign convention as the wheel.
+      this.scene.zoomCamera((this.pinchDistance - d) * 2);
+      this.pinchDistance = d;
+      this.scene.render();
+    } else if (e.touches.length === 1 && this.isDragging) {
+      const t = e.touches[0];
+      this.scene.rotateCamera(t.clientX - this.lastMouse.x, t.clientY - this.lastMouse.y);
+      this.lastMouse = { x: t.clientX, y: t.clientY };
+      this.scene.render();
+    }
+  };
+  private onTouchEnd = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      // Lifting one finger of a pinch continues as a rotate from the remaining one.
+      this.isDragging = true;
+      this.pinchDistance = null;
+      this.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if (e.touches.length === 0) {
+      this.isDragging = false;
+      this.pinchDistance = null;
+    }
   };
 
   constructor() {
@@ -128,7 +189,12 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
       canvas.height = parent.clientHeight;
     }
 
-    this.scene = new SolidScene(canvas);
+    try {
+      this.scene = new SolidScene(canvas);
+    } catch {
+      this.webglUnavailable.set(true);
+      return;
+    }
 
     if (parent && typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => {
@@ -146,6 +212,10 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     canvas.addEventListener('mouseup', this.onMouseUp);
     canvas.addEventListener('mouseleave', this.onMouseLeave);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
+    canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', this.onTouchEnd);
+    canvas.addEventListener('touchcancel', this.onTouchEnd);
 
     this.ngZone.runOutsideAngular(() => {
       const spec = this.spec();
@@ -194,6 +264,10 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
       canvas.removeEventListener('mouseup', this.onMouseUp);
       canvas.removeEventListener('mouseleave', this.onMouseLeave);
       canvas.removeEventListener('wheel', this.onWheel);
+      canvas.removeEventListener('touchstart', this.onTouchStart);
+      canvas.removeEventListener('touchmove', this.onTouchMove);
+      canvas.removeEventListener('touchend', this.onTouchEnd);
+      canvas.removeEventListener('touchcancel', this.onTouchEnd);
     }
     this.scene?.dispose();
   }
@@ -227,4 +301,11 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     event.preventDefault();
     this.scene.render();
   }
+}
+
+function touchDistance(touches: TouchList): number {
+  return Math.hypot(
+    touches[0].clientX - touches[1].clientX,
+    touches[0].clientY - touches[1].clientY,
+  );
 }

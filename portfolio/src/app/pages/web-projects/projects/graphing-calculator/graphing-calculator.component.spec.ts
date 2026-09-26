@@ -161,6 +161,31 @@ describe('GraphingCalculatorComponent', () => {
     expect(result!.pieces.length).toBeGreaterThan(0);
   });
 
+  it('keeps the same 2D canvas element across a 3D → 2D round trip', () => {
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    const comp = fixture.componentInstance;
+    fixture.detectChanges();
+    comp.addFunction();
+    comp.updateExpression(1, 'x^2+y^2-4=0');
+    comp.toggleSolidTool();
+    comp.solidToolState.toggleCurve(1);
+    comp.solidToolState.setA('-2');
+    comp.solidToolState.setB('2');
+    fixture.detectChanges();
+    expect(comp.hasSolidResult()).toBe(true);
+    const before = comp.canvasRef()?.nativeElement;
+    expect(before).toBeTruthy();
+
+    comp.show3DSolid.set(true);
+    fixture.detectChanges();
+    comp.show3DSolid.set(false);
+    fixture.detectChanges();
+
+    const after = comp.canvasRef()?.nativeElement;
+    expect(after).toBe(before);
+    expect(after!.isConnected).toBe(true);
+  });
+
   describe('detectMode', () => {
     it('should detect cos(t),sin(t) as parametric', () => {
       const fixture = TestBed.createComponent(GraphingCalculatorComponent);

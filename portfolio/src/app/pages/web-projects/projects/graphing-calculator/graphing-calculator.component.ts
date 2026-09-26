@@ -556,6 +556,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.solidToolState.result();
       this.solidToolState.sweepT();
       this.solidToolState.axisOrientation();
+      // Leaving the 3D overlay must repaint the (possibly resized) 2D canvas.
+      this.show3DSolid();
       if (!this.isBrowser) return;
       this.requestRender();
     });

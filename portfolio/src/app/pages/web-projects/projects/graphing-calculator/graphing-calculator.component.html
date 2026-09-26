@@ -7,6 +7,9 @@
     (keydown)="onCanvasKeyDown($event)"
   >
     <span id="canvas-graph-description" class="sr-only">{{ canvasDescription() }}</span>
+    <!-- The 2D canvas stays mounted (listeners/ResizeObserver are bound to this element
+         once); the 3D view is an absolute overlay on top of it. -->
+    <canvas #graphCanvas [attr.aria-hidden]="show3DSolid() && hasSolidResult()"></canvas>
     @if (show3DSolid() && hasSolidResult()) {
       <div class="solid-3d-container">
         <app-solid-3d
@@ -17,8 +20,6 @@
           [visible]="show3DSolid()"
         />
       </div>
-    } @else {
-      <canvas #graphCanvas></canvas>
     }
     @if (!show3DSolid()) {
       <div class="canvas-controls">
