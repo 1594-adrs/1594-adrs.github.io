@@ -6,3 +6,4 @@ node_modules/
 graphify-out/
 .playwright/
 .opencode/
+cv/private/
