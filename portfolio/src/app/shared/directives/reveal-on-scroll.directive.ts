@@ -29,7 +29,17 @@ export class RevealOnScroll implements OnInit, OnDestroy {
   visible = output<void>();
 
   ngOnInit() {
-    if (!this.isBrowser || typeof IntersectionObserver === 'undefined') return;
+    if (!this.isBrowser) return;
+
+    // Only hide content before reveal when JS can actually run the reveal;
+    // otherwise (no-JS, prerendered HTML) sections must render visible.
+    document.documentElement.classList.add('js-reveal');
+
+    if (this.prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
+      this.revealed.set(true);
+      this.visible.emit();
+      return;
+    }
 
     this.observer = new IntersectionObserver(
       (entries) => {
@@ -58,5 +68,9 @@ export class RevealOnScroll implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.observer?.disconnect();
     if (this.hideTimerId !== null) clearTimeout(this.hideTimerId);
+  }
+
+  private prefersReducedMotion(): boolean {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
   }
 }

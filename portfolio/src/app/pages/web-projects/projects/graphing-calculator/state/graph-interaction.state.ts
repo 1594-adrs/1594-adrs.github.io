@@ -34,11 +34,6 @@ export class GraphInteractionState {
     }
   }
 
-  isPinned(p: PointOfInterest): boolean {
-    const id = pointId(p);
-    return this.pinnedPoints().some((pt) => pt.id === id);
-  }
-
   togglePin(p: PointOfInterest): void {
     const id = pointId(p);
     this.pinnedPoints.update((pts) => {

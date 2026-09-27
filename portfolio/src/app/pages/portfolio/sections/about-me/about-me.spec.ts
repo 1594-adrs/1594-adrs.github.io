@@ -25,6 +25,6 @@ describe('AboutMe', () => {
     const fixture = TestBed.createComponent(AboutMe);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelectorAll('.skill-category').length).toBe(4);
+    expect(compiled.querySelectorAll('.skill-category').length).toBe(5);
   });
 });

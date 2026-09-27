@@ -1,10 +1,16 @@
-<nav class="navbar" aria-label="Main navigation">
+<nav class="navbar" aria-label="Main navigation" (keydown.escape)="closeMenu()">
   <div class="navbar-container">
-    <div class="logo">
+    <a
+      class="logo"
+      href="#home"
+      aria-label="Andrés Rincón — back to top"
+      (click)="scrollToSection('home'); $event.preventDefault()"
+    >
       <span class="logo-text">.A.D.R.S.</span>
-    </div>
+    </a>
 
     <button
+      #menuToggle
       class="menu-toggle"
       [class.active]="isMenuOpen()"
       (click)="toggleMenu()"
@@ -12,35 +18,74 @@
       [attr.aria-expanded]="isMenuOpen()"
       aria-controls="nav-menu"
     >
-      <span class="hamburger"></span>
+      <span class="hamburger-icon">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </span>
     </button>
 
-    <ul class="nav-links" [class.active]="isMenuOpen()" id="nav-menu">
-      @for (link of navLinks; track link.id) {
-        @if (link.isButton) {
-          <li class="nav-item">
+    <div
+      class="nav-backdrop"
+      [class.active]="isMenuOpen() && isMobileMenu()"
+      aria-hidden="true"
+      (click)="isMenuOpen.set(false)"
+    ></div>
+
+    <div
+      class="nav-menu-panel"
+      id="nav-menu"
+      [class.active]="isMenuOpen()"
+      [inert]="!isMenuOpen() && isMobileMenu()"
+    >
+      <div class="nav-menu-inner">
+      <ul class="nav-links">
+        @for (link of navLinks; track link.id) {
+          @if (link.isButton) {
+            <li class="nav-item">
+              <a
+                [href]="link.href"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="nav-link-btn"
+                [attr.aria-label]="link.label + ' (opens PDF)'"
+                (click)="isMenuOpen.set(false)"
+              >
+                {{ link.label }}
+              </a>
+            </li>
+          } @else {
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                [class.active]="activeLink() === link.id"
+                (click)="scrollToSection(link.id); $event.preventDefault()"
+                [href]="'#' + link.id"
+              >
+                {{ link.label }}
+              </a>
+            </li>
+          }
+        }
+      </ul>
+
+      <ul class="nav-social-list" aria-label="Social links">
+        @for (social of socialNetworks; track social.label) {
+          <li>
             <a
-              [href]="'/Andres_Rincon_CV.pdf'"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="nav-link-btn"
+              [href]="social.url"
+              [attr.aria-label]="social.label"
+              [attr.target]="social.url.startsWith('mailto:') ? null : '_blank'"
+              [attr.rel]="social.url.startsWith('mailto:') ? null : 'noopener noreferrer'"
+              class="nav-social-link"
             >
-              {{ link.label }}
-            </a>
-          </li>
-        } @else {
-          <li class="nav-item">
-            <a
-              class="nav-link"
-              [class.active]="activeLink() === link.id"
-              (click)="scrollToSection(link.id); $event.preventDefault()"
-              [href]="'#' + link.id"
-            >
-              {{ link.label }}
+              <app-icon [name]="social.iconName" />
+              <span>{{ social.label }}</span>
             </a>
           </li>
         }
-      }
-    </ul>
+      </ul>
+      </div>
+    </div>
   </div>
 </nav>

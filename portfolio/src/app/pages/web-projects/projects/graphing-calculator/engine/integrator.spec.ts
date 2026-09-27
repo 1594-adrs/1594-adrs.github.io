@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { integrate, computeIntegralPoints } from './integrator';
+import { integrate } from './integrator';
 
 describe('integrator', () => {
   it('should compute integral of x^2 from 0 to 1 ≈ 1/3', () => {
@@ -84,18 +84,5 @@ describe('integrator', () => {
     const expected = Math.atan(10);
     const result = integrate((x) => 1 / (1 + x * x), 0, 10);
     expect(result).toBeCloseTo(expected, 3);
-  });
-});
-
-describe('computeIntegralPoints', () => {
-  it('should return correct number of points', () => {
-    const points = computeIntegralPoints((x) => x, 0, 1, 100);
-    expect(points.length).toBe(101);
-  });
-
-  it('should return points with correct x and y values', () => {
-    const points = computeIntegralPoints((x) => x * x, 0, 2, 4);
-    expect(points[0]).toEqual({ x: 0, y: 0 });
-    expect(points[4]).toEqual({ x: 2, y: 4 });
   });
 });

@@ -6,12 +6,15 @@
   padding: 0;
 }
 
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {
   font-family: var(--font-family);
+  font-size: var(--font-size-md);
   color: var(--color-text);
   line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
@@ -39,15 +42,23 @@ button {
   background: none;
 }
 
-::-webkit-scrollbar {
-  display: none;
-}
-
-* {
+/* The custom scroll-progress bar replaces the native scrollbar only where it is
+   actually rendered (portfolio pages, fine pointer, > 768px) — toggled by app.ts.
+   The viewport scrollbar belongs to <html> itself, so it needs its own rules. */
+html.has-custom-scrollbar {
   scrollbar-width: none;
 }
 
-body {
+html.has-custom-scrollbar::-webkit-scrollbar,
+html.has-custom-scrollbar ::-webkit-scrollbar {
+  display: none;
+}
+
+html.has-custom-scrollbar * {
+  scrollbar-width: none;
+}
+
+html.has-custom-scrollbar body {
   -ms-overflow-style: none;
   overflow: -moz-scrollbars-none;
 }

@@ -5,12 +5,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-  z-index: 999;
+  z-index: var(--z-fixed);
 }
 
 .social-button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -34,7 +34,8 @@
   box-shadow: 2px 2px 0 var(--color-primary);
 }
 
-.social-button:hover .tooltip {
+.social-button:hover .tooltip,
+.social-button:focus-visible .tooltip {
   opacity: 1;
   visibility: visible;
   transform: translateX(20px) translateY(-50%);
@@ -69,23 +70,6 @@
 
 @media (max-width: 768px) {
   .social-buttons-container {
-    gap: 0.5rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .social-buttons-container {
-    left: 0.6rem;
-    bottom: 0.6rem;
-  }
-
-  .social-button {
-    width: 36px;
-    height: 36px;
-    font-size: 1rem;
-  }
-
-  .tooltip {
     display: none;
   }
 }

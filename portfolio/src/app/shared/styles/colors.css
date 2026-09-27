@@ -7,10 +7,13 @@
   --color-bg-card: #12121a;
   --color-canvas-bg: #0d0d15;
   --color-text: #e0e0e0;
-  --color-text-muted: #666680;
+  --color-text-muted: #80809a;
   --color-text-subtle: #888899;
   --color-border: #1a1a2e;
   --color-border-hover: #333350;
+  /* >=3:1 against --color-bg-dark (#0a0a0f); measured 3.16:1 — use for
+     .btn, tags and interactive outlines that must stay perceivable. */
+  --color-border-control: #5c5c8c;
   --color-glow: rgba(0, 255, 136, 0.25);
   --color-glow-10: rgba(0, 255, 136, 0.1);
   --color-glow-15: rgba(0, 255, 136, 0.15);

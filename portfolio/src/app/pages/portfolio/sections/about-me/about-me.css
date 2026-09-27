@@ -4,18 +4,29 @@
   justify-content: center;
   align-items: center;
   padding: var(--spacing-3xl) 6rem;
-  background: var(--color-bg-dark);
   position: relative;
 }
 
 .about-container {
-  max-width: 1100px;
+  max-width: var(--container-max);
   width: 100%;
-  opacity: 0;
-  transform: translateY(60px);
   transition:
     opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Only hide before reveal when JS can run the reveal (html.js-reveal, set by
+   RevealOnScroll) — otherwise no-JS/prerendered HTML must render visible. */
+:host-context(html.js-reveal) .about-container:not(.revealed) {
+  opacity: 0;
+  transform: translateY(60px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host-context(html.js-reveal) .about-container:not(.revealed) {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .about-container.revealed {
@@ -30,15 +41,33 @@
 
 .about-content {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    'user edu'
+    'tech tech'
+    'soft certs';
   gap: 2rem;
   margin-top: 2rem;
 }
 
-.about-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
+.area-tech {
+  grid-area: tech;
+}
+
+.area-user {
+  grid-area: user;
+}
+
+.area-soft {
+  grid-area: soft;
+}
+
+.area-certs {
+  grid-area: certs;
+}
+
+.area-edu {
+  grid-area: edu;
 }
 
 .terminal-header {
@@ -51,8 +80,8 @@
 
 .name {
   font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
   font-family: var(--font-family-display);
+  font-weight: var(--font-weight-normal);
   color: var(--color-text);
   margin: 0 0 0.5rem 0;
   letter-spacing: var(--letter-spacing-terminal);
@@ -62,7 +91,6 @@
 .role-label {
   font-size: var(--font-size-md);
   color: var(--color-primary);
-  font-weight: var(--font-weight-medium);
   margin: 0 0 1rem 0;
   font-family: var(--font-family-display);
   letter-spacing: var(--letter-spacing-terminal);
@@ -73,6 +101,17 @@
   color: var(--color-text-subtle);
   line-height: var(--line-height-normal);
   margin: 0;
+}
+
+.soft-skills-title,
+.courses-title {
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-primary);
+  margin: 0 0 0.8rem 0;
+  letter-spacing: var(--letter-spacing-tight);
+  text-transform: uppercase;
 }
 
 .soft-skills-list {
@@ -91,12 +130,6 @@
   font-family: var(--font-family);
 }
 
-.about-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
 .skills-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -106,10 +139,10 @@
 .category-title {
   font-size: var(--font-size-sm);
   font-family: var(--font-family-display);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-normal);
   color: var(--color-primary);
   margin: 0 0 0.6rem 0;
-  letter-spacing: var(--letter-spacing-terminal);
+  letter-spacing: var(--letter-spacing-tight);
   text-transform: uppercase;
 }
 
@@ -126,24 +159,41 @@
 }
 
 .course-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
   background: transparent;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-control);
   padding: 0.5rem 0.8rem;
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast);
 }
 
-.course-item:hover {
-  background: var(--color-glow-10);
-  border-color: var(--color-primary);
+@media (hover: hover) {
+  .course-item:hover {
+    background: var(--color-glow-10);
+    border-color: var(--color-primary);
+  }
 }
 
 .course-name {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text-subtle);
   font-family: var(--font-family-display);
-  letter-spacing: var(--letter-spacing-terminal);
+  letter-spacing: var(--letter-spacing-tight);
+  text-decoration: none;
+}
+
+a.course-name:hover,
+a.course-name:focus-visible {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.course-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
 }
 
 .education-list {
@@ -167,7 +217,7 @@
   font-family: var(--font-family-display);
   color: var(--color-text);
   margin: 0 0 0.3rem 0;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-normal);
   letter-spacing: var(--letter-spacing-terminal);
   text-transform: uppercase;
 }
@@ -199,6 +249,12 @@
 
   .about-content {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      'user'
+      'edu'
+      'tech'
+      'soft'
+      'certs';
     gap: 2rem;
   }
 }

@@ -23,12 +23,11 @@ describe('GraphInteractionState', () => {
 
   it('pins and unpins a point (toggle)', () => {
     const p = { x: 1, y: 2, label: 'root of f1' };
-    expect(state.isPinned(p)).toBe(false);
+    expect(state.pinnedPoints().length).toBe(0);
     state.togglePin(p);
-    expect(state.isPinned(p)).toBe(true);
     expect(state.pinnedPoints().length).toBe(1);
     state.togglePin(p);
-    expect(state.isPinned(p)).toBe(false);
+    expect(state.pinnedPoints().length).toBe(0);
   });
 
   it('clears all pinned points', () => {

@@ -1,0 +1,21 @@
+:host {
+  position: fixed;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  z-index: var(--z-phosphor-field);
+}
+
+.field-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.field-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(10, 10, 15, 0.55) 100%);
+}

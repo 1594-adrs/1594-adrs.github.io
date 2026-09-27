@@ -1,0 +1,88 @@
+<section class="contact-section" id="contact" appRevealOnScroll #reveal="reveal">
+  <div
+    class="reveal-container"
+    [class.revealed]="reveal.revealed()"
+    [class.hiding]="reveal.hiding()"
+  >
+    <h2 class="section-title">// Contact</h2>
+
+    <div class="contact-card terminal-card">
+      <div class="terminal-header">
+        <span class="terminal-dot"></span>
+        <span class="terminal-dot"></span>
+        <span class="terminal-dot"></span>
+        <span class="terminal-title">contact.sh</span>
+      </div>
+
+      <div class="terminal-body">
+        <p class="contact-lead">Let's work together.</p>
+        <p class="contact-availability">{{ profile.availability }}</p>
+
+        <address class="contact-details">
+          <div class="contact-detail">
+            <app-icon name="target" />
+            <span>{{ profile.location }} &middot; {{ profile.timezone }}</span>
+          </div>
+          <div class="contact-detail">
+            <app-icon name="envelope" />
+            <span class="contact-email">{{ profile.email }}</span>
+          </div>
+        </address>
+
+        <div class="contact-actions">
+          <a
+            class="btn btn-primary"
+            [href]="composeUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Email me (opens Gmail in a new tab)"
+          >
+            <app-icon name="envelope" />
+            Email me
+          </a>
+          <button type="button" class="btn" [class.copied]="copied()" (click)="copyEmail()">
+            <app-icon [name]="copied() ? 'check' : 'copy'" />
+            {{ copied() ? 'Copied!' : 'Copy email' }}
+          </button>
+          <a
+            class="btn"
+            href="https://www.linkedin.com/in/1594-adrs/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="LinkedIn profile"
+          >
+            <app-icon name="linkedin" />
+            LinkedIn
+          </a>
+          <a
+            class="btn"
+            href="https://github.com/1594-adrs"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub profile"
+          >
+            <app-icon name="github" />
+            GitHub
+          </a>
+          @if (profile.resumeUrl) {
+            <a
+              class="btn"
+              [href]="profile.resumeUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Download CV (PDF)"
+            >
+              <app-icon name="terminal" />
+              CV · PDF
+            </a>
+          }
+        </div>
+
+        <p class="contact-mailapp">
+          Prefer another client? <a [href]="'mailto:' + profile.email">Open in your mail app</a>
+        </p>
+        <p class="sr-only" aria-live="polite">{{ copied() ? 'Email address copied to clipboard' : '' }}</p>
+      </div>
+    </div>
+  </div>
+</section>

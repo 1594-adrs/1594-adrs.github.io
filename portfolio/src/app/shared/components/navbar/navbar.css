@@ -15,6 +15,7 @@
   padding: 0.5rem 2rem;
   max-width: var(--container-max);
   margin: 0 auto;
+  position: relative;
 }
 
 .logo {
@@ -22,6 +23,12 @@
   align-items: center;
   gap: 10px;
   cursor: pointer;
+  text-decoration: none;
+}
+
+.logo:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
 }
 
 .logo-text {
@@ -31,7 +38,6 @@
   color: var(--color-primary);
   letter-spacing: var(--letter-spacing-wide);
   transition: color var(--transition-fast);
-  animation: glitchFlicker 6s infinite;
   position: relative;
 }
 
@@ -48,28 +54,45 @@
 
 .logo-text::before {
   color: var(--color-corruption);
-  animation: glitchText 5s infinite linear alternate-reverse;
-  opacity: 0.6;
 }
 
 .logo-text::after {
   color: var(--color-secondary);
-  animation: glitchText2 5s infinite linear alternate-reverse;
-  opacity: 0.6;
 }
 
-.logo-text:hover {
+.logo:hover .logo-text,
+.logo:focus-visible .logo-text {
   color: var(--color-primary);
+  animation: glitchFlicker 1.2s infinite;
 }
 
-.logo-text:hover::before,
-.logo-text:hover::after {
-  opacity: 1;
+.logo:hover .logo-text::before,
+.logo:focus-visible .logo-text::before {
+  opacity: 0.6;
+  animation: glitchText 0.6s infinite linear alternate-reverse;
+}
+
+.logo:hover .logo-text::after,
+.logo:focus-visible .logo-text::after {
+  opacity: 0.6;
+  animation: glitchText2 0.6s infinite linear alternate-reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-text::before,
+  .logo-text::after {
+    display: none;
+  }
+
+  .logo:hover .logo-text,
+  .logo:focus-visible .logo-text {
+    animation: none;
+  }
 }
 
 .nav-links {
   display: flex;
-  gap: 2rem;
+  gap: 1.5rem;
   align-items: center;
   justify-content: flex-end;
 }
@@ -87,6 +110,7 @@
   font-weight: var(--font-weight-medium);
   font-family: var(--font-family-display);
   letter-spacing: var(--letter-spacing-terminal);
+  white-space: nowrap;
 }
 
 .nav-link::after {
@@ -128,15 +152,12 @@
     color var(--transition-fast);
   font-size: var(--font-size-sm);
   letter-spacing: var(--letter-spacing-terminal);
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .nav-link-btn::before {
   content: '> ';
-  opacity: 0.6;
-}
-
-.nav-link-btn::after {
-  content: '.exe';
   opacity: 0.6;
 }
 
@@ -145,26 +166,76 @@
   color: var(--color-bg-dark);
 }
 
-.menu-toggle {
+.nav-social-list {
   display: none;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.5rem;
 }
 
-.hamburger {
+.menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+.hamburger-icon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
   width: 25px;
+  height: 20px;
+}
+
+.hamburger-line {
+  width: 100%;
   height: 2px;
   background: var(--color-primary);
   transition: transform var(--transition-fast);
-  display: block;
+  transform-origin: center;
 }
 
-.menu-toggle.active .hamburger {
-  transform: rotate(45deg) translate(5px, 5px);
+.menu-toggle.active .hamburger-line:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
 }
 
-@media (max-width: 768px) {
+.menu-toggle.active .hamburger-line:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.menu-toggle.active .hamburger-line:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.nav-backdrop {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hamburger-line {
+    transition: none;
+  }
+}
+
+/* Desktop: tighten spacing between 961–1440px so Contact still fits on one line. */
+@media (min-width: 961px) and (max-width: 1200px) {
+  .nav-links {
+    gap: 1rem;
+  }
+
+  .nav-link {
+    letter-spacing: 1px;
+    font-size: var(--font-size-base);
+  }
+
+  .nav-link-btn {
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 960px) {
   .navbar-container {
     padding: 0.8rem 1rem;
   }
@@ -173,23 +244,49 @@
     display: flex;
   }
 
-  .nav-links {
-    position: absolute;
-    top: 50px;
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    gap: 0;
-    background: var(--color-bg-dark);
-    padding: 0;
-    border-bottom: 1px solid var(--color-border);
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height var(--transition-fast);
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: rgba(10, 10, 15, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
   }
 
-  .nav-links.active {
-    max-height: 400px;
+  .nav-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .nav-menu-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-rows: 0fr;
+    background: var(--color-bg-dark);
+    border-bottom: 1px solid var(--color-border);
+    transition: grid-template-rows var(--transition-medium);
+  }
+
+  .nav-menu-panel.active {
+    grid-template-rows: 1fr;
+  }
+
+  /* Single grid child so the 0fr row collapses everything (links + socials). */
+  .nav-menu-inner {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .nav-links {
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    align-items: stretch;
   }
 
   .nav-item {
@@ -214,6 +311,37 @@
   .logo-text {
     font-size: 1.3rem;
   }
+
+  .nav-social-list {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem 1.25rem;
+  }
+
+  .nav-social-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-family: var(--font-family-display);
+    font-size: var(--font-size-xs);
+    letter-spacing: var(--letter-spacing-terminal);
+    transition: color var(--transition-fast);
+  }
+
+  .nav-social-link:hover,
+  .nav-social-link:focus-visible {
+    color: var(--color-primary);
+  }
+
+  .nav-social-link app-icon {
+    font-size: 1.3rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -221,12 +349,15 @@
     font-size: 1.1rem;
   }
 
-  .nav-links {
-    top: 45px;
-  }
-
   .nav-link-btn {
     padding: 0.8rem 1.2rem;
     font-size: var(--font-size-sm);
+  }
+}
+
+@media (max-width: 960px) and (prefers-reduced-motion: reduce) {
+  .nav-menu-panel,
+  .nav-backdrop {
+    transition: none;
   }
 }

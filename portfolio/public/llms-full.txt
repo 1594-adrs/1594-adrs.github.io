@@ -1,0 +1,134 @@
+# Andrés David Rincón Salazar
+
+Software Developer · Full Stack — Pereira, Colombia (UTC−5)
+
+Junior full stack developer working with Angular, NestJS and TypeScript. Systems and Computer Engineering student at Universidad Tecnológica de Pereira, where I also work as a software development and support monitor. I build practical tools end to end — like this site's graphing calculator — and pick up new stacks fast.
+
+Availability: Open to remote contract, freelance or part-time work (20+ h/week).
+
+## Skills
+
+### Frontend
+
+- Angular
+- TypeScript
+- JavaScript
+- HTML
+- CSS
+- Astro
+
+### Backend
+
+- NestJS
+- Node.js
+- REST APIs
+- JWT / OAuth
+
+### Databases
+
+- PostgreSQL
+- Oracle
+- SQL
+
+### Languages & Mobile
+
+- Python
+- C
+- Racket
+- Dart / Flutter
+
+### Tools & Practices
+
+- Git
+- GitHub
+- GitLab CI/CD
+- Scrum
+- Cloud VMs (basic)
+
+## Experience
+
+### Software Development & Support Monitor — Universidad Tecnológica de Pereira
+
+Feb 2026 – Present · Pereira, Colombia
+
+Part-time contract. Internal systems are confidential.
+
+- Develop and maintain internal web applications with Angular and NestJS on Oracle and PostgreSQL, working in Scrum teams with Git workflows and CI/CD pipelines.
+- Contributed to the UI refactor of UTP Móvil, the university's Flutter mobile app.
+- Built internal tooling that automates parts of the team's Scrum workflow.
+
+Tech: Angular, NestJS, Oracle, PostgreSQL, Flutter, Git, CI/CD
+
+### Freelance Web Developer — AF Autoservice
+
+2026
+
+- Designed, built and deployed the website of a mobile auto-repair business in Colombia's Coffee Region using Astro, with on-page SEO and Vercel hosting; client reported positive results.
+
+Tech: Astro, SEO, Vercel
+Link: [Live site](https://af-autoservice.vercel.app/)
+
+## Education
+
+### Systems and Computer Engineering — Universidad Tecnológica de Pereira
+
+Feb 2025 - Present. Expected graduation: 2029
+
+### Systems Technician — SENA
+
+2023 - 2024. Participant and winner of "Tecnoferia 2024: S.O.S-Tenibilidad"
+
+## Courses
+
+- Python Developer
+- Generative AI Usage
+- Prompt Engineering
+- Data Analysis with AI
+- Professional Ethics
+- Interpersonal Skills Development
+
+## Projects
+
+### RacketChess
+
+A chess engine written entirely in Racket — pure recursion for move validation, check, and checkmate detection, with a graphical interface built on Racket's own graphics library.
+
+Technologies: Racket, Lisp, Functional Programming, Game Logic
+Repository: https://github.com/1594-adrs/RacketChess
+
+### CSV2Binary-DBMS
+
+A file-based database engine in C that converts CSV data into binary records and answers analytical queries — sorting, binary search, currency conversion — without ever loading the full dataset into memory.
+
+Technologies: C, File I/O, Binary Search, Merge Sort
+Repository: https://github.com/1594-adrs/CSV2Binary-DBMS
+
+### PrereqFlow
+
+An interactive Streamlit app that models a university curriculum as a prerequisite graph — visualize it, plan semesters under credit limits, edit courses live, and track progress, backed by 50 passing tests.
+
+Technologies: Python, Streamlit, PyVis, pytest
+Repository: https://github.com/1594-adrs/PrereqFlow
+
+### Portfolio
+
+This site. Built with Angular 21, standalone components, and signals. Scroll-reveal animations, lazy-loaded routes, and a custom IntersectionObserver directive. Deployed on GitHub Pages.
+
+Technologies: Angular, TypeScript, CSS, HTML
+Repository: https://github.com/1594-adrs/1594-adrs.github.io
+
+## Web Projects
+
+### Graphing Calculator
+
+Plot functions, compute integrals, and visualize solids of revolution in real time.
+
+Technologies: Angular, Canvas API, Custom Parser
+URL: https://1594-adrs.github.io/web-projects/calculator/
+
+## Contact
+
+- Email: [andresdrincons2007@gmail.com](mailto:andresdrincons2007@gmail.com)
+- GitHub: https://github.com/1594-adrs
+- LinkedIn: https://www.linkedin.com/in/1594-adrs/
+- Resume: [PDF](https://1594-adrs.github.io/Andres_Rincon_CV.pdf) · [page](https://1594-adrs.github.io/cv/)

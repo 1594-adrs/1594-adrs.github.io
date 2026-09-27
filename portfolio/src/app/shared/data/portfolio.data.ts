@@ -7,7 +7,18 @@ import {
   Education,
   Project,
   WebProject,
+  ExperienceItem,
+  SiteInfo,
+  PageMeta,
+  PageKey,
 } from '../models/portfolio.models';
+
+export const SITE: SiteInfo = {
+  url: 'https://1594-adrs.github.io',
+  siteName: 'Andrés Rincón — Portfolio',
+  ogImage: '/og-image.png',
+  locale: 'en_US',
+};
 
 export const PROFILE: Profile = {
   name: 'Andrés David Rincón Salazar',
@@ -16,15 +27,58 @@ export const PROFILE: Profile = {
   level: 'Full Stack',
   role: 'Software Developer · Full Stack',
   tagline: 'I build software end to end — from the data layer to the interface — and ship it.',
-  description: `Computer Science student at UTP building full-stack projects end to end: a chess engine in Racket, a file-based DBMS in C, a curriculum-planning tool in Python, and web apps in Angular and TypeScript. I write clean, tested code, pick up new stacks fast, and I'm sharpening problem-solving through competitive programming. Certified in AI and prompt engineering.`,
+  description: `Junior full stack developer working with Angular, NestJS and TypeScript. Systems and Computer Engineering student at Universidad Tecnológica de Pereira, where I also work as a software development and support monitor. I build practical tools end to end — like this site's graphing calculator — and pick up new stacks fast.`,
   resumeUrl: '/Andres_Rincon_CV.pdf',
+  email: 'andresdrincons2007@gmail.com',
+  location: 'Pereira, Colombia',
+  timezone: 'UTC−5',
+  availability: 'Open to remote contract, freelance or part-time work (20+ h/week).',
+};
+
+/**
+ * Gmail web compose link. Used instead of a bare mailto: because visitors without a
+ * configured mail app get no feedback at all from mailto: (the click does nothing).
+ */
+export const EMAIL_COMPOSE_URL =
+  'https://mail.google.com/mail/?view=cm&fs=1&to=' +
+  encodeURIComponent(PROFILE.email) +
+  '&su=' +
+  encodeURIComponent('Hello Andrés — from your portfolio');
+
+export const PAGE_META: Record<PageKey, PageMeta> = {
+  home: {
+    title: 'Andrés Rincón — Software Developer · Full Stack',
+    description:
+      'Portfolio of Andrés Rincón, junior full stack developer (Angular, NestJS, TypeScript) and Systems and Computer Engineering student at Universidad Tecnológica de Pereira. Experience, projects, CV and contact.',
+    path: '/',
+  },
+  webProjects: {
+    title: 'Web Projects — Andrés Rincón',
+    description:
+      'Interactive web tools built by Andrés Rincón, including a graphing calculator with integrals, areas between curves and 3D solids of revolution.',
+    path: '/web-projects/',
+  },
+  calculator: {
+    title: 'Graphing Calculator — Andrés Rincón',
+    description:
+      'Free online graphing calculator: plot functions, implicit curves and conics, compute definite integrals and areas between curves, and view solids of revolution in 3D. Built with Angular and Three.js.',
+    path: '/web-projects/calculator/',
+  },
+  notFound: {
+    title: 'Page Not Found — Andrés Rincón',
+    description: 'This page does not exist. Go back to the portfolio of Andrés Rincón.',
+    path: '/404.html',
+    noindex: true,
+  },
 };
 
 export const NAV_LINKS: NavLink[] = [
   { label: 'Home', href: '#home', id: 'home' },
   { label: 'About Me', href: '#about', id: 'about' },
+  { label: 'Experience', href: '#experience', id: 'experience' },
   { label: 'Projects', href: '#projects', id: 'projects' },
-  { label: 'download_cv', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
+  { label: 'Contact', href: '#contact', id: 'contact' },
+  { label: 'CV · PDF', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
 ];
 
 export const SOCIAL_NETWORKS: SocialNetwork[] = [
@@ -40,45 +94,49 @@ export const SOCIAL_NETWORKS: SocialNetwork[] = [
   },
   {
     iconName: 'envelope',
-    url: 'mailto:andresdrincons2007@gmail.com',
+    url: EMAIL_COMPOSE_URL,
     label: 'Email',
   },
 ];
 
 export const SKILLS: SkillCategory[] = [
   {
-    title: 'Advanced',
-    skills: ['Python', 'C', 'Racket'],
+    title: 'Frontend',
+    skills: ['Angular', 'TypeScript', 'JavaScript', 'HTML', 'CSS', 'Astro'],
   },
   {
-    title: 'Functional',
-    skills: ['Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'LUA'],
+    title: 'Backend',
+    skills: ['NestJS', 'Node.js', 'REST APIs', 'JWT / OAuth'],
   },
   {
     title: 'Databases',
-    skills: ['SQL'],
+    skills: ['PostgreSQL', 'Oracle', 'SQL'],
   },
   {
-    title: 'Infrastructure',
-    skills: ['Git', 'GitHub', 'AWS', 'Azure', 'Google Cloud'],
+    title: 'Languages & Mobile',
+    skills: ['Python', 'C', 'Racket', 'Dart / Flutter'],
+  },
+  {
+    title: 'Tools & Practices',
+    skills: ['Git', 'GitHub', 'GitLab CI/CD', 'Scrum', 'Cloud VMs (basic)'],
   },
 ];
 
 export const COURSES: Course[] = [
-  { name: 'Python Developer', issuer: 'Certification' },
-  { name: 'Generative AI Usage', issuer: 'Certification' },
-  { name: 'Prompt Engineering', issuer: 'Certification' },
-  { name: 'Data Analysis with AI', issuer: 'Certification' },
-  { name: 'Professional Ethics', issuer: 'Certification' },
-  { name: 'Interpersonal Skills Development', issuer: 'Certification' },
+  { name: 'Python Developer' },
+  { name: 'Generative AI Usage' },
+  { name: 'Prompt Engineering' },
+  { name: 'Data Analysis with AI' },
+  { name: 'Professional Ethics' },
+  { name: 'Interpersonal Skills Development' },
 ];
 
 export const EDUCATION: Education[] = [
   {
-    degree: 'Computer Science and Systems Engineering',
-    institution: 'Universidad Tecnologica De Pereira',
-    period: '2025 - Present',
-    detail: 'Active member of the competitive programming workshop',
+    degree: 'Systems and Computer Engineering',
+    institution: 'Universidad Tecnológica de Pereira',
+    period: 'Feb 2025 - Present',
+    detail: 'Expected graduation: 2029',
   },
   {
     degree: 'Systems Technician',
@@ -88,8 +146,34 @@ export const EDUCATION: Education[] = [
   },
 ];
 
+export const EXPERIENCE: ExperienceItem[] = [
+  {
+    role: 'Software Development & Support Monitor',
+    organization: 'Universidad Tecnológica de Pereira',
+    location: 'Pereira, Colombia',
+    period: 'Feb 2026 – Present',
+    summary: 'Part-time contract. Internal systems are confidential.',
+    highlights: [
+      'Develop and maintain internal web applications with Angular and NestJS on Oracle and PostgreSQL, working in Scrum teams with Git workflows and CI/CD pipelines.',
+      "Contributed to the UI refactor of UTP Móvil, the university's Flutter mobile app.",
+      "Built internal tooling that automates parts of the team's Scrum workflow.",
+    ],
+    tech: ['Angular', 'NestJS', 'Oracle', 'PostgreSQL', 'Flutter', 'Git', 'CI/CD'],
+  },
+  {
+    role: 'Freelance Web Developer',
+    organization: 'AF Autoservice',
+    period: '2026',
+    highlights: [
+      "Designed, built and deployed the website of a mobile auto-repair business in Colombia's Coffee Region using Astro, with on-page SEO and Vercel hosting; client reported positive results.",
+    ],
+    tech: ['Astro', 'SEO', 'Vercel'],
+    link: { label: 'Live site', url: 'https://af-autoservice.vercel.app/' },
+  },
+];
+
 export const SOFT_SKILLS: string[] = [
-  'Bilingual: Spanish (Native), English (Advanced - B2)',
+  'Spanish (native) · English (B2 reading and writing)',
   'Collaboration and clear communication across dev teams',
   'Breaking down complex problems into clean, working code',
   'Autodidact who picks up new stacks fast',

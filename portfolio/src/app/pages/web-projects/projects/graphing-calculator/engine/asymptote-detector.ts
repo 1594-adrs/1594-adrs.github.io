@@ -117,11 +117,6 @@ export function detectAsymptotes(
   return filterToRange(asymptotes, xMin, xMax);
 }
 
-/** Test-only: clears the memoization cache so specs don't leak state. */
-export function clearAsymptoteCache(): void {
-  cache.clear();
-}
-
 function categorizeFunction(ast?: ExpressionNode): FunctionCategory {
   if (!ast) return 'other';
 

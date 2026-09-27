@@ -7,7 +7,7 @@
     <h2 class="section-title">// Projects</h2>
 
     <div class="projects-grid">
-      <a class="project-card web-projects-card featured" routerLink="/web-projects">
+      <article class="project-card web-projects-card featured">
         <div class="card-topbar">
           <span class="card-dot"></span>
           <span class="card-dot"></span>
@@ -29,22 +29,34 @@
           </div>
 
           <div class="project-links">
-            <span class="btn btn-explore">
+            <a class="btn btn-explore" routerLink="/web-projects/calculator">
               <app-icon name="terminal" />
-              Launch Projects
-            </span>
+              Open calculator &rarr;
+            </a>
           </div>
+          <a class="all-web-projects-link" routerLink="/web-projects">All web projects</a>
         </div>
-      </a>
+      </article>
 
       @for (project of projects; track project.id) {
-        <div class="project-card" [class.featured]="project.featured">
+        <article class="project-card" [class.featured]="project.featured">
           <div class="card-topbar">
             <span class="card-dot"></span>
             <span class="card-dot"></span>
             <span class="card-dot"></span>
             <span class="card-filename">{{ project.title | lowercase }}.proj</span>
           </div>
+
+          @if (project.imageUrl) {
+            <div class="project-image">
+              <img
+                [ngSrc]="project.imageUrl"
+                [alt]="project.imageAlt ?? ''"
+                width="640"
+                height="360"
+              />
+            </div>
+          }
 
           <div class="project-content">
             <h3 class="project-title">{{ project.title }}</h3>
@@ -62,7 +74,7 @@
                 [href]="project.githubUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                [title]="'View source on GitHub: ' + project.title"
+                [attr.aria-label]="'View source code of ' + project.title"
               >
                 <app-icon name="github" />
                 Code
@@ -73,7 +85,7 @@
                   [href]="project.liveUrl"
                   target="_blank"
                   rel="noopener noreferrer"
-                  [title]="'Open live: ' + project.title"
+                  [attr.aria-label]="'Open live demo of ' + project.title"
                 >
                   <app-icon name="terminal" />
                   Live Demo
@@ -81,7 +93,7 @@
               }
             </div>
           </div>
-        </div>
+        </article>
       }
     </div>
   </div>

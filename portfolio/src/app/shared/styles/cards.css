@@ -42,7 +42,7 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   margin-left: 8px;
-  letter-spacing: var(--letter-spacing-terminal);
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .terminal-body,
@@ -51,9 +51,9 @@
 }
 
 .section-title {
-  font-size: var(--font-size-4xl);
+  font-size: clamp(1.75rem, 1.1rem + 2.8vw, var(--font-size-4xl));
   font-family: var(--font-family-display);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-normal);
   color: var(--color-text);
   margin-bottom: 2rem;
   position: relative;
@@ -62,10 +62,95 @@
   letter-spacing: var(--letter-spacing-wide);
 }
 
+.project-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .project-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 var(--color-border);
+    border-color: var(--color-primary);
+  }
+
+  .project-card:hover .project-title {
+    color: var(--color-primary);
+    text-shadow:
+      -1px 0 var(--color-corruption),
+      1px 0 var(--color-secondary);
+  }
+}
+
+.project-title {
+  font-size: var(--font-size-xl);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text);
+  margin: 0 0 0.8rem;
+  transition:
+    color var(--transition-fast),
+    text-shadow var(--transition-fast);
+  letter-spacing: var(--letter-spacing-terminal);
+  text-transform: uppercase;
+}
+
+.project-description {
+  color: var(--color-text-subtle);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  margin-bottom: 1rem;
+  flex: 1;
+}
+
+.technologies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-bottom: 1.5rem;
+}
+
+.project-links {
+  display: flex;
+  gap: 1rem;
+  margin-top: auto;
+}
+
+.back-home,
+.not-found__link {
+  display: inline-block;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  padding: 0.75rem 1.5rem;
+  text-decoration: none;
+  font-family: var(--font-family-display);
+  letter-spacing: var(--letter-spacing-terminal);
+  text-transform: uppercase;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .back-home:hover,
+  .not-found__link:hover {
+    background: var(--color-primary);
+    color: var(--color-bg-dark);
+  }
+}
+
 .btn {
+  min-height: 44px;
   padding: 0.7rem 1rem;
-  border: 1px solid var(--color-border);
-  font-weight: var(--font-weight-semibold);
+  border: 1px solid var(--color-border-control);
+  font-weight: var(--font-weight-normal);
   cursor: pointer;
   transition:
     background var(--transition-fast),
@@ -80,7 +165,7 @@
   flex: 1;
   justify-content: center;
   font-family: var(--font-family-display);
-  letter-spacing: var(--letter-spacing-terminal);
+  letter-spacing: var(--letter-spacing-tight);
 }
 
 .btn:active {
@@ -92,38 +177,22 @@
   background: transparent;
   color: var(--color-primary);
   padding: 0.35rem 0.7rem;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+  border: 1px solid var(--color-border-control);
   font-family: var(--font-family-display);
-  letter-spacing: var(--letter-spacing-terminal);
+  letter-spacing: var(--letter-spacing-tight);
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
 }
 
-.skill-tag:hover,
-.tech-badge:hover {
-  background: var(--color-glow-10);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-@media (max-width: 1024px) {
-  .section-title {
-    font-size: var(--font-size-3xl);
-  }
-}
-
-@media (max-width: 768px) {
-  .section-title {
-    font-size: 2rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .section-title {
-    font-size: var(--font-size-xl);
+@media (hover: hover) {
+  .skill-tag:hover,
+  .tech-badge:hover {
+    background: var(--color-glow-10);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
   }
 }

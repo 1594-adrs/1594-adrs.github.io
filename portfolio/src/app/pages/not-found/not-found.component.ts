@@ -1,5 +1,4 @@
-import { Component, ChangeDetectionStrategy, OnInit, inject } from '@angular/core';
-import { Title } from '@angular/platform-browser';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 @Component({
@@ -18,7 +17,10 @@ import { RouterLink } from '@angular/router';
   `,
   styles: `
     .not-found {
+      position: relative;
+      z-index: var(--z-content);
       min-height: 100vh;
+      min-height: 100svh;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -29,8 +31,8 @@ import { RouterLink } from '@angular/router';
     }
 
     .not-found__title {
-      font-size: 8rem;
-      font-weight: bold;
+      font-size: clamp(3.5rem, 2.4rem + 5.5vw, 8rem);
+      font-weight: var(--font-weight-normal);
       color: var(--color-corruption);
       line-height: 1;
       margin-bottom: 0.5rem;
@@ -43,6 +45,7 @@ import { RouterLink } from '@angular/router';
       color: var(--color-text);
       margin-bottom: 1rem;
       font-family: var(--font-family-display);
+      font-weight: var(--font-weight-normal);
       letter-spacing: 3px;
       text-transform: uppercase;
     }
@@ -56,28 +59,8 @@ import { RouterLink } from '@angular/router';
     }
 
     .not-found__link {
-      color: var(--color-primary);
-      border: 1px solid var(--color-primary);
-      padding: 0.75rem 1.5rem;
-      transition:
-        background var(--transition-fast),
-        color var(--transition-fast);
-      font-weight: var(--font-weight-medium);
-      font-family: var(--font-family-display);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-
-    .not-found__link:hover {
-      background: var(--color-primary);
-      color: var(--color-bg-dark);
+      font-weight: var(--font-weight-normal);
     }
   `,
 })
-export class NotFoundComponent implements OnInit {
-  private titleService = inject(Title);
-
-  ngOnInit(): void {
-    this.titleService.setTitle('Page Not Found — Andres Rincon');
-  }
-}
+export class NotFoundComponent {}

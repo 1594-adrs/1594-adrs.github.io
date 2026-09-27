@@ -1,4 +1,5 @@
 <app-loading-screen></app-loading-screen>
+<app-phosphor-field [active]="isAppPage()"></app-phosphor-field>
 <div class="crt-overlay" aria-hidden="true"></div>
 <div class="noise-overlay" aria-hidden="true"></div>
 
@@ -12,11 +13,25 @@
 
 <footer class="footer" [class.hidden]="!isAppPage()">
   <div class="footer-content">
+    <ul class="footer-links" aria-label="Quick links">
+      @for (social of socialNetworks; track social.label) {
+        <li>
+          <a
+            [href]="social.url"
+            [attr.target]="social.url.startsWith('mailto:') ? null : '_blank'"
+            [attr.rel]="social.url.startsWith('mailto:') ? null : 'noopener noreferrer'"
+            >{{ social.label }}</a
+          >
+        </li>
+      }
+      @if (profile.resumeUrl) {
+        <li>
+          <a [href]="profile.resumeUrl" target="_blank" rel="noopener noreferrer">CV · PDF</a>
+        </li>
+      }
+    </ul>
     <div class="footer-bottom">
-      <p class="footer-copy">&copy; 2026 .A.D.R.S.</p>
-      <div class="footer-updated">
-        <p>&gt; Last update: August 2026</p>
-      </div>
+      <p class="footer-copy">&copy; 2026 Andrés Rincón</p>
     </div>
   </div>
 </footer>
