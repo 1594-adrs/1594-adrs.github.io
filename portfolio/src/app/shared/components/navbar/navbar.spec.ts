@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Navbar } from './navbar';
@@ -6,6 +6,16 @@ import { NAV_LINKS } from '../../data/portfolio.data';
 
 describe('Navbar', () => {
   beforeEach(async () => {
+    // Other specs stub matchMedia without listeners on the shared window; pin a full MediaQueryList.
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    });
     await TestBed.configureTestingModule({
       imports: [Navbar],
       providers: [provideRouter([])],

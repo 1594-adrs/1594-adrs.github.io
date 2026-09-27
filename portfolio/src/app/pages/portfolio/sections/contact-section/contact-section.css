@@ -75,12 +75,17 @@
   user-select: all;
 }
 
-.contact-actions button.btn {
+.contact-actions .btn:not(.btn-primary) {
   color: var(--color-text);
 }
 
+.contact-actions .btn:not(.btn-primary):focus-visible {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 @media (hover: hover) {
-  .contact-actions button.btn:hover {
+  .contact-actions .btn:not(.btn-primary):hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
   }
