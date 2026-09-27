@@ -13,6 +13,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { NAV_LINKS } from '../../data/portfolio.data';
 
 interface SectionMarker {
   id: string;
@@ -20,7 +21,7 @@ interface SectionMarker {
   percent: number;
 }
 
-const SECTION_IDS = ['home', 'about', 'experience', 'projects'];
+const SECTION_IDS = NAV_LINKS.filter((link) => !link.isButton).map((link) => link.id);
 const ARROW_STEP_PX = 40;
 const PAGE_STEP_RATIO = 0.9;
 /** A section counts as reached once its top crosses this fraction of the viewport. */

@@ -63,14 +63,25 @@
   position: absolute;
   left: 50%;
   transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scroll-marker::before {
+  content: '';
   width: 10px;
   height: 10px;
-  padding: 0;
   border: 1px solid var(--color-border-hover);
   border-radius: 50%;
   background: var(--color-bg-dark);
-  cursor: pointer;
-  pointer-events: auto;
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast),
@@ -78,20 +89,25 @@
     transform var(--transition-fast);
 }
 
-.scroll-marker.passed {
+.scroll-marker.passed::before {
   border-color: var(--color-primary);
   background: var(--color-primary);
 }
 
-.scroll-marker.active {
-  transform: translate(-50%, -50%) scale(1.3);
+.scroll-marker.active::before {
+  transform: scale(1.3);
   box-shadow: 0 0 8px var(--color-primary);
 }
 
-.scroll-marker:hover,
-.scroll-marker:focus-visible {
+.scroll-marker:hover::before,
+.scroll-marker:focus-visible::before {
   border-color: var(--color-primary);
   background: var(--color-primary);
+}
+
+.scroll-marker:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .scroll-marker-tooltip {
@@ -117,10 +133,9 @@
   opacity: 1;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   .scroll-progress-container {
-    height: 120px;
-    right: 4px;
+    display: none;
   }
 }
 

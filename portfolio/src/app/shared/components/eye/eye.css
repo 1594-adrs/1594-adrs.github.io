@@ -125,28 +125,7 @@
 }
 
 @media (max-width: 1024px) {
-  .eye-container {
-    top: 5%;
-    right: 5%;
-  }
-
-  .eye {
-    width: 80px;
-    height: 80px;
-  }
-
-  .eye-inner {
-    width: 42px;
-    height: 42px;
-  }
-
-  .pupil {
-    width: 14px;
-    height: 14px;
-  }
-
-  .reflection {
-    width: 6px;
-    height: 6px;
+  :host {
+    display: none;
   }
 }

@@ -1,15 +1,16 @@
-<div class="social-buttons-container" role="list" aria-label="Social links">
+<ul class="social-buttons-container" aria-label="Social links">
   @for (social of socialNetworks; track social.label) {
-    <a
-      [href]="social.url"
-      [attr.aria-label]="social.label"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="social-button"
-      role="listitem"
-    >
-      <app-icon [name]="social.iconName" />
-      <span class="tooltip">{{ social.label }}</span>
-    </a>
+    <li>
+      <a
+        [href]="social.url"
+        [attr.aria-label]="social.label"
+        [target]="social.url.startsWith('mailto:') ? null : '_blank'"
+        [rel]="social.url.startsWith('mailto:') ? null : 'noopener noreferrer'"
+        class="social-button"
+      >
+        <app-icon [name]="social.iconName" />
+        <span class="tooltip">{{ social.label }}</span>
+      </a>
+    </li>
   }
-</div>
+</ul>

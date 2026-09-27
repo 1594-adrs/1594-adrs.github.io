@@ -35,24 +35,37 @@ describe('LoadingScreen', () => {
     expect(component.fadingOut()).toBe(false);
   });
 
-  it('should set fadingOut=true after 1800ms', () => {
+  it('should set fadingOut=true after 500ms', () => {
     const fixture = TestBed.createComponent(LoadingScreen);
     const component = fixture.componentInstance;
     fixture.detectChanges();
 
-    vi.advanceTimersByTime(1800);
+    vi.advanceTimersByTime(500);
 
     expect(component.fadingOut()).toBe(true);
     expect(component.visible()).toBe(true);
   });
 
-  it('should set visible=false after 2400ms total', () => {
+  it('should set visible=false after 800ms total', () => {
     const fixture = TestBed.createComponent(LoadingScreen);
     const component = fixture.componentInstance;
     fixture.detectChanges();
 
-    vi.advanceTimersByTime(2400);
+    vi.advanceTimersByTime(800);
 
+    expect(component.visible()).toBe(false);
+  });
+
+  it('should skip immediately on keydown', () => {
+    const fixture = TestBed.createComponent(LoadingScreen);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    window.dispatchEvent(new KeyboardEvent('keydown'));
+    vi.advanceTimersByTime(0);
+    expect(component.fadingOut()).toBe(true);
+
+    vi.advanceTimersByTime(300);
     expect(component.visible()).toBe(false);
   });
 

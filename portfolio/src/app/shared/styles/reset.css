@@ -42,15 +42,17 @@ button {
   background: none;
 }
 
-::-webkit-scrollbar {
+/* The custom scroll-progress bar replaces the native scrollbar only where it is
+   actually rendered (portfolio pages, fine pointer, > 768px) — toggled by app.ts. */
+html.has-custom-scrollbar ::-webkit-scrollbar {
   display: none;
 }
 
-* {
+html.has-custom-scrollbar * {
   scrollbar-width: none;
 }
 
-body {
+html.has-custom-scrollbar body {
   -ms-overflow-style: none;
   overflow: -moz-scrollbars-none;
 }

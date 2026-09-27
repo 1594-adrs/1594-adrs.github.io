@@ -19,10 +19,18 @@ const BASE_MAX_ALPHA = 0.12;
 const LIT_MAX_ALPHA = 0.5;
 const HEAT_DECAY_MS = 550;
 const HEAT_EPSILON = 0.02;
+/** Base layer tick cadence while the user is actively scrolling/pointing (≤5fps). */
 const BASE_REFRESH_MS = 200;
+/** Base layer tick cadence once idle — the drift is still visible but far cheaper. */
+const IDLE_BASE_REFRESH_MS = 1000;
+/** How long since the last pointer/scroll activity before we drop to the idle cadence. */
+const IDLE_AFTER_MS = 3000;
 const LOW_POWER_FRAME_MS = 1000 / 30;
 /** Minimum re-render gap for the base layer while scrolling between sections. */
 const SCROLL_BASE_REFRESH_MS = 60;
+/** Resize events on touch devices that only change height by less than this (mobile URL bar
+ * show/hide) don't warrant rebuilding the canvas and cell grid. */
+const TOUCH_RESIZE_HEIGHT_THRESHOLD_PX = 120;
 
 /**
  * One background theme per section, in page order. `ramp` goes dimmest to brightest
@@ -155,7 +163,7 @@ export class PhosphorField {
   private lastActivityAt = 0;
   private disposed = false;
 
-  private onResize = () => this.setupCanvas();
+  private onResize = () => this.handleResize();
   private onPointerMove = (e: PointerEvent) => this.handlePointer(e.clientX, e.clientY);
   private onScroll = () => this.handleScroll();
   private onVisibilityChange = () => this.syncRunningState();
@@ -246,6 +254,19 @@ export class PhosphorField {
     this.baseIntervalId = setInterval(() => this.tickBaseLayer(), BASE_REFRESH_MS);
   }
 
+  private handleResize(): void {
+    const isCoarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+    const widthChanged = window.innerWidth !== this.cssWidth;
+    const heightDelta = Math.abs(window.innerHeight - this.cssHeight);
+
+    // Ignore mobile URL-bar show/hide: same width, small height delta, touch device.
+    if (isCoarsePointer && !widthChanged && heightDelta < TOUCH_RESIZE_HEIGHT_THRESHOLD_PX) {
+      return;
+    }
+
+    this.setupCanvas();
+  }
+
   private readSectionAnchors(): void {
     const scrollY = window.scrollY || document.documentElement.scrollTop;
     const anchors: SectionAnchor[] = [];
@@ -286,7 +307,14 @@ export class PhosphorField {
 
   private tickBaseLayer(): void {
     if (!this.active()) return;
-    this.noiseTime += BASE_REFRESH_MS / 1000;
+
+    // Drop to a much cheaper cadence once idle — the drift is still visible, just slower.
+    const now = performance.now();
+    const idleFor = now - this.lastActivityAt;
+    const minGap = idleFor > IDLE_AFTER_MS ? IDLE_BASE_REFRESH_MS : BASE_REFRESH_MS;
+    if (now - this.lastBaseRenderAt < minGap) return;
+
+    this.noiseTime += (now - this.lastBaseRenderAt) / 1000;
     this.readSectionAnchors();
     this.renderBaseLayer();
     if (!this.rafRunning()) {
