@@ -9,6 +9,7 @@ graphify-out/
 cv/private/
 
 __pycache__/
+cv/__pycache__/
 
 # Personal brand assets (profile pictures), kept out of git
 branding/
