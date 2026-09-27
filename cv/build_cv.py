@@ -35,8 +35,8 @@ LINKS = [
 
 SUMMARY = (
     "Junior full stack developer building Angular and NestJS applications in Scrum teams at "
-    "Universidad Tecnológica de Pereira. Works with TypeScript, Oracle, "
-    "PostgreSQL, Git and CI/CD. Interested in full stack roles and AI code evaluation."
+    "Universidad Tecnológica de Pereira. Works with TypeScript, Oracle, PostgreSQL, Git and "
+    "CI/CD. Interested in full stack roles and AI code evaluation."
 )
 
 # (title, organization line or None, dates, bullets)
@@ -49,6 +49,7 @@ EXPERIENCE = [
             "Develop and maintain internal web applications with Angular and NestJS on Oracle and "
             "PostgreSQL, working in Scrum teams with Git workflows and CI/CD pipelines.",
             "Contributed to the UI refactor of UTP Móvil, the university's Flutter mobile app.",
+            "Built internal tooling that automates parts of the team's Scrum workflow.",
         ],
     ),
     (

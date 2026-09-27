@@ -156,6 +156,7 @@ export const EXPERIENCE: ExperienceItem[] = [
     highlights: [
       'Develop and maintain internal web applications with Angular and NestJS on Oracle and PostgreSQL, working in Scrum teams with Git workflows and CI/CD pipelines.',
       "Contributed to the UI refactor of UTP Móvil, the university's Flutter mobile app.",
+      "Built internal tooling that automates parts of the team's Scrum workflow.",
     ],
     tech: ['Angular', 'NestJS', 'Oracle', 'PostgreSQL', 'Flutter', 'Git', 'CI/CD'],
   },
