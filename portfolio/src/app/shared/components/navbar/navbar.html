@@ -1,10 +1,16 @@
-<nav class="navbar" aria-label="Main navigation">
+<nav class="navbar" aria-label="Main navigation" (keydown.escape)="closeMenu()">
   <div class="navbar-container">
-    <div class="logo">
+    <a
+      class="logo"
+      href="#home"
+      aria-label="Andrés Rincón — back to top"
+      (click)="scrollToSection('home'); $event.preventDefault()"
+    >
       <span class="logo-text">.A.D.R.S.</span>
-    </div>
+    </a>
 
     <button
+      #menuToggle
       class="menu-toggle"
       [class.active]="isMenuOpen()"
       (click)="toggleMenu()"
@@ -12,18 +18,28 @@
       [attr.aria-expanded]="isMenuOpen()"
       aria-controls="nav-menu"
     >
-      <span class="hamburger"></span>
+      <span class="hamburger-icon">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </span>
     </button>
 
-    <ul class="nav-links" [class.active]="isMenuOpen()" id="nav-menu">
+    <ul
+      class="nav-links"
+      [class.active]="isMenuOpen()"
+      id="nav-menu"
+      [inert]="!isMenuOpen() && isMobileMenu()"
+    >
       @for (link of navLinks; track link.id) {
         @if (link.isButton) {
           <li class="nav-item">
             <a
-              [href]="'/Andres_Rincon_CV.pdf'"
+              [href]="link.href"
               target="_blank"
               rel="noopener noreferrer"
               class="nav-link-btn"
+              (click)="isMenuOpen.set(false)"
             >
               {{ link.label }}
             </a>

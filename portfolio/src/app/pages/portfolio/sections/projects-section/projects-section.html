@@ -62,7 +62,7 @@
                 [href]="project.githubUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                [title]="'View source on GitHub: ' + project.title"
+                [attr.aria-label]="'View source code of ' + project.title"
               >
                 <app-icon name="github" />
                 Code
@@ -73,7 +73,7 @@
                   [href]="project.liveUrl"
                   target="_blank"
                   rel="noopener noreferrer"
-                  [title]="'Open live: ' + project.title"
+                  [attr.aria-label]="'Open live demo of ' + project.title"
                 >
                   <app-icon name="terminal" />
                   Live Demo
