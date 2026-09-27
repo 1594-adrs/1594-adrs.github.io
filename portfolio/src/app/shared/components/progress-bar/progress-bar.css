@@ -1,26 +1,118 @@
 .scroll-progress-container {
   position: fixed;
-  right: 15px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  width: 4px;
+  width: 20px;
   height: 180px;
-  background-color: var(--color-border);
+  display: flex;
+  justify-content: center;
   z-index: var(--z-nav);
-  overflow: hidden;
+}
+
+.scroll-progress-hit,
+.scroll-markers {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.scroll-progress-hit {
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.scroll-markers {
+  pointer-events: none;
+}
+
+.scroll-progress-hit:focus-visible .scroll-progress-track {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.scroll-progress-track {
+  position: relative;
+  width: 4px;
+  height: 100%;
+  background-color: var(--color-border);
+  transition: width 0.15s ease;
+}
+
+.scroll-progress-container:hover .scroll-progress-track,
+.scroll-progress-container.dragging .scroll-progress-track {
+  width: 6px;
 }
 
 .scroll-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
   width: 100%;
   background: var(--color-primary);
   transition: height 0.1s ease-out;
   box-shadow: 0 0 6px var(--color-glow-15);
 }
 
+.scroll-progress-container.dragging .scroll-progress-bar {
+  box-shadow: 0 0 10px var(--color-glow-15);
+}
+
+.scroll-marker {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1px solid var(--color-border-hover);
+  border-radius: 50%;
+  background: var(--color-bg-dark);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.scroll-marker:hover,
+.scroll-marker:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.scroll-marker-tooltip {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  background: var(--color-bg-dark);
+  border: 1px solid var(--color-border-hover);
+  color: var(--color-primary);
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.scroll-marker:hover .scroll-marker-tooltip,
+.scroll-marker:focus-visible .scroll-marker-tooltip {
+  opacity: 1;
+}
+
 @media (max-width: 768px) {
   .scroll-progress-container {
-    width: 3px;
     height: 120px;
-    right: 8px;
+    right: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-progress-bar,
+  .scroll-progress-track,
+  .scroll-marker-tooltip {
+    transition: none;
   }
 }

@@ -1,10 +1,37 @@
-<div
-  class="scroll-progress-container"
-  role="progressbar"
-  [attr.aria-valuenow]="scrollProgress()"
-  aria-valuemin="0"
-  aria-valuemax="100"
-  aria-label="Page scroll progress"
->
-  <div class="scroll-progress-bar" [style.height.%]="scrollProgress()"></div>
+<div class="scroll-progress-container" [class.dragging]="dragging()">
+  <!-- role="scrollbar" makes its children presentational, so the section markers live beside it -->
+  <div
+    class="scroll-progress-hit"
+    role="scrollbar"
+    aria-controls="main-content"
+    aria-orientation="vertical"
+    [attr.aria-valuenow]="roundedProgress()"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    aria-label="Page scroll"
+    tabindex="0"
+    #track
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+    (pointercancel)="onPointerUp($event)"
+    (keydown)="onKeydown($event)"
+  >
+    <div class="scroll-progress-track">
+      <div class="scroll-progress-bar" [style.height.%]="scrollProgress()"></div>
+    </div>
+  </div>
+  <div class="scroll-markers">
+    @for (marker of markers(); track marker.id) {
+      <button
+        type="button"
+        class="scroll-marker"
+        [style.top.%]="marker.percent"
+        [attr.aria-label]="'Go to ' + marker.label + ' section'"
+        (click)="onMarkerClick($event, marker.id)"
+      >
+        <span class="scroll-marker-tooltip" aria-hidden="true">&gt; {{ marker.label }}</span>
+      </button>
+    }
+  </div>
 </div>
