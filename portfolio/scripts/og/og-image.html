@@ -28,7 +28,7 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding: 0 84px;
+        padding: 0 72px;
       }
       .grid {
         position: absolute;
@@ -47,15 +47,16 @@
         height: 620px;
         background: radial-gradient(circle, rgba(0, 255, 136, 0.16) 0%, rgba(0, 255, 136, 0) 70%);
       }
-      .monogram {
+      .card {
         position: relative;
-        font-size: 15px;
-        line-height: 1.15;
-        color: #00ff88;
-        white-space: pre;
-        margin-bottom: 34px;
-        opacity: 0.92;
-        text-shadow: 0 0 14px rgba(0, 255, 136, 0.45);
+        display: flex;
+        align-items: center;
+        gap: 56px;
+      }
+      .logo {
+        width: 300px;
+        height: 300px;
+        flex: none;
       }
       .name {
         position: relative;
@@ -86,14 +87,13 @@
   <body>
     <div class="grid"></div>
     <div class="glow"></div>
-    <div class="monogram"> █████╗ ██████╗ ██████╗ ███████╗
-██╔══██╗██╔══██╗██╔══██╗██╔════╝
-███████║██║  ██║██████╔╝███████╗
-██╔══██║██║  ██║██╔══██╗╚════██║
-██║  ██║██████╔╝██║  ██║███████║
-╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚══════╝</div>
-    <div class="name">Andrés Rincón</div>
-    <div class="role">Software Developer · Full Stack</div>
-    <div class="domain">1594-adrs.github.io</div>
+    <div class="card">
+      <img class="logo" src="../../public/logo.svg" alt="" />
+      <div>
+        <div class="name">Andrés Rincón</div>
+        <div class="role">Software Developer · Full Stack</div>
+        <div class="domain">1594-adrs.github.io</div>
+      </div>
+    </div>
   </body>
 </html>
