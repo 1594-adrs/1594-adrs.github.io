@@ -1,0 +1,52 @@
+<section id="experience" class="experience-section" appRevealOnScroll #reveal="reveal">
+  <div
+    class="experience-container"
+    [class.revealed]="reveal.revealed()"
+    [class.hiding]="reveal.hiding()"
+  >
+    <h2 class="section-title">// Experience</h2>
+
+    <ol class="timeline">
+      @for (item of items; track item.role) {
+        <li class="timeline-item terminal-card">
+          <div class="terminal-header">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-title">{{ item.organization }}</span>
+          </div>
+          <div class="terminal-body">
+            <div class="item-heading">
+              <h3 class="item-role">{{ item.role }}</h3>
+              <span class="item-period">{{ item.period }}</span>
+            </div>
+            <p class="item-org">
+              {{ item.organization }}
+              @if (item.location) {
+                <span class="item-location"> &middot; {{ item.location }}</span>
+              }
+            </p>
+            @if (item.summary) {
+              <p class="item-summary">{{ item.summary }}</p>
+            }
+            <ul class="item-highlights">
+              @for (highlight of item.highlights; track highlight) {
+                <li>&gt; {{ highlight }}</li>
+              }
+            </ul>
+            <div class="item-tech">
+              @for (tech of item.tech; track tech) {
+                <span class="tech-badge">{{ tech }}</span>
+              }
+            </div>
+            @if (item.link) {
+              <a class="item-link" [href]="item.link.url" target="_blank" rel="noopener noreferrer">
+                {{ item.link.label }} &rarr;
+              </a>
+            }
+          </div>
+        </li>
+      }
+    </ol>
+  </div>
+</section>

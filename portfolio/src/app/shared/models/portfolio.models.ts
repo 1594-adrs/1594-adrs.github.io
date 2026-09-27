@@ -29,7 +29,23 @@ export interface SkillCategory {
 
 export interface Course {
   name: string;
-  issuer: string;
+  issuer?: string;
+}
+
+export interface ExperienceLink {
+  label: string;
+  url: string;
+}
+
+export interface ExperienceItem {
+  role: string;
+  organization: string;
+  location?: string;
+  period: string;
+  summary?: string;
+  highlights: string[];
+  tech: string[];
+  link?: ExperienceLink;
 }
 
 export interface Education {

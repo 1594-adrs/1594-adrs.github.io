@@ -7,6 +7,7 @@ import {
   Education,
   Project,
   WebProject,
+  ExperienceItem,
 } from '../models/portfolio.models';
 
 export const PROFILE: Profile = {
@@ -16,13 +17,14 @@ export const PROFILE: Profile = {
   level: 'Full Stack',
   role: 'Software Developer · Full Stack',
   tagline: 'I build software end to end — from the data layer to the interface — and ship it.',
-  description: `Computer Science student at UTP building full-stack projects end to end: a chess engine in Racket, a file-based DBMS in C, a curriculum-planning tool in Python, and web apps in Angular and TypeScript. I write clean, tested code, pick up new stacks fast, and I'm sharpening problem-solving through competitive programming. Certified in AI and prompt engineering.`,
+  description: `Junior full stack developer working with Angular, NestJS and TypeScript. Systems and Computer Engineering student at Universidad Tecnológica de Pereira, where I also work as a software development and support monitor. I build practical tools end to end — like this site's graphing calculator — and pick up new stacks fast.`,
   resumeUrl: '/Andres_Rincon_CV.pdf',
 };
 
 export const NAV_LINKS: NavLink[] = [
   { label: 'Home', href: '#home', id: 'home' },
   { label: 'About Me', href: '#about', id: 'about' },
+  { label: 'Experience', href: '#experience', id: 'experience' },
   { label: 'Projects', href: '#projects', id: 'projects' },
   { label: 'download_cv', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
 ];
@@ -47,30 +49,34 @@ export const SOCIAL_NETWORKS: SocialNetwork[] = [
 
 export const SKILLS: SkillCategory[] = [
   {
-    title: 'Advanced',
-    skills: ['Python', 'C', 'Racket'],
+    title: 'Frontend',
+    skills: ['Angular', 'TypeScript', 'JavaScript', 'HTML', 'CSS', 'Astro'],
   },
   {
-    title: 'Functional',
-    skills: ['Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'LUA'],
+    title: 'Backend',
+    skills: ['NestJS', 'Node.js', 'REST APIs', 'JWT / OAuth'],
   },
   {
     title: 'Databases',
-    skills: ['SQL'],
+    skills: ['PostgreSQL', 'Oracle', 'SQL'],
   },
   {
-    title: 'Infrastructure',
-    skills: ['Git', 'GitHub', 'AWS', 'Azure', 'Google Cloud'],
+    title: 'Languages & Mobile',
+    skills: ['Python', 'C', 'Racket', 'Dart / Flutter'],
+  },
+  {
+    title: 'Tools & Practices',
+    skills: ['Git', 'GitHub', 'GitLab CI/CD', 'Scrum', 'Cloud VMs (basic)'],
   },
 ];
 
 export const COURSES: Course[] = [
-  { name: 'Python Developer', issuer: 'Certification' },
-  { name: 'Generative AI Usage', issuer: 'Certification' },
-  { name: 'Prompt Engineering', issuer: 'Certification' },
-  { name: 'Data Analysis with AI', issuer: 'Certification' },
-  { name: 'Professional Ethics', issuer: 'Certification' },
-  { name: 'Interpersonal Skills Development', issuer: 'Certification' },
+  { name: 'Python Developer' },
+  { name: 'Generative AI Usage' },
+  { name: 'Prompt Engineering' },
+  { name: 'Data Analysis with AI' },
+  { name: 'Professional Ethics' },
+  { name: 'Interpersonal Skills Development' },
 ];
 
 export const EDUCATION: Education[] = [
@@ -88,8 +94,33 @@ export const EDUCATION: Education[] = [
   },
 ];
 
+export const EXPERIENCE: ExperienceItem[] = [
+  {
+    role: 'Software Development & Support Monitor',
+    organization: 'Universidad Tecnológica de Pereira',
+    location: 'Pereira, Colombia',
+    period: 'Feb 2026 – Present',
+    summary: 'Part-time contract. Internal systems are confidential.',
+    highlights: [
+      'Develop and maintain internal web applications with Angular and NestJS on Oracle and PostgreSQL, working in Scrum teams with Git workflows and CI/CD pipelines.',
+      "Contributed to the UI refactor of UTP Móvil, the university's Flutter mobile app.",
+    ],
+    tech: ['Angular', 'NestJS', 'Oracle', 'PostgreSQL', 'Flutter', 'Git', 'CI/CD'],
+  },
+  {
+    role: 'Freelance Web Developer',
+    organization: 'AF Autoservice',
+    period: '2026',
+    highlights: [
+      "Designed, built and deployed the website of a mobile auto-repair business in Colombia's Coffee Region using Astro, with on-page SEO and Vercel hosting; client reported positive results.",
+    ],
+    tech: ['Astro', 'SEO', 'Vercel'],
+    link: { label: 'Live site', url: 'https://af-autoservice.vercel.app/' },
+  },
+];
+
 export const SOFT_SKILLS: string[] = [
-  'Bilingual: Spanish (Native), English (Advanced - B2)',
+  'Spanish (native) · English (B2 reading and writing)',
   'Collaboration and clear communication across dev teams',
   'Breaking down complex problems into clean, working code',
   'Autodidact who picks up new stacks fast',

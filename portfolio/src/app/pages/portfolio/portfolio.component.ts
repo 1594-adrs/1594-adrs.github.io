@@ -2,15 +2,17 @@ import { Component, ChangeDetectionStrategy, OnInit, inject } from '@angular/cor
 import { Title } from '@angular/platform-browser';
 import { HeroSection } from './sections/hero-section/hero-section';
 import { AboutMe } from './sections/about-me/about-me';
+import { Experience } from './sections/experience/experience';
 import { ProjectsSection } from './sections/projects-section/projects-section';
 
 @Component({
   selector: 'app-portfolio',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HeroSection, AboutMe, ProjectsSection],
+  imports: [HeroSection, AboutMe, Experience, ProjectsSection],
   template: `
     <app-hero-section />
     <app-about-me />
+    <app-experience />
     <app-projects-section />
   `,
 })
