@@ -1,6 +1,7 @@
-import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { Eye } from '../../../../shared/components/eye/eye';
 import { PROFILE } from '../../../../shared/data/portfolio.data';
+import { MONOGRAM_ASCII } from '../../../../shared/data/monogram';
 
 @Component({
   selector: 'app-hero-section',
@@ -10,14 +11,12 @@ import { PROFILE } from '../../../../shared/data/portfolio.data';
   imports: [Eye],
 })
 export class HeroSection {
-  imageFailed = signal(false);
+  monogram = MONOGRAM_ASCII;
 
   name = PROFILE.shortName;
-  role = PROFILE.role;
+  // Keep the last two words ("Full Stack") from wrapping onto separate lines.
+  role = PROFILE.role.replace(/ (?=\S+$)/, ' ');
   tagline = PROFILE.tagline;
+  availability = PROFILE.availability;
   resumeUrl = PROFILE.resumeUrl;
-
-  onImageError() {
-    this.imageFailed.set(true);
-  }
 }

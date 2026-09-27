@@ -31,6 +31,10 @@ export class RevealOnScroll implements OnInit, OnDestroy {
   ngOnInit() {
     if (!this.isBrowser) return;
 
+    // Only hide content before reveal when JS can actually run the reveal;
+    // otherwise (no-JS, prerendered HTML) sections must render visible.
+    document.documentElement.classList.add('js-reveal');
+
     if (this.prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
       this.revealed.set(true);
       this.visible.emit();

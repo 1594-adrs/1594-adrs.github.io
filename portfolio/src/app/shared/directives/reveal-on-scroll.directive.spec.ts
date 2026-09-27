@@ -45,6 +45,7 @@ describe('RevealOnScroll', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    document.documentElement.classList.remove('js-reveal');
   });
 
   it('should create', async () => {
@@ -116,6 +117,25 @@ describe('RevealOnScroll', () => {
     const directive = fixture.debugElement.children[0].injector.get(RevealOnScroll);
 
     expect(directive.revealed()).toBe(true);
+  });
+
+  it('should mark the document root with js-reveal so CSS only hides content when JS runs', async () => {
+    await TestBed.configureTestingModule({ imports: [RevealHost] }).compileComponents();
+    const fixture = TestBed.createComponent(RevealHost);
+    fixture.detectChanges();
+
+    expect(document.documentElement.classList.contains('js-reveal')).toBe(true);
+  });
+
+  it('should not mark the document root when not in browser platform', async () => {
+    await TestBed.configureTestingModule({
+      imports: [RevealHost],
+      providers: [{ provide: PLATFORM_ID, useValue: 'server' }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(RevealHost);
+    fixture.detectChanges();
+
+    expect(document.documentElement.classList.contains('js-reveal')).toBe(false);
   });
 
   it('should not observe when not in browser platform', async () => {

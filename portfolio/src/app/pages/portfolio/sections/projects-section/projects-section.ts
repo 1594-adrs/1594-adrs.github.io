@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
-import { LowerCasePipe } from '@angular/common';
+import { LowerCasePipe, NgOptimizedImage } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Project } from '../../../../shared/models/portfolio.models';
 import { PROJECTS } from '../../../../shared/data/portfolio.data';
@@ -11,7 +11,7 @@ import { IconComponent } from '../../../../shared/icons/icon.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './projects-section.html',
   styleUrls: ['./projects-section.css'],
-  imports: [RevealOnScroll, LowerCasePipe, RouterLink, IconComponent],
+  imports: [RevealOnScroll, LowerCasePipe, RouterLink, IconComponent, NgOptimizedImage],
 })
 export class ProjectsSection {
   projects: Project[] = PROJECTS;

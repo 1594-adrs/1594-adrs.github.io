@@ -20,4 +20,7 @@
   --line-height-normal: 1.6;
   --letter-spacing-wide: 3px;
   --letter-spacing-terminal: 2px;
+  /* Max ~0.06em for text <=14px (WCAG readability) — use instead of
+     --letter-spacing-terminal on small labels/tags/chips. */
+  --letter-spacing-tight: 0.06em;
 }
