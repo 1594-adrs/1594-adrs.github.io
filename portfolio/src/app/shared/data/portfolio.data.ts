@@ -8,7 +8,17 @@ import {
   Project,
   WebProject,
   ExperienceItem,
+  SiteInfo,
+  PageMeta,
+  PageKey,
 } from '../models/portfolio.models';
+
+export const SITE: SiteInfo = {
+  url: 'https://1594-adrs.github.io',
+  siteName: 'Andrés Rincón — Portfolio',
+  ogImage: '/og-image.png',
+  locale: 'en_US',
+};
 
 export const PROFILE: Profile = {
   name: 'Andrés David Rincón Salazar',
@@ -19,6 +29,37 @@ export const PROFILE: Profile = {
   tagline: 'I build software end to end — from the data layer to the interface — and ship it.',
   description: `Junior full stack developer working with Angular, NestJS and TypeScript. Systems and Computer Engineering student at Universidad Tecnológica de Pereira, where I also work as a software development and support monitor. I build practical tools end to end — like this site's graphing calculator — and pick up new stacks fast.`,
   resumeUrl: '/Andres_Rincon_CV.pdf',
+  email: 'andresdrincons2007@gmail.com',
+  location: 'Pereira, Colombia',
+  timezone: 'UTC−5',
+  availability: 'Open to junior developer roles and internships — remote or in Pereira.',
+};
+
+export const PAGE_META: Record<PageKey, PageMeta> = {
+  home: {
+    title: 'Andrés Rincón — Software Developer · Full Stack',
+    description:
+      'Portfolio of Andrés Rincón, junior full stack developer (Angular, NestJS, TypeScript) and Systems and Computer Engineering student at Universidad Tecnológica de Pereira. Experience, projects, CV and contact.',
+    path: '/',
+  },
+  webProjects: {
+    title: 'Web Projects — Andrés Rincón',
+    description:
+      'Interactive web tools built by Andrés Rincón, including a graphing calculator with integrals, areas between curves and 3D solids of revolution.',
+    path: '/web-projects/',
+  },
+  calculator: {
+    title: 'Graphing Calculator — Andrés Rincón',
+    description:
+      'Free online graphing calculator: plot functions, implicit curves and conics, compute definite integrals and areas between curves, and view solids of revolution in 3D. Built with Angular and Three.js.',
+    path: '/web-projects/calculator/',
+  },
+  notFound: {
+    title: 'Page Not Found — Andrés Rincón',
+    description: 'This page does not exist. Go back to the portfolio of Andrés Rincón.',
+    path: '/404.html',
+    noindex: true,
+  },
 };
 
 export const NAV_LINKS: NavLink[] = [
@@ -26,7 +67,8 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'About Me', href: '#about', id: 'about' },
   { label: 'Experience', href: '#experience', id: 'experience' },
   { label: 'Projects', href: '#projects', id: 'projects' },
-  { label: 'download_cv', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
+  { label: 'Contact', href: '#contact', id: 'contact' },
+  { label: 'CV · PDF', href: '/Andres_Rincon_CV.pdf', id: 'cv', isButton: true },
 ];
 
 export const SOCIAL_NETWORKS: SocialNetwork[] = [

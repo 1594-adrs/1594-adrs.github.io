@@ -7,6 +7,11 @@ export interface Profile {
   description: string;
   role: string;
   resumeUrl?: string;
+  email: string;
+  location: string;
+  timezone: string;
+  /** One-line availability shown in the hero and contact section. */
+  availability: string;
 }
 
 export interface NavLink {
@@ -30,6 +35,8 @@ export interface SkillCategory {
 export interface Course {
   name: string;
   issuer?: string;
+  year?: string;
+  url?: string;
 }
 
 export interface ExperienceLink {
@@ -62,6 +69,7 @@ export interface Project {
   technologies: string[];
   githubUrl: string;
   imageUrl?: string;
+  imageAlt?: string;
   liveUrl?: string;
   featured?: boolean;
 }
@@ -74,3 +82,23 @@ export interface WebProject {
   technologies: string[];
   iconName: string;
 }
+
+export interface SiteInfo {
+  /** Absolute origin without trailing slash, e.g. https://example.github.io */
+  url: string;
+  siteName: string;
+  /** Path of the 1200x630 social preview image. */
+  ogImage: string;
+  locale: string;
+}
+
+export interface PageMeta {
+  title: string;
+  description: string;
+  /** Canonical path with trailing slash, e.g. '/' or '/web-projects/'. */
+  path: string;
+  /** Set to true for pages that must not be indexed (404). */
+  noindex?: boolean;
+}
+
+export type PageKey = 'home' | 'webProjects' | 'calculator' | 'notFound';
