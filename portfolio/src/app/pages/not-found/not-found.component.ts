@@ -56,21 +56,7 @@ import { RouterLink } from '@angular/router';
     }
 
     .not-found__link {
-      color: var(--color-primary);
-      border: 1px solid var(--color-primary);
-      padding: 0.75rem 1.5rem;
-      transition:
-        background var(--transition-fast),
-        color var(--transition-fast);
       font-weight: var(--font-weight-medium);
-      font-family: var(--font-family-display);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-
-    .not-found__link:hover {
-      background: var(--color-primary);
-      color: var(--color-bg-dark);
     }
   `,
 })

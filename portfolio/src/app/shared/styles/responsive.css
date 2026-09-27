@@ -10,10 +10,33 @@
   --transition-fast: 0.15s ease;
   --transition-medium: 0.3s ease;
   --transition-slow: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  --nav-height: 72px;
+  --z-behind: -1;
   --z-base: 1;
   --z-canvas: 10;
+  --z-overlay-noise: 99;
   --z-overlay: 100;
+  --z-content: 101;
+  --z-fixed: 999;
   --z-nav: 1000;
   --z-modal: 9999;
   --z-loading: 99999;
+  --clip-pixel-corner: polygon(
+    0 4px,
+    4px 4px,
+    4px 0,
+    calc(100% - 4px) 0,
+    calc(100% - 4px) 4px,
+    100% 4px,
+    100% calc(100% - 4px),
+    calc(100% - 4px) calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    4px 100%,
+    4px calc(100% - 4px),
+    0 calc(100% - 4px)
+  );
+}
+
+section[id] {
+  scroll-margin-top: var(--nav-height);
 }
