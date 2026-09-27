@@ -4,8 +4,8 @@
       <a
         [href]="social.url"
         [attr.aria-label]="social.label"
-        [target]="social.url.startsWith('mailto:') ? null : '_blank'"
-        [rel]="social.url.startsWith('mailto:') ? null : 'noopener noreferrer'"
+        [attr.target]="social.url.startsWith('mailto:') ? null : '_blank'"
+        [attr.rel]="social.url.startsWith('mailto:') ? null : 'noopener noreferrer'"
         class="social-button"
       >
         <app-icon [name]="social.iconName" />
