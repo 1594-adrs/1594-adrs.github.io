@@ -4,7 +4,6 @@
   justify-content: center;
   align-items: center;
   padding: var(--spacing-3xl) 6rem;
-  background: var(--color-bg-dark);
   position: relative;
 }
 

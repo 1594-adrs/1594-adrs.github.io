@@ -13,8 +13,6 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
-/** Density ramp, dimmest to brightest. Index 0 renders nothing. */
-const RAMP = ' .:-+*#%@';
 const CELL_SIZE = 16;
 const BASE_MIN_ALPHA = 0.06;
 const BASE_MAX_ALPHA = 0.12;
@@ -23,25 +21,79 @@ const HEAT_DECAY_MS = 550;
 const HEAT_EPSILON = 0.02;
 const BASE_REFRESH_MS = 200;
 const LOW_POWER_FRAME_MS = 1000 / 30;
-const SECTION_IDS = ['home', 'about', 'experience', 'projects'];
-const COLOR_GREEN: [number, number, number] = [0, 255, 136];
-const COLOR_CYAN: [number, number, number] = [0, 204, 255];
+/** Minimum re-render gap for the base layer while scrolling between sections. */
+const SCROLL_BASE_REFRESH_MS = 60;
+
+/**
+ * One background theme per section, in page order. `ramp` goes dimmest to brightest
+ * (spaces render nothing); `sample` shapes the drifting pattern.
+ */
+interface FieldTheme {
+  id: string;
+  ramp: string;
+  rgb: string;
+  sample: (x: number, y: number, t: number) => number;
+}
+
+const THEMES: FieldTheme[] = [
+  // Hero: classic ASCII density field.
+  { id: 'home', ramp: ' .:-+*#%@', rgb: '0, 255, 136', sample: (x, y, t) => fieldNoise(x, y, t) },
+  // About: memory dump, binary columns drifting down.
+  {
+    id: 'about',
+    ramp: '  01',
+    rgb: '0, 255, 136',
+    sample: (x, y, t) => fieldNoise(x * 1.8, y * 0.35 - t * 2.2, t * 0.5),
+  },
+  // Experience: log lines, horizontal streaks sliding sideways.
+  {
+    id: 'experience',
+    ramp: ' .-=|',
+    rgb: '0, 230, 200',
+    sample: (x, y, t) => fieldNoise(x * 0.3 - t * 2.5, y * 1.9, t * 0.4),
+  },
+  // Projects: source code glyphs.
+  {
+    id: 'projects',
+    ramp: ' .</>{}[]',
+    rgb: '0, 204, 255',
+    sample: (x, y, t) => fieldNoise(x * 0.9, y * 0.9 + t * 0.6, t),
+  },
+];
+
+/** The dim base layer uses a few quantized alphas so it can be drawn in batches. */
+const BASE_ALPHA_LEVELS = 6;
+const BASE_STYLES = THEMES.flatMap((theme) =>
+  Array.from({ length: BASE_ALPHA_LEVELS }, (_, level) => {
+    const alpha =
+      BASE_MIN_ALPHA + ((level + 0.5) / BASE_ALPHA_LEVELS) * (BASE_MAX_ALPHA - BASE_MIN_ALPHA);
+    return `rgba(${theme.rgb}, ${alpha.toFixed(3)})`;
+  }),
+);
+
+/** Lit glyphs are batched the same way; their ramps skip the blank entries. */
+const LIT_ALPHA_LEVELS = 8;
+const LIT_RAMPS = THEMES.map((theme) => theme.ramp.trimStart());
+const LIT_STYLES = THEMES.flatMap((theme) =>
+  Array.from({ length: LIT_ALPHA_LEVELS }, (_, level) => {
+    const value = (level + 0.5) / LIT_ALPHA_LEVELS;
+    const alpha = Math.min(LIT_MAX_ALPHA, value * LIT_MAX_ALPHA + 0.05);
+    return `rgba(${theme.rgb}, ${alpha.toFixed(3)})`;
+  }),
+);
 
 interface SectionAnchor {
   top: number;
-  colorT: number;
+  themeIndex: number;
 }
 
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
-function lerpColor(a: [number, number, number], b: [number, number, number], t: number): string {
-  const clamped = Math.max(0, Math.min(1, t));
-  const r = Math.round(lerp(a[0], b[0], clamped));
-  const g = Math.round(lerp(a[1], b[1], clamped));
-  const bl = Math.round(lerp(a[2], b[2], clamped));
-  return `${r}, ${g}, ${bl}`;
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = clamp01((x - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
 }
 
 /** Cheap deterministic drifting value noise, normalized to 0..1. */
@@ -85,7 +137,15 @@ export class PhosphorField {
   /** row*cols + col -> current heat (0..1) */
   private heat = new Map<number, number>();
   private sections: SectionAnchor[] = [];
-  private currentColorT = 0;
+  /** Continuous section position: 1.4 = 40% of the way from section 1 to section 2. */
+  private sectionPos = 0;
+  /** Per-cell random threshold (0..1) that drives the dissolve between themes. */
+  private cellHash = new Float32Array(0);
+  private lastBaseRenderAt = 0;
+  /** Flat [col, row, rampIndex, ...] lists, one per theme × alpha level (reused between renders). */
+  private baseBuckets: number[][] = BASE_STYLES.map(() => []);
+  /** Flat [key, heat, ...] lists, one per theme × lit alpha level. */
+  private litBuckets: number[][] = LIT_STYLES.map(() => []);
 
   private noiseTime = 0;
   private lastBaseRefresh = 0;
@@ -168,6 +228,13 @@ export class PhosphorField {
     this.offscreenCtx = offCtx;
 
     this.heat.clear();
+    this.cellHash = new Float32Array(this.cols * this.rows);
+    for (let i = 0; i < this.cellHash.length; i++) {
+      // Integer hash: stable pseudo-random value per cell.
+      let h = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b);
+      h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+      this.cellHash[i] = ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
+    }
     this.readSectionAnchors();
     this.renderBaseLayer();
     this.drawFrame();
@@ -182,37 +249,45 @@ export class PhosphorField {
   private readSectionAnchors(): void {
     const scrollY = window.scrollY || document.documentElement.scrollTop;
     const anchors: SectionAnchor[] = [];
-    SECTION_IDS.forEach((id, index) => {
-      const el = document.getElementById(id);
+    THEMES.forEach((theme, themeIndex) => {
+      const el = document.getElementById(theme.id);
       if (!el) return;
-      const top = el.getBoundingClientRect().top + scrollY;
-      const colorT = index <= 1 ? 0 : 1;
-      anchors.push({ top, colorT });
+      anchors.push({ top: el.getBoundingClientRect().top + scrollY, themeIndex });
     });
     this.sections = anchors.sort((a, b) => a.top - b.top);
   }
 
-  private computeSectionColorT(): number {
-    if (this.sections.length < 2) return 0;
+  private computeSectionPos(): number {
+    if (this.sections.length === 0) return 0;
     const viewportCenter =
       (window.scrollY || document.documentElement.scrollTop) + this.cssHeight / 2;
 
     let prev = this.sections[0];
+    if (viewportCenter <= prev.top) return prev.themeIndex;
     for (let i = 1; i < this.sections.length; i++) {
       const next = this.sections[i];
       if (viewportCenter <= next.top) {
-        const span = next.top - prev.top || 1;
-        const t = (viewportCenter - prev.top) / span;
-        return lerp(prev.colorT, next.colorT, Math.max(0, Math.min(1, t)));
+        const t = (viewportCenter - prev.top) / (next.top - prev.top || 1);
+        // Hold the current theme for most of the section, dissolve as the next one arrives.
+        return prev.themeIndex + smoothstep(0.45, 0.95, t) * (next.themeIndex - prev.themeIndex);
       }
       prev = next;
     }
-    return prev.colorT;
+    return prev.themeIndex;
+  }
+
+  /** Theme shown by a cell: cells flip to the next theme as the dissolve progresses. */
+  private themeIndexForCell(key: number): number {
+    const base = Math.floor(this.sectionPos);
+    const frac = this.sectionPos - base;
+    const next = Math.min(THEMES.length - 1, base + 1);
+    return frac > 0 && this.cellHash[key] < frac ? next : base;
   }
 
   private tickBaseLayer(): void {
     if (!this.active()) return;
     this.noiseTime += BASE_REFRESH_MS / 1000;
+    this.readSectionAnchors();
     this.renderBaseLayer();
     if (!this.rafRunning()) {
       this.drawFrame();
@@ -222,20 +297,34 @@ export class PhosphorField {
   private renderBaseLayer(): void {
     const ctx = this.offscreenCtx;
     if (!ctx) return;
-    this.currentColorT = this.computeSectionColorT();
-    const rgb = lerpColor(COLOR_GREEN, COLOR_CYAN, this.currentColorT);
+    this.sectionPos = this.computeSectionPos();
+    this.lastBaseRenderAt = performance.now();
 
-    ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
+    // Bucket glyphs by (theme, alpha level) so fillStyle — the costly part — is set a few
+    // dozen times per render instead of once per cell.
+    const buckets = this.baseBuckets;
+    for (const bucket of buckets) bucket.length = 0;
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        const value = fieldNoise(col, row, this.noiseTime);
-        const rampIndex = Math.min(RAMP.length - 1, Math.floor(value * RAMP.length));
-        if (rampIndex === 0) continue;
-        const alpha = BASE_MIN_ALPHA + value * (BASE_MAX_ALPHA - BASE_MIN_ALPHA);
-        ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
-        ctx.fillText(RAMP[rampIndex], col * CELL_SIZE, row * CELL_SIZE);
+        const themeIndex = this.themeIndexForCell(row * this.cols + col);
+        const theme = THEMES[themeIndex];
+        const value = clamp01(theme.sample(col, row, this.noiseTime));
+        const rampIndex = Math.min(theme.ramp.length - 1, Math.floor(value * theme.ramp.length));
+        if (theme.ramp[rampIndex] === ' ') continue;
+        const level = Math.min(BASE_ALPHA_LEVELS - 1, Math.floor(value * BASE_ALPHA_LEVELS));
+        buckets[themeIndex * BASE_ALPHA_LEVELS + level].push(col, row, rampIndex);
       }
     }
+
+    ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
+    buckets.forEach((cells, index) => {
+      if (cells.length === 0) return;
+      const theme = THEMES[Math.floor(index / BASE_ALPHA_LEVELS)];
+      ctx.fillStyle = BASE_STYLES[index];
+      for (let i = 0; i < cells.length; i += 3) {
+        ctx.fillText(theme.ramp[cells[i + 2]], cells[i] * CELL_SIZE, cells[i + 1] * CELL_SIZE);
+      }
+    });
   }
 
   private handlePointer(clientX: number, clientY: number): void {
@@ -270,6 +359,14 @@ export class PhosphorField {
     const velocity = Math.min(1, Math.abs(scrollY - this.lastScrollY) / dt);
     this.lastScrollY = scrollY;
     this.lastScrollAt = now;
+
+    // Keep the section dissolve in step with the scroll instead of the slow base tick.
+    if (
+      now - this.lastBaseRenderAt > SCROLL_BASE_REFRESH_MS &&
+      Math.abs(this.computeSectionPos() - this.sectionPos) > 0.01
+    ) {
+      this.renderBaseLayer();
+    }
 
     const scrollHeight = Math.max(
       1,
@@ -366,18 +463,31 @@ export class PhosphorField {
 
     if (this.heat.size === 0) return;
 
-    const rgb = lerpColor(COLOR_GREEN, COLOR_CYAN, this.currentColorT);
     ctx.font = `${CELL_SIZE - 2}px "JetBrains Mono", monospace`;
     ctx.textBaseline = 'top';
 
+    const buckets = this.litBuckets;
+    for (const bucket of buckets) bucket.length = 0;
     for (const [key, value] of this.heat) {
-      const row = Math.floor(key / this.cols);
-      const col = key % this.cols;
-      const rampIndex = Math.min(RAMP.length - 1, Math.max(1, Math.floor(value * RAMP.length)));
-      const alpha = Math.min(LIT_MAX_ALPHA, value * LIT_MAX_ALPHA + 0.05);
-      ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`;
-      ctx.fillText(RAMP[rampIndex], col * CELL_SIZE, row * CELL_SIZE);
+      const themeIndex = this.themeIndexForCell(key);
+      const level = Math.min(LIT_ALPHA_LEVELS - 1, Math.floor(value * LIT_ALPHA_LEVELS));
+      buckets[themeIndex * LIT_ALPHA_LEVELS + level].push(key, value);
     }
+
+    buckets.forEach((cells, index) => {
+      if (cells.length === 0) return;
+      const ramp = LIT_RAMPS[Math.floor(index / LIT_ALPHA_LEVELS)];
+      ctx.fillStyle = LIT_STYLES[index];
+      for (let i = 0; i < cells.length; i += 2) {
+        const key = cells[i];
+        const rampIndex = Math.min(ramp.length - 1, Math.floor(cells[i + 1] * ramp.length));
+        ctx.fillText(
+          ramp[rampIndex],
+          (key % this.cols) * CELL_SIZE,
+          Math.floor(key / this.cols) * CELL_SIZE,
+        );
+      }
+    });
   }
 
   private clearCanvas(): void {
