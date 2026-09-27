@@ -43,7 +43,13 @@ button {
 }
 
 /* The custom scroll-progress bar replaces the native scrollbar only where it is
-   actually rendered (portfolio pages, fine pointer, > 768px) — toggled by app.ts. */
+   actually rendered (portfolio pages, fine pointer, > 768px) — toggled by app.ts.
+   The viewport scrollbar belongs to <html> itself, so it needs its own rules. */
+html.has-custom-scrollbar {
+  scrollbar-width: none;
+}
+
+html.has-custom-scrollbar::-webkit-scrollbar,
 html.has-custom-scrollbar ::-webkit-scrollbar {
   display: none;
 }
