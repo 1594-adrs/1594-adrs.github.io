@@ -1,0 +1,36 @@
+# Andrés Rincón
+
+> I build software end to end — from the data layer to the interface — and ship it.
+
+Junior full stack developer working with Angular, NestJS and TypeScript. Systems and Computer Engineering student at Universidad Tecnológica de Pereira, where I also work as a software development and support monitor. I build practical tools end to end — like this site's graphing calculator — and pick up new stacks fast.
+
+## Profile
+
+- Software Developer · Full Stack
+- Pereira, Colombia (UTC−5)
+- Open to remote contract, freelance or part-time work (20+ h/week).
+- Contact: [andresdrincons2007@gmail.com](mailto:andresdrincons2007@gmail.com)
+
+## Experience
+
+- [Software Development & Support Monitor — Universidad Tecnológica de Pereira](https://1594-adrs.github.io/#experience) (Feb 2026 – Present)
+- [Freelance Web Developer — AF Autoservice](https://1594-adrs.github.io/#experience) (2026)
+
+## Projects
+
+- [RacketChess](https://github.com/1594-adrs/RacketChess)
+- [CSV2Binary-DBMS](https://github.com/1594-adrs/CSV2Binary-DBMS)
+- [PrereqFlow](https://github.com/1594-adrs/PrereqFlow)
+- [Portfolio](https://github.com/1594-adrs/1594-adrs.github.io)
+- [Graphing Calculator](https://1594-adrs.github.io/web-projects/calculator/)
+
+## Resume
+
+- [Resume page](https://1594-adrs.github.io/cv/)
+- [Resume PDF](https://1594-adrs.github.io/Andres_Rincon_CV.pdf)
+
+## Contact
+
+- Email: [andresdrincons2007@gmail.com](mailto:andresdrincons2007@gmail.com)
+- GitHub: https://github.com/1594-adrs
+- LinkedIn: https://www.linkedin.com/in/1594-adrs/

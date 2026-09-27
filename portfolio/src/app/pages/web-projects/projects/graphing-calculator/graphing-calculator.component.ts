@@ -17,7 +17,6 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Title } from '@angular/platform-browser';
 import { Viewport } from './canvas/viewport';
 import { drawGrid } from './canvas/grid-renderer';
 import { Solid3DComponent } from './canvas/solid-3d/solid-3d.component';
@@ -153,7 +152,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     : null;
   private ngZone = inject(NgZone);
   private cdr = inject(ChangeDetectorRef);
-  private titleService = inject(Title);
   solidToolState = inject(SolidToolState);
   interactionState = inject(GraphInteractionState);
   uiLayout = inject(UiLayoutState);
@@ -609,7 +607,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.titleService.setTitle('Graphing Calculator — Andres Rincon');
     if (!this.isBrowser) return;
     this.restoreFromShareLink();
     const canvas = this.canvasRef()?.nativeElement;

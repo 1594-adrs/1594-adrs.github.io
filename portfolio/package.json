@@ -4,7 +4,10 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "prebuild": "node scripts/gen-seo.mjs",
     "build": "ng build",
+    "postbuild": "node scripts/postbuild.mjs",
+    "gen-seo": "node scripts/gen-seo.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "format": "prettier --write \"src/**/*.{ts,html,css,scss}\"",

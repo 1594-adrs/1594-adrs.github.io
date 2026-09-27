@@ -1,5 +1,4 @@
-import { Component, ChangeDetectionStrategy, OnInit, inject } from '@angular/core';
-import { Title } from '@angular/platform-browser';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { WebProject } from '../../shared/models/portfolio.models';
 import { WEB_PROJECTS } from '../../shared/data/portfolio.data';
@@ -12,12 +11,6 @@ import { IconComponent } from '../../shared/icons/icon.component';
   templateUrl: './web-projects.component.html',
   styleUrls: ['./web-projects.component.css'],
 })
-export class WebProjectsComponent implements OnInit {
-  private titleService = inject(Title);
-
+export class WebProjectsComponent {
   projects: WebProject[] = WEB_PROJECTS;
-
-  ngOnInit(): void {
-    this.titleService.setTitle('Web Projects — Andres Rincon');
-  }
 }
