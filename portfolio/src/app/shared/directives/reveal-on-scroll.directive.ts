@@ -8,6 +8,7 @@ import {
   OnInit,
   OnDestroy,
   PLATFORM_ID,
+  NgZone,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
@@ -17,8 +18,10 @@ import { isPlatformBrowser } from '@angular/common';
 })
 export class RevealOnScroll implements OnInit, OnDestroy {
   private el = inject(ElementRef);
+  private ngZone = inject(NgZone);
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private observer?: IntersectionObserver;
+  private hideTimerId: ReturnType<typeof setTimeout> | null = null;
 
   threshold = input(0.15);
   revealed = signal(false);
@@ -29,7 +32,8 @@ export class RevealOnScroll implements OnInit, OnDestroy {
     if (!this.isBrowser) return;
 
     if (this.prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
-      this.reveal();
+      this.revealed.set(true);
+      this.visible.emit();
       return;
     }
 
@@ -37,9 +41,17 @@ export class RevealOnScroll implements OnInit, OnDestroy {
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            this.reveal();
-            this.observer?.unobserve(this.el.nativeElement);
-            this.observer?.disconnect();
+            this.hiding.set(false);
+            this.revealed.set(true);
+            this.visible.emit();
+          } else if (this.revealed()) {
+            this.hiding.set(true);
+            this.hideTimerId = setTimeout(() => {
+              this.ngZone.run(() => {
+                this.hiding.set(false);
+                this.revealed.set(false);
+              });
+            }, 400);
           }
         });
       },
@@ -51,11 +63,7 @@ export class RevealOnScroll implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.observer?.disconnect();
-  }
-
-  private reveal(): void {
-    this.revealed.set(true);
-    this.visible.emit();
+    if (this.hideTimerId !== null) clearTimeout(this.hideTimerId);
   }
 
   private prefersReducedMotion(): boolean {

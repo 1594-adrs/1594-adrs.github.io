@@ -7,6 +7,12 @@ describe('LoadingScreen', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
     sessionStorage.clear();
+    // Other specs stub matchMedia on the shared window; pin "no reduced motion" so order can't leak in.
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockReturnValue({ matches: false }),
+    });
     await TestBed.configureTestingModule({
       imports: [LoadingScreen],
     }).compileComponents();
@@ -29,23 +35,23 @@ describe('LoadingScreen', () => {
     expect(component.fadingOut()).toBe(false);
   });
 
-  it('should set fadingOut=true after 400ms', () => {
+  it('should set fadingOut=true after 1800ms', () => {
     const fixture = TestBed.createComponent(LoadingScreen);
     const component = fixture.componentInstance;
     fixture.detectChanges();
 
-    vi.advanceTimersByTime(400);
+    vi.advanceTimersByTime(1800);
 
     expect(component.fadingOut()).toBe(true);
     expect(component.visible()).toBe(true);
   });
 
-  it('should set visible=false after 600ms total', () => {
+  it('should set visible=false after 2400ms total', () => {
     const fixture = TestBed.createComponent(LoadingScreen);
     const component = fixture.componentInstance;
     fixture.detectChanges();
 
-    vi.advanceTimersByTime(600);
+    vi.advanceTimersByTime(2400);
 
     expect(component.visible()).toBe(false);
   });

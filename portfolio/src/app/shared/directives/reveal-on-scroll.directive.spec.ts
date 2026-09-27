@@ -19,6 +19,7 @@ describe('RevealOnScroll', () => {
   let capturedCallback: IntersectionObserverCallback;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     observeSpy = vi.fn();
     unobserveSpy = vi.fn();
     disconnectSpy = vi.fn();
@@ -42,6 +43,7 @@ describe('RevealOnScroll', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -52,7 +54,7 @@ describe('RevealOnScroll', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should reveal once and unobserve on the first intersection, and stay revealed on exit', async () => {
+  it('should reveal on enter, glitch-hide on leave, and replay on re-entry', async () => {
     await TestBed.configureTestingModule({ imports: [RevealHost] }).compileComponents();
     const fixture = TestBed.createComponent(RevealHost);
     fixture.detectChanges();
@@ -65,16 +67,24 @@ describe('RevealOnScroll', () => {
       [{ isIntersecting: true } as IntersectionObserverEntry],
       {} as IntersectionObserver,
     );
-
     expect(directive.revealed()).toBe(true);
-    expect(unobserveSpy).toHaveBeenCalled();
-    expect(disconnectSpy).toHaveBeenCalled();
+    expect(unobserveSpy).not.toHaveBeenCalled();
 
     capturedCallback(
       [{ isIntersecting: false } as IntersectionObserverEntry],
       {} as IntersectionObserver,
     );
+    expect(directive.hiding()).toBe(true);
+    expect(directive.revealed()).toBe(true);
 
+    vi.advanceTimersByTime(400);
+    expect(directive.hiding()).toBe(false);
+    expect(directive.revealed()).toBe(false);
+
+    capturedCallback(
+      [{ isIntersecting: true } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
     expect(directive.revealed()).toBe(true);
     expect(directive.hiding()).toBe(false);
   });
@@ -89,6 +99,23 @@ describe('RevealOnScroll', () => {
 
     expect(directive.revealed()).toBe(true);
     expect(observeSpy).not.toHaveBeenCalled();
+  });
+
+  it('should reveal immediately when IntersectionObserver is unavailable', async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal('IntersectionObserver', undefined);
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockReturnValue({ matches: false }),
+    });
+
+    await TestBed.configureTestingModule({ imports: [RevealHost] }).compileComponents();
+    const fixture = TestBed.createComponent(RevealHost);
+    fixture.detectChanges();
+    const directive = fixture.debugElement.children[0].injector.get(RevealOnScroll);
+
+    expect(directive.revealed()).toBe(true);
   });
 
   it('should not observe when not in browser platform', async () => {

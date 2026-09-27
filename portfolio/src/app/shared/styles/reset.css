@@ -13,14 +13,12 @@
 }
 
 body {
-  font-family: var(--font-body);
+  font-family: var(--font-family);
   font-size: var(--font-size-md);
   color: var(--color-text);
   line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border-hover) var(--color-bg-dark);
 }
 
 ul {
@@ -45,19 +43,14 @@ button {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  display: none;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--color-bg-dark);
+* {
+  scrollbar-width: none;
 }
 
-::-webkit-scrollbar-thumb {
-  background-color: var(--color-border-hover);
-  border: 2px solid var(--color-bg-dark);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-primary);
+body {
+  -ms-overflow-style: none;
+  overflow: -moz-scrollbars-none;
 }

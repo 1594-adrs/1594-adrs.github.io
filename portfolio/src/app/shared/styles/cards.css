@@ -101,7 +101,7 @@
 
 .project-description {
   color: var(--color-text-subtle);
-  font-family: var(--font-body);
+  font-family: var(--font-family);
   font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
   margin-bottom: 1rem;

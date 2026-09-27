@@ -10,8 +10,8 @@ import {
 import { isPlatformBrowser } from '@angular/common';
 
 const SESSION_KEY = 'loading-screen-shown';
-const FADE_DELAY_MS = 400;
-const FADE_DURATION_MS = 200;
+const FADE_DELAY_MS = 1800;
+const FADE_DURATION_MS = 600;
 
 @Component({
   selector: 'app-loading-screen',
