@@ -15,11 +15,12 @@ import { Navbar } from './shared/components/navbar/navbar';
 import { ProgressBar } from './shared/components/progress-bar/progress-bar';
 import { SocialButtons } from './shared/components/social-buttons/social-buttons';
 import { LoadingScreen } from './shared/components/loading-screen/loading-screen';
+import { PhosphorField } from './shared/components/phosphor-field/phosphor-field';
 
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, Navbar, ProgressBar, SocialButtons, LoadingScreen],
+  imports: [RouterOutlet, Navbar, ProgressBar, SocialButtons, LoadingScreen, PhosphorField],
   templateUrl: './app.html',
   styleUrls: ['./app.css'],
 })

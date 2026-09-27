@@ -2,28 +2,6 @@
   display: none !important;
 }
 
-.bg-depth {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: var(--z-behind);
-  background-image:
-    radial-gradient(circle at 15% 10%, var(--color-bg-glow-primary), transparent 45%),
-    radial-gradient(circle at 85% 90%, var(--color-bg-glow-secondary), transparent 45%),
-    radial-gradient(var(--color-bg-grid-dot) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    100% 100%,
-    28px 28px;
-  background-position:
-    0 0,
-    0 0,
-    0 0;
-}
-
 .crt-overlay {
   position: fixed;
   top: 0;
