@@ -65,9 +65,7 @@ describe('ProgressBar', () => {
 
     expect(fixture.componentInstance.roundedProgress()).toBe(50);
 
-    const container: HTMLElement = fixture.nativeElement.querySelector(
-      '[role="scrollbar"]',
-    );
+    const container: HTMLElement = fixture.nativeElement.querySelector('[role="scrollbar"]');
     expect(container.getAttribute('aria-valuenow')).toBe('50');
 
     vi.unstubAllGlobals();

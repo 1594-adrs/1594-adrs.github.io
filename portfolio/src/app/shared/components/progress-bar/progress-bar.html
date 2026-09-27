@@ -26,6 +26,9 @@
       <button
         type="button"
         class="scroll-marker"
+        [class.passed]="$index <= activeIndex()"
+        [class.active]="$index === activeIndex()"
+        [attr.aria-current]="$index === activeIndex() ? 'location' : null"
         [style.top.%]="marker.percent"
         [attr.aria-label]="'Go to ' + marker.label + ' section'"
         (click)="onMarkerClick($event, marker.id)"

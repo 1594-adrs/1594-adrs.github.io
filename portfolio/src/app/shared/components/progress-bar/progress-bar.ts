@@ -23,6 +23,8 @@ interface SectionMarker {
 const SECTION_IDS = ['home', 'about', 'experience', 'projects'];
 const ARROW_STEP_PX = 40;
 const PAGE_STEP_RATIO = 0.9;
+/** A section counts as reached once its top crosses this fraction of the viewport. */
+const REACHED_VIEWPORT_RATIO = 0.35;
 
 @Component({
   selector: 'app-progress-bar',
@@ -41,6 +43,15 @@ export class ProgressBar implements AfterViewInit, OnDestroy {
   roundedProgress = computed(() => Math.round(this.scrollProgress()));
   markers = signal<SectionMarker[]>([]);
   dragging = signal(false);
+  /** Index of the last section whose marker the progress has reached (-1 before the first). */
+  activeIndex = computed(() => {
+    const progress = this.scrollProgress();
+    let index = -1;
+    this.markers().forEach((marker, i) => {
+      if (marker.percent <= progress + 0.5) index = i;
+    });
+    return index;
+  });
 
   private lastProgress = 0;
   private rafId = 0;
@@ -186,7 +197,10 @@ export class ProgressBar implements AfterViewInit, OnDestroy {
     for (const id of SECTION_IDS) {
       const el = document.getElementById(id);
       if (!el) continue;
-      const top = el.getBoundingClientRect().top + window.scrollY;
+      const top =
+        el.getBoundingClientRect().top +
+        window.scrollY -
+        window.innerHeight * REACHED_VIEWPORT_RATIO;
       const percent = this.clamp((top / maxScroll) * 100, 0, 100);
       next.push({ id, label: id, percent });
     }
