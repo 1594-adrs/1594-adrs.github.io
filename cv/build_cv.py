@@ -344,6 +344,31 @@ def build_docx(phone: str | None, path: Path) -> None:
 
 # ---------------------------------------------------------------- main
 
+def write_web_copy(html_path: Path, dest_dir: Path) -> Path:
+    """Publish the (phone-free) CV HTML at /cv/, with SEO tags and a back link."""
+    content = html_path.read_text(encoding="utf-8")
+    head_extra = (
+        "<link rel='canonical' href='https://1594-adrs.github.io/cv/'>"
+        "<meta name='description' content=\"CV of Andrés Rincón, junior full stack developer "
+        "(Angular, NestJS, TypeScript) and Systems and Computer Engineering student at "
+        "Universidad Tecnológica de Pereira.\">"
+        "<link rel='alternate' type='application/pdf' "
+        "href='https://1594-adrs.github.io/Andres_Rincon_CV.pdf'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<style>@media screen{body{max-width:8.5in;margin:24px auto;padding:0 16px}}</style>"
+    )
+    content = content.replace("</head>", head_extra + "</head>")
+    content = content.replace(
+        "<body>",
+        "<body><p style='margin:0 0 6pt;font-size:9pt'>"
+        "<a href='https://1594-adrs.github.io/'>&larr; Portfolio</a></p>",
+    )
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = dest_dir / "index.html"
+    dest_path.write_text(content, encoding="utf-8")
+    return dest_path
+
+
 def build(out_dir: Path, phone: str | None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     html_path = out_dir / "Andres_Rincon_CV.html"
@@ -364,6 +389,9 @@ def build(out_dir: Path, phone: str | None) -> Path:
 if __name__ == "__main__":
     public_pdf = build(ROOT, None)
     shutil.copyfile(public_pdf, ROOT.parent / "portfolio" / "public" / "Andres_Rincon_CV.pdf")
+    write_web_copy(
+        ROOT / "Andres_Rincon_CV.html", ROOT.parent / "portfolio" / "public" / "cv"
+    )
     phone = os.environ.get("CV_PHONE")
     if phone:
         build(ROOT / "private", phone)

@@ -7,3 +7,5 @@ graphify-out/
 .playwright/
 .opencode/
 cv/private/
+
+__pycache__/
