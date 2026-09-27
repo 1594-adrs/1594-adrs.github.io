@@ -22,7 +22,7 @@
     "@angular/platform-browser": "^21.2.21",
     "@angular/platform-server": "^21.2.21",
     "@angular/router": "^21.2.21",
-    "three": "^0.185.1",
+    "three": "^0.186.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
@@ -31,7 +31,7 @@
     "@angular/compiler-cli": "^21.2.21",
     "@angular/ssr": "^21.2.21",
     "@types/node": "^20.17.19",
-    "@types/three": "^0.185.4",
+    "@types/three": "^0.186.0",
     "jsdom": "^27.1.0",
     "prettier": "^3.9.9",
     "prettier-plugin-angular": "^0.3.2",
