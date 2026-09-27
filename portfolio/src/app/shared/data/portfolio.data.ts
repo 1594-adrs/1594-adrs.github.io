@@ -81,10 +81,10 @@ export const COURSES: Course[] = [
 
 export const EDUCATION: Education[] = [
   {
-    degree: 'Computer Science and Systems Engineering',
-    institution: 'Universidad Tecnologica De Pereira',
-    period: '2025 - Present',
-    detail: 'Active member of the competitive programming workshop',
+    degree: 'Systems and Computer Engineering',
+    institution: 'Universidad Tecnológica de Pereira',
+    period: 'Feb 2025 - Present',
+    detail: 'Expected graduation: 2029',
   },
   {
     degree: 'Systems Technician',
