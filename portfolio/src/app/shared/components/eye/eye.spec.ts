@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { PLATFORM_ID } from '@angular/core';
 import { Eye } from './eye';
@@ -42,5 +42,21 @@ describe('Eye', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.irisTransform()).toBe('translate(0px, 0px)');
+  });
+
+  it('should not attach mousemove listener when reduced motion is preferred', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockReturnValue({ matches: true }),
+    });
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+
+    const fixture = TestBed.createComponent(Eye);
+    fixture.detectChanges();
+
+    expect(addEventListenerSpy).not.toHaveBeenCalledWith('mousemove', expect.any(Function));
+
+    addEventListenerSpy.mockRestore();
   });
 });

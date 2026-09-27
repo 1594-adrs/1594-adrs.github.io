@@ -8,7 +8,6 @@ import {
   OnInit,
   OnDestroy,
   PLATFORM_ID,
-  NgZone,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
@@ -18,10 +17,8 @@ import { isPlatformBrowser } from '@angular/common';
 })
 export class RevealOnScroll implements OnInit, OnDestroy {
   private el = inject(ElementRef);
-  private ngZone = inject(NgZone);
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private observer?: IntersectionObserver;
-  private hideTimerId: ReturnType<typeof setTimeout> | null = null;
 
   threshold = input(0.15);
   revealed = signal(false);
@@ -29,23 +26,20 @@ export class RevealOnScroll implements OnInit, OnDestroy {
   visible = output<void>();
 
   ngOnInit() {
-    if (!this.isBrowser || typeof IntersectionObserver === 'undefined') return;
+    if (!this.isBrowser) return;
+
+    if (this.prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {
+      this.reveal();
+      return;
+    }
 
     this.observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            this.hiding.set(false);
-            this.revealed.set(true);
-            this.visible.emit();
-          } else if (this.revealed()) {
-            this.hiding.set(true);
-            this.hideTimerId = setTimeout(() => {
-              this.ngZone.run(() => {
-                this.hiding.set(false);
-                this.revealed.set(false);
-              });
-            }, 400);
+            this.reveal();
+            this.observer?.unobserve(this.el.nativeElement);
+            this.observer?.disconnect();
           }
         });
       },
@@ -57,6 +51,14 @@ export class RevealOnScroll implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.observer?.disconnect();
-    if (this.hideTimerId !== null) clearTimeout(this.hideTimerId);
+  }
+
+  private reveal(): void {
+    this.revealed.set(true);
+    this.visible.emit();
+  }
+
+  private prefersReducedMotion(): boolean {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
   }
 }

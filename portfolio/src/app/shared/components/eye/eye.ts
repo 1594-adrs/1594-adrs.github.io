@@ -33,6 +33,7 @@ export class Eye implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     if (!this.isBrowser) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
     this.ngZone.runOutsideAngular(() => {
       window.addEventListener('mousemove', this.onMouseMoveHandler);
     });
