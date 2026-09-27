@@ -19,25 +19,3 @@ export function integrate(f: (x: number) => number, a: number, b: number, _n = 2
   }
   return result.value;
 }
-
-export function computeIntegralPoints(
-  f: (x: number) => number,
-  a: number,
-  b: number,
-  steps = 200,
-): Array<{ x: number; y: number }> {
-  const points: Array<{ x: number; y: number }> = [];
-  const h = (b - a) / steps;
-  for (let i = 0; i <= steps; i++) {
-    const x = a + i * h;
-    let y: number;
-    try {
-      y = f(x);
-    } catch {
-      y = NaN;
-    }
-    if (!isFinite(y)) y = NaN;
-    points.push({ x, y });
-  }
-  return points;
-}

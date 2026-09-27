@@ -156,7 +156,6 @@ export class PhosphorField {
   private litBuckets: number[][] = LIT_STYLES.map(() => []);
 
   private noiseTime = 0;
-  private lastBaseRefresh = 0;
   private lastFrameTime = 0;
   private rafId = 0;
   private baseIntervalId?: ReturnType<typeof setInterval>;
