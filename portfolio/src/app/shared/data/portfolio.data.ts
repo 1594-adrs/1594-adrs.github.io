@@ -35,6 +35,16 @@ export const PROFILE: Profile = {
   availability: 'Open to remote contract, freelance or part-time work (20+ h/week).',
 };
 
+/**
+ * Gmail web compose link. Used instead of a bare mailto: because visitors without a
+ * configured mail app get no feedback at all from mailto: (the click does nothing).
+ */
+export const EMAIL_COMPOSE_URL =
+  'https://mail.google.com/mail/?view=cm&fs=1&to=' +
+  encodeURIComponent(PROFILE.email) +
+  '&su=' +
+  encodeURIComponent('Hello Andrés — from your portfolio');
+
 export const PAGE_META: Record<PageKey, PageMeta> = {
   home: {
     title: 'Andrés Rincón — Software Developer · Full Stack',
@@ -84,7 +94,7 @@ export const SOCIAL_NETWORKS: SocialNetwork[] = [
   },
   {
     iconName: 'envelope',
-    url: 'mailto:andresdrincons2007@gmail.com',
+    url: EMAIL_COMPOSE_URL,
     label: 'Email',
   },
 ];

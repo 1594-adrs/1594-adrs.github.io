@@ -71,14 +71,44 @@
 
 .contact-email {
   color: var(--color-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
   word-break: break-all;
+  user-select: all;
 }
 
-.contact-email:hover,
-.contact-email:focus-visible {
+.contact-actions button.btn {
   color: var(--color-text);
+}
+
+@media (hover: hover) {
+  .contact-actions button.btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+}
+
+.contact-actions .btn.copied {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.contact-mailapp {
+  margin-top: 1rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.contact-mailapp a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-text-subtle);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.contact-mailapp a:hover,
+.contact-mailapp a:focus-visible {
+  color: var(--color-primary);
 }
 
 .contact-actions {

@@ -25,15 +25,25 @@
           </div>
           <div class="contact-detail">
             <app-icon name="envelope" />
-            <a class="contact-email" [href]="'mailto:' + profile.email">{{ profile.email }}</a>
+            <span class="contact-email">{{ profile.email }}</span>
           </div>
         </address>
 
         <div class="contact-actions">
-          <a class="btn btn-primary" [href]="'mailto:' + profile.email">
+          <a
+            class="btn btn-primary"
+            [href]="composeUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Email me (opens Gmail in a new tab)"
+          >
             <app-icon name="envelope" />
             Email me
           </a>
+          <button type="button" class="btn" [class.copied]="copied()" (click)="copyEmail()">
+            <app-icon [name]="copied() ? 'check' : 'copy'" />
+            {{ copied() ? 'Copied!' : 'Copy email' }}
+          </button>
           <a
             class="btn"
             href="https://www.linkedin.com/in/1594-adrs/"
@@ -67,6 +77,11 @@
             </a>
           }
         </div>
+
+        <p class="contact-mailapp">
+          Prefer another client? <a [href]="'mailto:' + profile.email">Open in your mail app</a>
+        </p>
+        <p class="sr-only" aria-live="polite">{{ copied() ? 'Email address copied to clipboard' : '' }}</p>
       </div>
     </div>
   </div>
