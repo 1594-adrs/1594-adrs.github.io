@@ -32,7 +32,7 @@ export const PROFILE: Profile = {
   email: 'andresdrincons2007@gmail.com',
   location: 'Pereira, Colombia',
   timezone: 'UTC−5',
-  availability: 'Open to junior developer roles and internships — remote or in Pereira.',
+  availability: 'Open to remote contract, freelance or part-time work (20+ h/week).',
 };
 
 export const PAGE_META: Record<PageKey, PageMeta> = {
