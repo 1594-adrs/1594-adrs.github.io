@@ -30,7 +30,7 @@
     "@angular/cli": "^21.2.21",
     "@angular/compiler-cli": "^21.2.21",
     "@angular/ssr": "^21.2.21",
-    "@types/node": "^20.17.19",
+    "@types/node": "^26.6.3",
     "@types/three": "^0.185.4",
     "jsdom": "^27.1.0",
     "prettier": "^3.9.9",
