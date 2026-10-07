@@ -58,7 +58,12 @@ export class SolidScene {
   private maxDist = 20;
   private framedRadius = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  /** `createRenderer` exists so tests can run without a WebGL context. */
+  constructor(
+    canvas: HTMLCanvasElement,
+    createRenderer: (canvas: HTMLCanvasElement) => WebGLRenderer = (c) =>
+      new WebGLRenderer({ canvas: c, antialias: true }),
+  ) {
     this.scene = new Scene();
     this.scene.background = new Color(0x0d0d15);
 
@@ -66,7 +71,7 @@ export class SolidScene {
     this.camera.position.set(4, 3, 4);
     this.camera.lookAt(0, 0, 0);
 
-    this.renderer = new WebGLRenderer({ canvas, antialias: true });
+    this.renderer = createRenderer(canvas);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(canvas.width, canvas.height);
     this.renderer.localClippingEnabled = true;
@@ -260,7 +265,13 @@ export class SolidScene {
     this.renderer.setSize(width, height);
   }
 
+  /**
+   * Releases every GPU resource. `renderer.dispose()` alone frees buffers but keeps the WebGL
+   * context alive until GC, and browsers cap live contexts (~16): opening/closing the 3D view
+   * repeatedly made them evict older ones. `forceContextLoss()` hands the context back at once.
+   */
   dispose(): void {
+    if (this.isDisposed) return;
     this.isDisposed = true;
     this.disposeSolidPieces();
     if (this.sliceMesh) {
@@ -279,5 +290,7 @@ export class SolidScene {
     disposeMaterial(this.axes.material);
     this.scene.clear();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
+    this.renderer.domElement.remove();
   }
 }

@@ -16,13 +16,21 @@
     <canvas #graphCanvas [attr.aria-hidden]="show3DSolid() && hasSolidResult()"></canvas>
     @if (show3DSolid() && hasSolidResult()) {
       <div class="solid-3d-container">
-        <app-solid-3d
-          [spec]="solidToolState.spec()"
-          [pieces]="solidToolState.result()?.pieces ?? []"
-          [sweepT]="solidToolState.sweepT()"
-          [color]="solidColor()"
-          [visible]="show3DSolid()"
-        />
+        <!-- Three.js (~530 kB) is only downloaded when the 3D view is first opened. -->
+        @defer (on immediate) {
+          <app-solid-3d
+            #solid3d
+            [spec]="solidToolState.spec()"
+            [pieces]="solidToolState.result()?.pieces ?? []"
+            [sweepT]="solidToolState.sweepT()"
+            [color]="solidColor()"
+            [visible]="show3DSolid()"
+          />
+        } @placeholder {
+          <p class="solid-3d-loading" role="status">Loading 3D view…</p>
+        } @error {
+          <p class="solid-3d-loading" role="alert">The 3D view could not be loaded.</p>
+        }
       </div>
     }
     @if (!show3DSolid()) {

@@ -270,6 +270,7 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
       canvas.removeEventListener('touchcancel', this.onTouchEnd);
     }
     this.scene?.dispose();
+    this.scene = null;
   }
 
   onKeyDown(event: KeyboardEvent): void {

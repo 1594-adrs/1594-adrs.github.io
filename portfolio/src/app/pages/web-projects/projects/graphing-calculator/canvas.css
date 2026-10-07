@@ -3,6 +3,14 @@
   overflow: hidden;
   background: var(--color-canvas-bg);
 }
+.solid-3d-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-subtle);
+}
 .canvas-container canvas {
   /* The app handles pan/pinch itself; stop the browser from scrolling/zooming the page. */
   touch-action: none;

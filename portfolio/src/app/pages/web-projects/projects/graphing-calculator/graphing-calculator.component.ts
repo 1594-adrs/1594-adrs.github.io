@@ -110,6 +110,8 @@ const POI_HIT_PX_FINE = 12;
 const POI_HIT_PX_COARSE = 22;
 /** Debounce for recomputing points of interest after a pan/zoom. */
 const POI_RECOMPUTE_DELAY_MS = 150;
+/** Quiet time after the last wheel/key/button view change before the full-resolution redraw. */
+const GESTURE_IDLE_MS = 150;
 /** Movement (screen px) beyond which a single-finger touch commits to panning
  *  instead of holding still to trace a curve. */
 const TOUCH_PAN_THRESHOLD_PX = 10;
@@ -175,7 +177,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
-  solid3dRef = viewChild(Solid3DComponent);
+  // Template ref (not the class token): a class-token query would keep Three.js in the route chunk.
+  solid3dRef = viewChild<Solid3DComponent>('solid3d');
 
   functions = signal<MathExpression[]>([
     {
@@ -657,6 +660,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   constructor() {
+    // Start the MathLive chunk (a separate lazy chunk, not in the initial bundle) now rather than
+    // when the first <app-math-input> finishes rendering; the loader memoizes the promise.
+    if (this.isBrowser) void loadMathlive();
+
     // Re-bind whenever the <canvas> element itself changes (dev-server HMR swaps the
     // template DOM without re-running ngAfterViewInit; any future @if around the canvas
     // would do the same). No-op while it's the element we're already bound to.
@@ -1254,6 +1261,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   private wheelIdleTimerId: ReturnType<typeof setTimeout> | null = null;
 
+  /** Marks a burst of discrete view changes (wheel ticks, key auto-repeat, +/- buttons) as one
+   *  gesture: implicit curves use the coarse grid and POI recompute is skipped until it's quiet. */
+  private beginTransientGesture(): void {
+    this.gestureActive = true;
+    if (this.wheelIdleTimerId !== null) clearTimeout(this.wheelIdleTimerId);
+    this.wheelIdleTimerId = setTimeout(() => {
+      this.wheelIdleTimerId = null;
+      if (!this.isDragging()) this.gestureActive = false;
+      this.requestRender();
+    }, GESTURE_IDLE_MS);
+  }
+
   onCanvasWheel(event: WheelEvent): void {
     event.preventDefault();
     const canvas = this.canvasRef()?.nativeElement;
@@ -1264,16 +1283,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
     this.viewport.zoom(factor, x, y, this.cssWidth, this.cssHeight);
 
-    // A wheel/trackpad zoom fires many events in quick succession; treat it as one
-    // gesture (coarser implicit-curve grid, no POI recompute) until it's quiet.
-    this.gestureActive = true;
-    if (this.wheelIdleTimerId !== null) clearTimeout(this.wheelIdleTimerId);
-    this.wheelIdleTimerId = setTimeout(() => {
-      this.wheelIdleTimerId = null;
-      this.gestureActive = false;
-      this.requestRender();
-    }, 150);
-
+    // A wheel/trackpad zoom fires many events in quick succession.
+    this.beginTransientGesture();
     this.requestRender();
   }
 
@@ -1378,6 +1389,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         return;
     }
     event.preventDefault();
+    this.beginTransientGesture();
     this.requestRender();
   }
 
@@ -1513,6 +1525,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
     this.viewport.zoom(1.3, this.cssWidth / 2, this.cssHeight / 2, this.cssWidth, this.cssHeight);
+    this.beginTransientGesture();
     this.requestRender();
   }
 
@@ -1526,6 +1539,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.cssWidth,
       this.cssHeight,
     );
+    this.beginTransientGesture();
     this.requestRender();
   }
 
