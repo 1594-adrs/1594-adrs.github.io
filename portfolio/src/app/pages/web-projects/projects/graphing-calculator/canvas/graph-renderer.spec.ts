@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Viewport } from './viewport';
+import { drawIntegralArea, drawAreaBetween } from './graph-renderer';
 
 interface MockContext {
   calls: Array<{ method: string; args: unknown[] }>;
@@ -85,6 +86,8 @@ function createMockContext(): CanvasRenderingContext2D & MockContext {
     fillText: function (text: string, x: number, y: number) {
       calls.push({ method: 'fillText', args: [text, x, y] });
     },
+    rect: function () {},
+    clip: function () {},
     measureText: function (text: string) {
       return { width: text.length * 6.6 };
     },
@@ -287,5 +290,52 @@ describe('drawInequality simulation', () => {
 
     expect(ctx.calls).toContainEqual({ method: 'save', args: [] });
     expect(ctx.calls).toContainEqual({ method: 'restore', args: [] });
+  });
+});
+
+describe('drawIntegralArea / drawAreaBetween hardening', () => {
+  const count = (ctx: { calls: Array<{ method: string }> }, m: string) =>
+    ctx.calls.filter((c) => c.method === m).length;
+
+  it('terminates and stays bounded for a=-1e308, b=1e308', () => {
+    const ctx = createMockContext();
+    const vp = new Viewport();
+    drawIntegralArea(ctx, vp, (x) => x, -1e308, 1e308, '#ff0000', 800, 600);
+    expect(count(ctx, 'lineTo')).toBeLessThan(10000);
+  });
+
+  it('terminates for non-finite limits in drawAreaBetween', () => {
+    const ctx = createMockContext();
+    const vp = new Viewport();
+    drawAreaBetween(
+      ctx,
+      vp,
+      (x) => x + 1,
+      (x) => x - 1,
+      0,
+      1e308,
+      '#ff0000',
+      800,
+      600,
+    );
+    expect(count(ctx, 'lineTo')).toBeLessThan(40000);
+  });
+
+  it('does not shade stretches where the integrand is undefined', () => {
+    const ctx = createMockContext();
+    const vp = new Viewport();
+    drawIntegralArea(ctx, vp, () => NaN, -5, 5, '#ff0000', 800, 600);
+    expect(count(ctx, 'fill')).toBe(0);
+  });
+
+  it('closes the shape before an undefined stretch', () => {
+    const ctx = createMockContext();
+    const vp = new Viewport();
+    drawIntegralArea(ctx, vp, (x) => (x < 0 ? 1 : NaN), -5, 5, '#ff0000', 800, 600);
+    expect(count(ctx, 'fill')).toBe(1);
+    const closeIdx = ctx.calls.findIndex((c) => c.method === 'closePath');
+    const last = ctx.calls[closeIdx - 1];
+    // Closing point is the last valid sample (x < 0 => screen x < 400), not the NaN stretch.
+    expect(last.args[0] as number).toBeLessThan(400);
   });
 });

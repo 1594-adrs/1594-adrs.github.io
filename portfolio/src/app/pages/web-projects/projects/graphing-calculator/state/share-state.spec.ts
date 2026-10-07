@@ -82,4 +82,83 @@ describe('share-state', () => {
   it('extracts nothing when there is no #s= fragment', () => {
     expect(extractShareFragment('#foo=bar')).toBeNull();
   });
+
+  describe('strict validation', () => {
+    const enc = (o: unknown) => serializeShareState(o as ShareState);
+    const base = () => ({ ...makeState() }) as Record<string, unknown>;
+
+    it('rejects absurd or inverted viewports', () => {
+      for (const viewport of [
+        { xMin: 1e16, xMax: 1e16 + 4, yMin: -1, yMax: 1 },
+        { xMin: 5, xMax: -5, yMin: -1, yMax: 1 },
+        { xMin: 0, xMax: 0, yMin: -1, yMax: 1 },
+        { xMin: -1e300, xMax: 1e300, yMin: -1, yMax: 1 },
+        { xMin: 1e8, xMax: 1e8 + 1e-3, yMin: -1, yMax: 1 },
+      ]) {
+        expect(parseShareState(enc({ ...base(), viewport }))).toBeNull();
+      }
+    });
+
+    it('rejects more than 5 functions and over-long raw (2MB style)', () => {
+      const f = { raw: 'x', color: '#00ff88', visible: true };
+      expect(parseShareState(enc({ ...base(), functions: Array(6).fill(f) }))).toBeNull();
+      const huge = { ...f, raw: 'x'.repeat(2_000_000) };
+      expect(parseShareState(enc({ ...base(), functions: [huge] }))).toBeNull();
+    });
+
+    it('falls back to the palette color for non-hex colors', () => {
+      const f = { raw: 'x', color: 'url(https://evil/p.gif)', visible: true };
+      const parsed = parseShareState(enc({ ...base(), functions: [f] }));
+      expect(parsed?.functions[0].color).toBe('#00ff88');
+    });
+
+    it('drops an integral tool with a=1e308 but keeps the link', () => {
+      const tool = { active: 'integral', integral: { fnIndex: 0, a: 1e308, b: 2 } };
+      const parsed = parseShareState(enc({ ...base(), tool }));
+      expect(parsed?.tool).toEqual({ active: null });
+    });
+
+    it('drops a malformed solid body instead of throwing', () => {
+      const solid = {
+        method: 'shell',
+        curveIndices: 'nope',
+        a: 5,
+        b: '1',
+        axisValue: '0',
+        shape: 'square',
+        heightRatio: '1',
+      };
+      const parsed = parseShareState(enc({ ...base(), tool: { active: 'solid', solid } }));
+      expect(parsed?.tool).toEqual({ active: null });
+    });
+
+    it('drops tools with duplicate/out-of-range indices or bad enums', () => {
+      const area = { functionIndices: [0, 0], a: 0, b: 1, overlapMode: 'all' };
+      expect(
+        parseShareState(enc({ ...base(), tool: { active: 'area', area } }))?.tool.active,
+      ).toBeNull();
+      const area2 = { functionIndices: [0, 7], a: 0, b: 1, overlapMode: 'all' };
+      expect(
+        parseShareState(enc({ ...base(), tool: { active: 'area', area: area2 } }))?.tool.active,
+      ).toBeNull();
+      const area3 = { functionIndices: [0, 1], a: 0, b: 1, overlapMode: 'x' };
+      expect(
+        parseShareState(enc({ ...base(), tool: { active: 'area', area: area3 } }))?.tool.active,
+      ).toBeNull();
+    });
+
+    it('keeps a valid solid tool', () => {
+      const solid = {
+        method: 'disk-washer',
+        curveIndices: [0, 1],
+        a: '0',
+        b: 'pi',
+        axisValue: '0',
+        shape: 'square',
+        heightRatio: '1',
+      };
+      const parsed = parseShareState(enc({ ...base(), tool: { active: 'solid', solid } }));
+      expect(parsed?.tool.solid).toEqual(solid);
+    });
+  });
 });

@@ -56,6 +56,41 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.shareNotice()).toContain('Ignored an invalid share link');
   });
 
+  it('ignores a crafted link with a 1e16 viewport and keeps the default state', () => {
+    window.location.hash = buildShareHash({
+      v: 1,
+      functions: [{ raw: 'x', color: '#ff6b35', visible: true }],
+      viewport: { xMin: 1e16, xMax: 1e16 + 4, yMin: -1, yMax: 1 },
+      tool: { active: null },
+    });
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    fixture.detectChanges();
+    const comp = fixture.componentInstance;
+    expect(comp.functions()[0].raw).toBe('sin(x)');
+    expect(comp.viewport.xMax).toBeLessThan(1e3);
+    expect(comp.shareNotice()).toContain('Ignored an invalid share link');
+    expect(window.location.hash).toBe('');
+  });
+
+  it('drops a malformed solid tool but still restores functions and binds the app', () => {
+    window.location.hash = buildShareHash({
+      v: 1,
+      functions: [{ raw: 'x^2', color: 'url(https://evil/x.gif)', visible: true }],
+      viewport: { xMin: -5, xMax: 5, yMin: -5, yMax: 5 },
+      tool: {
+        active: 'solid',
+        solid: { method: 'shell', curveIndices: 'nope', a: 1 },
+      },
+    } as never);
+    const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+    fixture.detectChanges();
+    const comp = fixture.componentInstance;
+    expect(comp.functions()[0].raw).toBe('x^2');
+    expect(comp.functions()[0].color).toBe('#00ff88');
+    expect(comp.showSolidTool()).toBe(false);
+    expect(window.location.hash).toBe('');
+  });
+
   it('should create', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     expect(fixture.componentInstance).toBeTruthy();

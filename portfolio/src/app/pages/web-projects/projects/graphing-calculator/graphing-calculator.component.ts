@@ -104,6 +104,8 @@ const POI_RECOMPUTE_DELAY_MS = 150;
 /** Movement (screen px) beyond which a single-finger touch commits to panning
  *  instead of holding still to trace a curve. */
 const TOUCH_PAN_THRESHOLD_PX = 10;
+/** Rows longer than this skip the inequality regex split (it is quadratic on long input). */
+const MAX_INEQUALITY_RAW = 500;
 
 /**
  * Rewrites the evaluator's "Unknown variable: 'foo'" into a display message.
@@ -757,7 +759,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           };
         }
         if (mode === 'implicit') {
-          const inequalityMatch = raw.match(/(.*?)(>=|<=|>|<)(.*)/);
+          // Length guard: the lazy `.*?` regex is quadratic on long inputs without an operator.
+          const inequalityMatch =
+            raw.length <= MAX_INEQUALITY_RAW ? raw.match(/(.*?)(>=|<=|>|<)(.*)/) : null;
           if (inequalityMatch) {
             const lhs = inequalityMatch[1].trim();
             const op = inequalityMatch[2] as '>' | '<' | '>=' | '<=';
@@ -1557,6 +1561,29 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
+    const fallback = {
+      functions: this.functions(),
+      viewport: { ...this.viewport } as Viewport,
+    };
+    try {
+      this.applyShareState(state);
+    } catch {
+      // A crafted link must never leave the app half-restored or unbound.
+      this.functions.set(fallback.functions);
+      this.viewport.xMin = fallback.viewport.xMin;
+      this.viewport.xMax = fallback.viewport.xMax;
+      this.viewport.yMin = fallback.viewport.yMin;
+      this.viewport.yMax = fallback.viewport.yMax;
+      this.activeIntegral.set(null);
+      this.activeMultiArea.set(null);
+      this.showSolidTool.set(false);
+      this.announceShare('Ignored an invalid share link.');
+    }
+    this.clearShareHash();
+    this.requestRender();
+  }
+
+  private applyShareState(state: ShareState): void {
     this.functions.set(
       state.functions.map((f) => ({
         raw: f.raw,
@@ -1595,9 +1622,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.solidToolState.setShape(tool.solid.shape);
       this.solidToolState.setHeightRatio(tool.solid.heightRatio);
     }
-
-    this.clearShareHash();
-    this.requestRender();
   }
 
   /** Drops the `#s=...` fragment from the URL once it's been applied (or rejected), so a

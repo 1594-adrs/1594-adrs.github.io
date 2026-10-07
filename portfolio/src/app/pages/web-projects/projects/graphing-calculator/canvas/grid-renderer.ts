@@ -12,6 +12,8 @@ const LABEL_FONT = '11px "JetBrains Mono", monospace';
  *  pack them closer than MIN_MINOR_SPACING_PX on screen (clutter, not signal). */
 const MINOR_SUBDIVISIONS = 5;
 const MIN_MINOR_SPACING_PX = 8;
+/** Hard cap on lines/labels per axis pass, so no viewport can stall the render loop. */
+const MAX_GRID_LINES = 500;
 
 function niceStep(range: number): number {
   const rough = range / 8;
@@ -36,7 +38,8 @@ function drawVerticalLines(
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
-  for (let x = start; x <= viewport.xMax; x += step) {
+  for (let x = start, n = 0; x <= viewport.xMax && n < MAX_GRID_LINES; x += step, n++) {
+    if (x + step === x) break;
     const [sx] = viewport.worldToScreen(x, 0, width, height);
     ctx.moveTo(sx, 0);
     ctx.lineTo(sx, height);
@@ -57,7 +60,8 @@ function drawHorizontalLines(
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
-  for (let y = start; y <= viewport.yMax; y += step) {
+  for (let y = start, n = 0; y <= viewport.yMax && n < MAX_GRID_LINES; y += step, n++) {
+    if (y + step === y) break;
     const [, sy] = viewport.worldToScreen(0, y, width, height);
     ctx.moveTo(0, sy);
     ctx.lineTo(width, sy);
@@ -150,7 +154,8 @@ export function drawGrid(
   ctx.textAlign = 'center';
   ctx.textBaseline = xBaseline;
 
-  for (let x = startX; x <= viewport.xMax; x += stepX) {
+  for (let x = startX, n = 0; x <= viewport.xMax && n < MAX_GRID_LINES; x += stepX, n++) {
+    if (x + stepX === x) break;
     if (Math.abs(x) < stepX * 0.01) continue;
     const [sx] = viewport.worldToScreen(x, 0, width, height);
     const label = Math.abs(x) < 0.001 ? '0' : Number(x.toPrecision(4)).toString();
@@ -159,7 +164,8 @@ export function drawGrid(
 
   ctx.textAlign = yAlign;
   ctx.textBaseline = 'middle';
-  for (let y = startY; y <= viewport.yMax; y += stepY) {
+  for (let y = startY, n = 0; y <= viewport.yMax && n < MAX_GRID_LINES; y += stepY, n++) {
+    if (y + stepY === y) break;
     if (Math.abs(y) < stepY * 0.01) continue;
     const [, sy] = viewport.worldToScreen(0, y, width, height);
     const label = Math.abs(y) < 0.001 ? '0' : Number(y.toPrecision(4)).toString();
