@@ -317,3 +317,8 @@
 .ratio-row {
   margin-top: 8px;
 }
+
+.sweep-output {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}

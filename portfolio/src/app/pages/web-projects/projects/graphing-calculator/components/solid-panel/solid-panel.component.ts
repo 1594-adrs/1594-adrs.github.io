@@ -1,3 +1,4 @@
+import { formatValue } from '../../utils/format-value';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MathInput } from '../math-input/math-input';
 import { IntegralFormulaComponent } from '../integral-formula/integral-formula.component';
@@ -20,13 +21,6 @@ const SHAPE_LABELS: Record<CrossSectionShape, string> = {
   'right-isosceles-hypotenuse': 'Right isosceles (hypotenuse on base)',
   semicircle: 'Semicircle',
 };
-
-function formatValue(v: number): string {
-  if (Number.isNaN(v)) return 'undefined';
-  if (Math.abs(v) < 1e-10) return '0';
-  if (Math.abs(v) >= 1e12 || Math.abs(v) < 0.001) return v.toExponential(3);
-  return v.toFixed(6);
-}
 
 /**
  * Tool panel for "solids by integration": method selection, curve/bounds/axis inputs, inline

@@ -20,7 +20,7 @@
 
   <div class="range-section curve-section">
     <span class="range-label">curves (max 5)</span>
-    <div class="bounded-fn-selects">
+    <div class="bounded-fn-selects" role="group" aria-label="Curves for the solid">
       @for (opt of state.curveOptions(); track opt.index) {
         <label
           class="range-field multi-fn-toggle"
@@ -31,6 +31,7 @@
             type="checkbox"
             [checked]="opt.selected"
             [disabled]="!opt.compatible"
+            [attr.aria-label]="'Include f' + (opt.index + 1) + ' in the solid'"
             (change)="state.toggleCurve(opt.index)"
           />
           <span class="color-swatch" [style.background]="opt.fn.color"></span>
@@ -190,6 +191,7 @@
             [attr.aria-valuetext]="sweepValueText()"
             aria-label="Sweep position"
           />
+          <output class="sweep-output" aria-hidden="true">{{ sweepValueText() }}</output>
           <div class="sweep-buttons">
             <button
               class="t-btn sweep-btn"

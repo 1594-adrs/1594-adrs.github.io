@@ -60,6 +60,11 @@
   }
 
   @if (rows().length > 0) {
+    <div class="value-table-actions">
+      <button type="button" class="action-btn" (click)="copy()">Copy values</button>
+      <button type="button" class="action-btn" (click)="downloadCsv()">Download CSV</button>
+      <span class="value-table-notice" role="status" aria-live="polite">{{ notice() }}</span>
+    </div>
     <div class="value-table-scroll">
       <table class="value-table">
         <caption>

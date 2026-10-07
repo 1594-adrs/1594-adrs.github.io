@@ -16,14 +16,22 @@ import {
     '(document:keydown.tab)': 'onTabKey($event)',
   },
   template: `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" (click)="close.emit()">
+    <div
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      (click)="close.emit()"
+    >
       <div
         class="modal-content"
         aria-labelledby="modal-title"
         (click)="$event.stopPropagation()"
         #modalContent
       >
-        <button class="modal-close" (click)="close.emit()" autofocus>&times;</button>
+        <button class="modal-close" (click)="close.emit()" aria-label="Close help" autofocus>
+          &times;
+        </button>
         <h2 class="modal-title" id="modal-title">&gt; help</h2>
 
         <div class="help-section">

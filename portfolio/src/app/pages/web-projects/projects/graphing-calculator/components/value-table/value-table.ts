@@ -1,6 +1,7 @@
 import { Component, ChangeDetectionStrategy, computed, input, output, signal } from '@angular/core';
 import { evalExpression, evaluate } from '../../engine/evaluator';
 import { formatValue } from '../../utils/format-value';
+import { tableToCsv } from '../../utils/result-format';
 import type { MathExpression } from '../../models/calculator.models';
 
 const DEFAULT_START = '0';
@@ -90,6 +91,36 @@ export class ValueTable {
     }
     return out;
   });
+
+  notice = signal('');
+
+  private csv(): string {
+    const header: [string, string] = this.inputVariable() === 'y' ? ['y', 'g(y)'] : ['x', 'f(x)'];
+    return tableToCsv(
+      header,
+      this.rows().map((r) => ({ input: this.formatInput(r.input), output: r.output })),
+    );
+  }
+
+  /** Copies the rows as CSV text to the clipboard and announces the result. */
+  async copy(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.csv());
+      this.notice.set('Copied to clipboard');
+    } catch {
+      this.notice.set('Could not copy');
+    }
+  }
+
+  downloadCsv(): void {
+    const url = URL.createObjectURL(new Blob([this.csv()], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'values.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    this.notice.set('CSV downloaded');
+  }
 
   setStart(value: string): void {
     this.startText.set(value);

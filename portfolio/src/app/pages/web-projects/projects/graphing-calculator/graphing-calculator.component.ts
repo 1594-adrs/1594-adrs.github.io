@@ -39,7 +39,7 @@ import { detectConic, detectConicDomain } from './engine/conic-detector';
 import type { ConicInfo } from './engine/conic-detector';
 import { detectAsymptotes } from './engine/asymptote-detector';
 import { drawSolidRegion } from './canvas/solid-region-renderer';
-import { parse } from './engine/parser';
+import { parse, lowercaseExponentWarning } from './engine/parser';
 import type { ExpressionNode } from './engine/parser';
 import {
   evalExpression,
@@ -86,10 +86,18 @@ import {
   type ShareState,
 } from './state/share-state';
 import { formatValue } from './utils/format-value';
+import {
+  conicInfoLines,
+  describeIntegral,
+  limitErrorMessage,
+  regionAreaText,
+  statusValueText,
+  sumRegions,
+  type ResultRow,
+} from './utils/result-format';
 import { downloadCanvasAsPng } from './utils/export-png';
 import type {
   MathExpression,
-  IntegralResult,
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
@@ -533,8 +541,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return null;
   });
 
-  results = computed<IntegralResult[]>(() => {
-    const res: IntegralResult[] = [];
+  results = computed<ResultRow[]>(() => {
+    const res: ResultRow[] = [];
     const au = this.angleUnit();
     const intg = this.activeIntegral();
     if (intg) {
@@ -543,13 +551,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const compiled = compileExpression(expr.ast, au);
         const fn = (x: number) => compiled(x, 0);
         const result = integrateAdaptive(fn, intg.a, intg.b);
-        const value =
-          result.status === 'divergent'
-            ? 'diverges'
-            : result.status === 'undefined'
-              ? `undefined near x ≈ ${result.badPoint?.toFixed(4) ?? '?'}`
-              : formatValue(result.value);
-        res.push({ label: `∫ ${expr.raw} dx`, value });
+        const abs =
+          result.status === 'ok' || result.status === 'inaccurate'
+            ? areaSingle(fn, Math.min(intg.a, intg.b), Math.max(intg.a, intg.b))
+            : undefined;
+        res.push(...describeIntegral(expr.raw, intg.a, intg.b, result, abs));
       }
     }
     // Solid-of-revolution / cross-section results are shown inline by <app-solid-panel>
@@ -557,10 +563,19 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     const geom = this.multiAreaGeometry();
     if (geom?.mode === 'multi') {
-      let total = 0;
-      for (const r of geom.regions) total += r.area;
+      const total = sumRegions(geom.regions);
       const labels = geom.fns.map((f) => f.raw).join(', ');
-      res.push({ label: `A [${labels}]`, value: formatValue(total) });
+      res.push({
+        label: `A [${labels}]`,
+        value: statusValueText(total.status, total.value),
+        approx: total.status === 'inaccurate',
+        notes:
+          total.status === 'divergent'
+            ? ['At least one region has infinite area.']
+            : total.status === 'undefined'
+              ? ['The curves are undefined inside at least one region.']
+              : [],
+      });
     } else if (geom?.mode === 'single') {
       const value = areaSingle(geom.fn, geom.a, geom.b);
       res.push({ label: `A [${geom.expr.raw}]`, value: formatValue(value) });
@@ -568,6 +583,55 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     return res;
   });
+
+  /** Empty-state hint for the area tool until it has two usable curves. */
+  areaHint = computed(() => {
+    const cfg = this.activeMultiArea();
+    if (!cfg) return null;
+    return cfg.functionIndices.length < 2
+      ? 'Select 2 or more curves to see the area between them.'
+      : null;
+  });
+
+  /** Per-region breakdown and intersection list for the area tool (null for single curves). */
+  areaBreakdown = computed(() => {
+    const geom = this.multiAreaGeometry();
+    if (geom?.mode !== 'multi') return null;
+    const name = (i: number) =>
+      `f${geom.fns[i] ? this.functions().indexOf(geom.fns[i]) + 1 : i + 1}`;
+    return {
+      regions: geom.regions.map((r) => ({
+        range: `[${formatValue(r.a)}, ${formatValue(r.b)}]`,
+        pair: `${name(r.topFunctionIndex)} − ${name(r.bottomFunctionIndex)}`,
+        area: regionAreaText(r),
+      })),
+      intersections: geom.intersections.map((p) => ({
+        point: `(${formatValue(p.x)}, ${formatValue(p.y)})`,
+        pair: p.functionIndices.map(name).join(' = '),
+      })),
+    };
+  });
+
+  /** Info cards for recognised conics among the visible implicit rows. */
+  conicCards = computed(() =>
+    this.functions().flatMap((fn, i) => {
+      if (fn.mode !== 'implicit' || !fn.visible || !fn.ast) return [];
+      const info = this.getConicInfo(fn.ast);
+      return info ? [{ index: i, color: fn.color, lines: conicInfoLines(info) }] : [];
+    }),
+  );
+
+  fmt = formatValue;
+
+  /** "use uppercase E" hint for a row's raw text, or null. */
+  expHint(raw: string): string | null {
+    return lowercaseExponentWarning(raw)?.message ?? null;
+  }
+
+  /** Field error text for a limit key (replaces the boolean-only red outline). */
+  limitError(key: string): string | null {
+    return limitErrorMessage(!!this.limitErrors()[key]);
+  }
 
   constructor() {
     // Re-bind whenever the <canvas> element itself changes (dev-server HMR swaps the
@@ -1130,13 +1194,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  updateMultiAreaOverlapMode(checked: boolean): void {
-    this.activeMultiArea.update((cfg) =>
-      cfg ? { ...cfg, overlapMode: checked ? 'all' : 'pairwise' } : null,
-    );
-    this.requestRender();
-  }
-
   onCanvasMouseMove(event: MouseEvent): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
@@ -1521,10 +1578,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       } else {
         this.copyViaFallbackInput(url);
       }
-      this.announceShare('Link copied');
+      this.announceShare('Link copied to clipboard');
     } catch {
       this.copyViaFallbackInput(url);
-      this.announceShare('Link copied');
+      this.announceShare('Link copied to clipboard');
     }
   }
 

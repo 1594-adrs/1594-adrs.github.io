@@ -244,6 +244,8 @@
             </p>
           } @else if (fnIssues()[$index]?.length) {
             <p role="status" aria-live="polite" class="fn-error">{{ fnIssues()[$index][0] }}</p>
+          } @else if (expHint(fn.raw); as hint) {
+            <p role="status" aria-live="polite" class="fn-error">{{ hint }}</p>
           }
           @if (tableOpenIndex() === $index && canShowValueTable(fn)) {
             <app-value-table
@@ -400,6 +402,7 @@
                 label="Integral lower bound a"
                 placeholder="pi"
                 [invalid]="!!limitErrors()['integralA']"
+                [describedBy]="limitErrors()['integralA'] ? 'int-a-error' : null"
                 (valueChange)="updateIntegralA($event)"
               />
             </label>
@@ -411,10 +414,17 @@
                 label="Integral upper bound b"
                 placeholder="e/2"
                 [invalid]="!!limitErrors()['integralB']"
+                [describedBy]="limitErrors()['integralB'] ? 'int-b-error' : null"
                 (valueChange)="updateIntegralB($event)"
               />
             </label>
           </div>
+          @if (limitError('integralA'); as msg) {
+            <p id="int-a-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (limitError('integralB'); as msg) {
+            <p id="int-b-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
         </div>
       }
 
@@ -434,18 +444,28 @@
               3D view
             </button>
           </div>
+          @if (limitError('multiA'); as msg) {
+            <p id="multi-a-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (limitError('multiB'); as msg) {
+            <p id="multi-b-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (areaHint(); as hint) {
+            <p class="tool-note" role="status">{{ hint }}</p>
+          }
         </div>
       }
 
       @if (activeMultiArea()) {
         <div class="range-section">
           <span class="range-label">Area between curves</span>
-          <div class="bounded-fn-selects">
+          <div class="bounded-fn-selects" role="group" aria-label="Curves for the area">
             @for (fn of functions(); track $index) {
               <label class="range-field multi-fn-toggle">
                 <input
                   type="checkbox"
                   [checked]="activeMultiArea()!.functionIndices.includes($index)"
+                  [attr.aria-label]="'Include f' + ($index + 1) + ' in the area'"
                   (change)="toggleMultiAreaFunction($index)"
                 />
                 <span class="color-swatch" [style.background]="fn.color"></span>
@@ -453,16 +473,6 @@
               </label>
             }
           </div>
-          @if (activeMultiArea()!.functionIndices.length >= 2) {
-            <label class="range-field">
-              <input
-                type="checkbox"
-                [checked]="activeMultiArea()!.overlapMode === 'all'"
-                (change)="updateMultiAreaOverlapMode($any($event.target).checked)"
-              />
-              Only where all overlap
-            </label>
-          }
           <div class="range-inputs">
             <label class="range-field">
               a =
@@ -472,6 +482,7 @@
                 label="Area lower bound a"
                 placeholder="0"
                 [invalid]="!!limitErrors()['multiA']"
+                [describedBy]="limitErrors()['multiA'] ? 'multi-a-error' : null"
                 (valueChange)="updateMultiAreaA($event)"
               />
             </label>
@@ -483,6 +494,7 @@
                 label="Area upper bound b"
                 placeholder="2*pi"
                 [invalid]="!!limitErrors()['multiB']"
+                [describedBy]="limitErrors()['multiB'] ? 'multi-b-error' : null"
                 (valueChange)="updateMultiAreaB($event)"
               />
             </label>
@@ -519,10 +531,90 @@
             <div class="result-row">
               <span class="result-label">{{ r.label }}</span>
               <span class="result-eq">=</span>
-              <span class="result-value">{{ r.value }}</span>
+              <span class="result-value">{{ r.approx ? '≈ ' : '' }}{{ r.value }}</span>
+              @if (r.error) {
+                <span class="result-err">{{ r.error }}</span>
+              }
             </div>
+            @if (r.notes?.length) {
+              <p class="result-note" role="status">{{ r.notes![0] }}</p>
+            }
           }
         </div>
+      }
+
+      @if (areaBreakdown(); as bd) {
+        <details class="breakdown">
+          <summary>Regions and intersections</summary>
+          @if (bd.regions.length) {
+            <table class="breakdown-table">
+              <caption class="sr-only">
+                Area of each region
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Interval</th>
+                  <th scope="col">Top − bottom</th>
+                  <th scope="col">Area</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of bd.regions; track $index) {
+                  <tr>
+                    <td>{{ r.range }}</td>
+                    <td>{{ r.pair }}</td>
+                    <td>{{ r.area }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="tool-note">No regions in this interval.</p>
+          }
+          @if (bd.intersections.length) {
+            <ul class="breakdown-list" aria-label="Intersections">
+              @for (p of bd.intersections; track $index) {
+                <li>{{ p.pair }} at {{ p.point }}</li>
+              }
+            </ul>
+          }
+        </details>
+      }
+
+      @if (interactionState.pointsOfInterest().length > 0) {
+        <details class="breakdown">
+          <summary>Points of interest ({{ interactionState.pointsOfInterest().length }})</summary>
+          <ul class="breakdown-list" aria-label="Points of interest">
+            @for (p of interactionState.pointsOfInterest(); track $index) {
+              <li>
+                {{ p.label }}: ({{ fmt(p.x) }}, {{ fmt(p.y) }})
+                <button
+                  type="button"
+                  class="t-btn poi-pin"
+                  (click)="interactionState.togglePin(p)"
+                  [attr.aria-label]="'Pin or unpin ' + p.label"
+                >
+                  Pin
+                </button>
+              </li>
+            }
+          </ul>
+        </details>
+      }
+
+      @for (c of conicCards(); track c.index) {
+        <section class="conic-card" [attr.aria-label]="'Conic properties of f' + (c.index + 1)">
+          <h3 class="conic-card-title">
+            <span class="eval-dot" [style.background]="c.color"></span>
+            f{{ c.index + 1 }}
+          </h3>
+          <dl class="conic-card-list">
+            @for (l of c.lines; track l.label) {
+              <dt>{{ l.label }}</dt>
+              <dd>{{ l.value }}</dd>
+            }
+          </dl>
+        </section>
       }
 
       <div class="panel-footer">
@@ -538,7 +630,7 @@
         <button class="t-btn" (click)="share()">Share</button>
         <button class="t-btn" (click)="exportPng()">Export PNG</button>
       </div>
-      <p class="sr-only" role="status" aria-live="polite">{{ shareNotice() }}</p>
+      <p class="share-notice" role="status" aria-live="polite">{{ shareNotice() }}</p>
     </div>
   </aside>
 </div>
