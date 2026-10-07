@@ -63,7 +63,9 @@ import { FUNCTION_COLORS } from './utils/color';
 import { MathInput } from './components/math-input/math-input';
 import {
   hideMathKeyboard,
+  isMathliveReady,
   loadMathlive,
+  onMathKeyboardGeometry,
   onMathKeyboardVisibility,
   showMathKeyboard,
 } from './components/math-input/mathlive-loader';
@@ -136,6 +138,7 @@ function roundLimit(v: number): number {
     IconComponent,
     ShortcutsPopover,
   ],
+  host: { '[style.--kb-h.px]': 'kbHeight()' },
   providers: [SolidToolState, GraphInteractionState, UiLayoutState],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
@@ -183,7 +186,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   showKeyboard = signal(false);
   rowDraggable = signal(true);
   fnIssues = signal<Record<number, string[]>>({});
+  /** On-screen height of the math keyboard (0 hidden); drives `--kb-h` so the layout makes room. */
+  kbHeight = signal(0);
   private keyboardUnsub: (() => void) | null = null;
+  private keyboardGeoUnsub: (() => void) | null = null;
   show3DSolid = signal(false);
   showHelp = signal(false);
   showConicAssistant = signal(false);
@@ -653,6 +659,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.keyboardUnsub?.();
+    this.keyboardGeoUnsub?.();
     if (this.showKeyboard()) hideMathKeyboard();
     this.resizeObserver?.disconnect();
     this.canvasListenerController?.abort();
@@ -1630,9 +1637,29 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       return;
     }
     if (!(await loadMathlive())) return;
-    this.keyboardUnsub ??= onMathKeyboardVisibility((visible) => this.showKeyboard.set(visible));
+    this.watchKeyboard();
     showMathKeyboard();
     this.showKeyboard.set(true);
+  }
+
+  /** Idempotent: mirrors the keyboard's visibility and height into signals, however it was opened. */
+  private watchKeyboard(): void {
+    if (!isMathliveReady()) return;
+    this.keyboardUnsub ??= onMathKeyboardVisibility((visible) => this.showKeyboard.set(visible));
+    this.keyboardGeoUnsub ??= onMathKeyboardGeometry((h) => {
+      if (h === this.kbHeight()) return;
+      this.kbHeight.set(h);
+      if (h > 0) this.revealFocusedField();
+    });
+  }
+
+  /** After the layout shrinks for the keyboard, keep the field being edited on screen. */
+  private revealFocusedField(): void {
+    requestAnimationFrame(() =>
+      (document.activeElement as HTMLElement | null)
+        ?.closest?.('app-math-input')
+        ?.scrollIntoView({ block: 'nearest' }),
+    );
   }
 
   /** Row drag is armed on press: a press inside a math field must select text, not drag the row. */
@@ -1656,6 +1683,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   onInputFocus(index: number): void {
     this.focusedInputIndex.set(index);
+    this.watchKeyboard();
   }
 
   onInputBlur(): void {

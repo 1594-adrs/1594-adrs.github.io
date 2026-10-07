@@ -77,3 +77,17 @@ export function onMathKeyboardVisibility(cb: (visible: boolean) => void): () => 
   kb.addEventListener('virtual-keyboard-toggle', handler);
   return () => kb.removeEventListener('virtual-keyboard-toggle', handler);
 }
+
+/** Reports the on-screen height (px) the keyboard occupies, 0 while hidden, so the layout can
+ *  reserve room instead of letting it cover the field being edited. Returns an unsubscribe. */
+export function onMathKeyboardGeometry(cb: (height: number) => void): () => void {
+  if (!ready) return () => undefined;
+  const kb = window.mathVirtualKeyboard;
+  const handler = () => cb(kb.visible ? Math.ceil(kb.boundingRect.height) : 0);
+  kb.addEventListener('geometrychange', handler);
+  kb.addEventListener('virtual-keyboard-toggle', handler);
+  return () => {
+    kb.removeEventListener('geometrychange', handler);
+    kb.removeEventListener('virtual-keyboard-toggle', handler);
+  };
+}

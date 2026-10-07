@@ -1,15 +1,16 @@
 :host {
   display: block;
-  height: 100vh;
-  height: 100dvh;
+  /* --kb-h is the math keyboard's height (set by the component): the layout shrinks above it
+     instead of being covered. */
+  height: calc(100vh - var(--kb-h, 0px));
+  height: calc(100dvh - var(--kb-h, 0px));
   background: var(--color-bg-dark);
 }
 .calculator-layout {
   position: relative;
   display: grid;
-  grid-template-columns: 340px 1fr;
-  height: 100vh;
-  height: 100dvh;
+  grid-template-columns: 380px 1fr;
+  height: 100%;
   overflow: hidden;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
@@ -63,16 +64,20 @@
     transition: height 0.25s cubic-bezier(0.32, 0.72, 0, 1);
   }
   .panel.snap-peek {
-    height: 16vh;
-    height: 16dvh;
+    height: 16%;
   }
   .panel.snap-half {
-    height: 50vh;
-    height: 50dvh;
+    height: 50%;
   }
   .panel.snap-full {
-    height: 92vh;
-    height: 92dvh;
+    height: 92%;
+  }
+  /* Math keyboard open: the layout is already shrunk above it, so the sheet takes all of that
+     room (handle + header + focused row stay visible) whatever snap or drag it was in. */
+  .calculator-layout.kb-open > .panel {
+    height: 100%;
+    min-height: min(170px, 100%);
+    transition: none;
   }
   .panel-handle {
     display: flex;

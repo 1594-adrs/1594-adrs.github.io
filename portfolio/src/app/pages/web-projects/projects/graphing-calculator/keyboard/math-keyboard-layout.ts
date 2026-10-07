@@ -25,11 +25,25 @@ const op2 = (name: string): Key => ({
 
 const sym = (latex: string): Key => ({ latex, insert: latex });
 
-const ACTIONS: Key[] = ['[left]', '[right]', '[backspace]'];
+const HIDE: Key = {
+  label: '&#x2304;',
+  command: 'hideVirtualKeyboard',
+  tooltip: 'Hide keyboard',
+  class: 'action',
+};
+
+const ACTIONS: Key[] = ['[left]', '[right]', '[backspace]', HIDE];
 
 const NUMBERS: Key[][] = [
   ['[7]', '[8]', '[9]', sym('\\div'), '\\frac{#@}{#?}', '\\sqrt{#0}'],
-  ['[4]', '[5]', '[6]', sym('\\times'), '[^]', { latex: 'x^2', insert: '#@^{2}' }],
+  [
+    '[4]',
+    '[5]',
+    '[6]',
+    sym('\\times'),
+    { latex: 'x^y', insert: '#@^{#?}' },
+    { latex: '|x|', insert: '\left|#0\right|' },
+  ],
   ['[1]', '[2]', '[3]', '[-]', '[(]', '[)]'],
   ['[0]', '[.]', '[+]', ...ACTIONS],
 ];
@@ -66,7 +80,7 @@ const LIMIT: Key[][] = [
   ['[7]', '[8]', '[9]', sym('\\div'), '\\frac{#@}{#?}', '\\sqrt{#0}', '[backspace]'],
   ['[4]', '[5]', '[6]', sym('\\times'), '[^]', '[(]', '[)]'],
   ['[1]', '[2]', '[3]', '[-]', '[+]', sym('\\pi'), 'e'],
-  ['[0]', '[.]', '[left]', '[right]'],
+  ['[0]', '[.]', '[left]', '[right]', HIDE],
 ];
 
 const layout = (
@@ -130,26 +144,39 @@ export const MATH_KEYBOARD_THEME_CSS = `:root {
   --keyboard-toolbar-background-selected: var(--color-glow-15);
   --keyboard-toolbar-text: var(--color-text-muted);
   --keyboard-toolbar-text-active: var(--color-primary);
-  --keycap-background: var(--color-canvas-bg);
-  --keycap-background-hover: var(--color-border);
+  --keycap-background: color-mix(in srgb, var(--color-border-control) 30%, var(--color-bg-card));
+  --keycap-background-hover: var(--color-glow-10);
   --keycap-background-active: var(--color-glow-20);
-  --keycap-background-pressed: var(--color-glow-20);
+  --keycap-background-pressed: var(--color-primary);
   --keycap-border: var(--color-border-control);
   --keycap-border-bottom: var(--color-border-control);
   --keycap-text: var(--color-text);
   --keycap-text-hover: var(--color-primary);
   --keycap-text-active: var(--color-primary);
-  --keycap-text-pressed: var(--color-primary);
+  --keycap-text-pressed: var(--color-bg-dark);
   --keycap-secondary-background: var(--color-bg-dark);
-  --keycap-secondary-background-hover: var(--color-border);
+  --keycap-secondary-background-hover: var(--color-glow-10);
   --keycap-secondary-border: var(--color-border-control);
   --keycap-secondary-border-bottom: var(--color-border-control);
   --keycap-secondary-text: var(--color-text);
   --keycap-primary-background: var(--color-iris-dark);
   --keycap-primary-background-hover: var(--color-iris-green);
   --keycap-primary-text: var(--color-text);
+  --keycap-max-width: 64px;
+  --keycap-height: 48px;
+  --keycap-font-size: 18px;
+  --keycap-small-font-size: 16px;
+  --keycap-extra-small-font-size: 16px;
   --variant-panel-background: var(--color-bg-card);
   --variant-keycap-text: var(--color-text);
   --variant-keycap-text-active: var(--color-bg-dark);
   --variant-keycap-background-active: var(--color-primary);
+}
+@media (max-width: 768px) {
+  :root {
+    --keycap-height: 40px;
+    --keycap-font-size: 16px;
+    --keycap-small-font-size: 14px;
+    --keycap-extra-small-font-size: 14px;
+  }
 }`;

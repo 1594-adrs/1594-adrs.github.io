@@ -10,16 +10,16 @@
   color: var(--color-corruption);
 }
 .functions-list {
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 .function-row {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  padding: 5px 8px;
+  padding: 4px;
   border-radius: 6px;
   transition: background 0.15s;
   gap: 6px;
@@ -30,7 +30,7 @@
 .function-row.selected {
   background: rgba(255, 255, 255, 0.04);
   border-left: 2px solid var(--color-primary);
-  padding-left: 6px;
+  padding-left: 2px;
 }
 .fn-gutter {
   display: flex;
@@ -68,10 +68,11 @@
   background: var(--dot-color, transparent);
 }
 .visibility-dot:not(.visible) {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 .visibility-dot:not(.visible)::before {
   background: transparent;
+  border-style: dashed;
 }
 .visibility-dot:hover {
   opacity: 1;
@@ -148,7 +149,19 @@
 .fn-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
+}
+/* Up/down stacked on fine pointers to give the expression the width. */
+.move-stack {
+  display: flex;
+  flex-direction: column;
+}
+.move-stack .action-btn {
+  height: 13px;
+}
+.action-slot {
+  visibility: hidden;
+  pointer-events: none;
 }
 .action-btn {
   background: none;
@@ -226,11 +239,17 @@
   .fn-input {
     min-height: 44px;
   }
+  .move-stack {
+    flex-direction: row;
+  }
+  .move-stack .action-btn {
+    height: auto;
+  }
 }
 
 @media (max-width: 375px) {
   .function-row {
-    grid-template-columns: 40px 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     padding: 4px;
     gap: 4px;
   }
@@ -238,7 +257,7 @@
 
 @media (pointer: coarse) {
   .function-row {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .visibility-dot::before {
     width: 20px;

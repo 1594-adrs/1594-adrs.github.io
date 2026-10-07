@@ -81,7 +81,7 @@
   @if (state.method() === 'disk-washer' || state.method() === 'shell') {
     <div class="range-section axis-config">
       <span class="range-label">axis of revolution</span>
-      <div class="range-inputs">
+      <div class="range-inputs single">
         <label class="range-field">
           {{ axisPrefix() }}
           <app-math-input
@@ -115,17 +115,19 @@
         <p class="field-error" role="alert">{{ state.fieldErrors().shape }}</p>
       }
       @if (state.shape() === 'rectangle') {
-        <label class="range-field" style="margin-top: 0.4rem">
-          height ratio =
-          <app-math-input
-            kind="limit"
-            [value]="state.heightRatioText()"
-            [label]="'Height ratio'"
-            [invalid]="!!state.fieldErrors().ratio"
-            [describedBy]="state.fieldErrors().ratio ? 'solid-ratio-error' : null"
-            (valueChange)="state.setHeightRatio($event)"
-          />
-        </label>
+        <div class="range-inputs single ratio-row">
+          <label class="range-field">
+            height ratio =
+            <app-math-input
+              kind="limit"
+              [value]="state.heightRatioText()"
+              [label]="'Height ratio'"
+              [invalid]="!!state.fieldErrors().ratio"
+              [describedBy]="state.fieldErrors().ratio ? 'solid-ratio-error' : null"
+              (valueChange)="state.setHeightRatio($event)"
+            />
+          </label>
+        </div>
         @if (state.fieldErrors().ratio) {
           <p id="solid-ratio-error" class="field-error" role="alert">
             {{ state.fieldErrors().ratio }}
@@ -172,7 +174,7 @@
             @if (result.surfaceExact) {
               <span class="exact"> = {{ result.surfaceExact }}</span>
             }
-            <span> (total surface)</span>
+            <span class="note"> (total surface)</span>
           </p>
         }
 

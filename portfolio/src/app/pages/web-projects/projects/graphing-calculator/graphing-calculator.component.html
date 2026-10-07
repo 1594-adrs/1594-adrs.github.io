@@ -1,4 +1,8 @@
-<div class="calculator-layout" [class.sheet-full]="uiLayout.sheetSnap() === 'full'">
+<div
+  class="calculator-layout"
+  [class.kb-open]="kbHeight() > 0"
+  [class.sheet-full]="uiLayout.sheetSnap() === 'full'"
+>
   <div
     class="canvas-container"
     tabindex="0"
@@ -136,11 +140,11 @@
                 (click)="toggleVisibility($index)"
                 [attr.aria-pressed]="fn.visible"
                 [attr.aria-label]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
-                [title]="fn.visible ? 'Hide' : 'Show'"
+                [title]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
               ></button>
               <app-color-picker
                 [color]="fn.color"
-                [label]="'Color for f' + ($index + 1)"
+                [label]="'Change colour of f' + ($index + 1)"
                 (colorChange)="updateColor($index, $event)"
               />
             </div>
@@ -160,7 +164,7 @@
                         ? 'cos(t),sin(t)'
                         : fn.mode === 'polar'
                           ? 'r=cos(3*theta)'
-                          : 'sin(x)'
+                          : 'x^2, sin(x), x=y^2'
                 "
                 (valueChange)="updateExpression($index, $event)"
                 (issuesChange)="onMathIssues($index, $event)"
@@ -170,24 +174,26 @@
               />
             </div>
             <div class="fn-actions">
-              <button
-                class="action-btn move-btn"
-                (click)="moveFunctionUp($index)"
-                [disabled]="!canMoveFunctionUp($index)"
-                [attr.aria-label]="'Move ' + functionLabel($index) + ' up'"
-                title="Move up (Alt+ArrowUp)"
-              >
-                <app-icon name="arrow-up" />
-              </button>
-              <button
-                class="action-btn move-btn"
-                (click)="moveFunctionDown($index)"
-                [disabled]="!canMoveFunctionDown($index)"
-                [attr.aria-label]="'Move ' + functionLabel($index) + ' down'"
-                title="Move down (Alt+ArrowDown)"
-              >
-                <app-icon name="arrow-down" />
-              </button>
+              <span class="move-stack">
+                <button
+                  class="action-btn move-btn"
+                  (click)="moveFunctionUp($index)"
+                  [disabled]="!canMoveFunctionUp($index)"
+                  [attr.aria-label]="'Move ' + functionLabel($index) + ' up'"
+                  title="Move up (Alt+ArrowUp)"
+                >
+                  <app-icon name="arrow-up" />
+                </button>
+                <button
+                  class="action-btn move-btn"
+                  (click)="moveFunctionDown($index)"
+                  [disabled]="!canMoveFunctionDown($index)"
+                  [attr.aria-label]="'Move ' + functionLabel($index) + ' down'"
+                  title="Move down (Alt+ArrowDown)"
+                >
+                  <app-icon name="arrow-down" />
+                </button>
+              </span>
               <button
                 class="action-btn mode-btn"
                 (click)="cycleMode($index)"
@@ -219,6 +225,8 @@
                 >
                   <app-icon name="table" />
                 </button>
+              } @else {
+                <span class="action-btn action-slot" aria-hidden="true"></span>
               }
               <button
                 class="action-btn delete"
@@ -519,8 +527,13 @@
 
       <div class="panel-footer">
         <button class="t-btn" (click)="toggleAngleUnit()">Angle: {{ angleUnit() }}</button>
-        <button class="t-btn" (click)="toggleKeyboard()" [class.active]="showKeyboard()">
-          Keyboard
+        <button
+          class="t-btn"
+          (click)="toggleKeyboard()"
+          [class.active]="showKeyboard()"
+          [attr.aria-pressed]="showKeyboard()"
+        >
+          Math keyboard
         </button>
         <button class="t-btn" (click)="share()">Share</button>
         <button class="t-btn" (click)="exportPng()">Export PNG</button>

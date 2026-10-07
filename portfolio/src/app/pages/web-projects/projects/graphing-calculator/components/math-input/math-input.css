@@ -58,11 +58,15 @@
 .fb:focus,
 .mf:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-glow-10);
+  box-shadow: 0 0 0 2px var(--color-glow-20);
 }
 
-.fb:focus-visible,
+.mf:focus,
 .mf:focus-within {
+  outline: none;
+}
+
+.fb:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
@@ -70,6 +74,16 @@
 .fb.invalid,
 .mf.invalid {
   border-color: var(--color-corruption);
+}
+
+.fb.invalid:focus,
+.mf.invalid:focus-within {
+  border-color: var(--color-corruption);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-corruption) 30%, transparent);
+}
+
+.fb.invalid:focus-visible {
+  outline-color: var(--color-corruption);
 }
 
 .mf::part(menu-toggle),
