@@ -1,4 +1,5 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { MathInput } from '../math-input/math-input';
 import { IntegralFormulaComponent } from '../integral-formula/integral-formula.component';
 import { SolidToolState } from '../../state/solid-tool.state';
 import type { CrossSectionShape, SolidMethod } from '../../engine/solids/solid.types';
@@ -35,7 +36,7 @@ function formatValue(v: number): string {
 @Component({
   selector: 'app-solid-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IntegralFormulaComponent],
+  imports: [IntegralFormulaComponent, MathInput],
   templateUrl: './solid-panel.component.html',
   styleUrl: './solid-panel.component.css',
 })

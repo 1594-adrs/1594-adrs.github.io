@@ -8,7 +8,6 @@ import {
   afterRenderEffect,
   ElementRef,
   viewChild,
-  viewChildren,
   AfterViewInit,
   OnDestroy,
   NgZone,
@@ -61,8 +60,13 @@ import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode } from './engine/mode-detector';
 import { FUNCTION_COLORS } from './utils/color';
-import { OnscreenKeyboardComponent } from './keyboard/onscreen-keyboard.component';
-import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
+import { MathInput } from './components/math-input/math-input';
+import {
+  hideMathKeyboard,
+  loadMathlive,
+  onMathKeyboardVisibility,
+  showMathKeyboard,
+} from './components/math-input/mathlive-loader';
 import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
 import { SolidPanelComponent } from './components/solid-panel/solid-panel.component';
 import { ValueTable } from './components/value-table/value-table';
@@ -122,10 +126,9 @@ function roundLimit(v: number): number {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    OnscreenKeyboardComponent,
     Solid3DComponent,
     HelpModalComponent,
-    MathRendererComponent,
+    MathInput,
     ConicAssistantComponent,
     SolidPanelComponent,
     ValueTable,
@@ -157,7 +160,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   uiLayout = inject(UiLayoutState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
-  fnInputs = viewChildren<ElementRef<HTMLInputElement>>('fnInput');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
   solid3dRef = viewChild(Solid3DComponent);
 
@@ -177,7 +179,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   activeMultiArea = signal<MultiFunctionAreaConfig | null>(null);
   angleUnit = signal<'deg' | 'rad'>('rad');
   limitErrors = signal<Record<string, boolean>>({});
+  private limitTexts = signal<Record<string, string>>({});
   showKeyboard = signal(false);
+  rowDraggable = signal(true);
+  fnIssues = signal<Record<number, string[]>>({});
+  private keyboardUnsub: (() => void) | null = null;
   show3DSolid = signal(false);
   showHelp = signal(false);
   showConicAssistant = signal(false);
@@ -223,8 +229,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   evalResults = computed(() => {
-    const point = parseFloat(this.evalPoint());
-    if (isNaN(point)) return [];
+    const point = parseLimitText(this.evalPoint()).value;
+    if (point === null || isNaN(point)) return [];
     const au = this.angleUnit();
     return this.functions()
       .filter((f) => f.visible && f.ast && f.mode !== 'explicit-y')
@@ -646,6 +652,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.keyboardUnsub?.();
+    if (this.showKeyboard()) hideMathKeyboard();
     this.resizeObserver?.disconnect();
     this.canvasListenerController?.abort();
     this.sheetPointerController?.abort();
@@ -689,6 +697,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   removeFunction(index: number): void {
+    this.fnIssues.set({});
     this.functions.update((fns) => fns.filter((_, i) => i !== index));
     if (this.functions().length < 2) {
       this.activeMultiArea.set(null);
@@ -858,7 +867,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
         if (mode === 'polar') {
           const expr = raw.replace(/^r\s*=\s*/i, '');
-          const { ast, error } = this.parseAndValidate(expr, { x: 1 });
+          // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
+          const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 });
           return {
             ...fn,
             raw,
@@ -1613,8 +1623,35 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return false;
   }
 
-  toggleKeyboard(): void {
-    this.showKeyboard.update((v) => !v);
+  async toggleKeyboard(): Promise<void> {
+    if (this.showKeyboard()) {
+      hideMathKeyboard();
+      this.showKeyboard.set(false);
+      return;
+    }
+    if (!(await loadMathlive())) return;
+    this.keyboardUnsub ??= onMathKeyboardVisibility((visible) => this.showKeyboard.set(visible));
+    showMathKeyboard();
+    this.showKeyboard.set(true);
+  }
+
+  /** Row drag is armed on press: a press inside a math field must select text, not drag the row. */
+  onRowPointerDown(event: PointerEvent): void {
+    const inField = (event.target as Element | null)?.closest?.('app-math-input') != null;
+    this.rowDraggable.set(!inField);
+  }
+
+  /** Text shown in a limit field: what the user typed while it parses to `num` or is still
+   *  incomplete (keeps `pi/2`, and `pi/` mid-typing, instead of echoing 1.5707…), else the number. */
+  limitText(key: string, num: number): string {
+    const typed = this.limitTexts()[key];
+    if (typed === undefined) return String(num);
+    const { value } = parseLimitText(typed);
+    return value === null || value === num ? typed : String(num);
+  }
+
+  onMathIssues(index: number, issues: string[]): void {
+    this.fnIssues.update((m) => ({ ...m, [index]: issues }));
   }
 
   onInputFocus(index: number): void {
@@ -1657,6 +1694,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
    *  integral/solid-tool selections pointed at the same underlying function.
    *  Shared by drag-and-drop and the keyboard-accessible move up/down controls. */
   private reorderFunction(sourceIndex: number, targetIndex: number): void {
+    this.fnIssues.set({});
     this.functions.update((fns) => {
       const updated = [...fns];
       const [moved] = updated.splice(sourceIndex, 1);
@@ -1754,73 +1792,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.showConicAssistant.set(false);
   }
 
-  onKeyPress(symbol: string): void {
-    const idx = this.focusedInputIndex();
-    if (idx === null) return;
-    const inputs = this.fnInputs();
-    const inputEl = inputs?.[idx]?.nativeElement;
-    if (!inputEl) return;
-
-    const start = inputEl.selectionStart ?? inputEl.value.length;
-    const end = inputEl.selectionEnd ?? start;
-    const current = this.functions()[idx].raw;
-    const newValue = current.slice(0, start) + symbol + current.slice(end);
-    this.updateExpression(idx, newValue);
-
-    const rafId = requestAnimationFrame(() => {
-      inputEl.selectionStart = inputEl.selectionEnd = start + symbol.length;
-      inputEl.focus();
-    });
-    this.pendingRafIds.push(rafId);
-  }
-
-  onKeyAction(action: 'backspace' | 'left' | 'right' | 'clear'): void {
-    const idx = this.focusedInputIndex();
-    if (idx === null) return;
-    const inputs = this.fnInputs();
-    const inputEl = inputs?.[idx]?.nativeElement;
-    if (!inputEl) return;
-
-    const current = this.functions()[idx].raw;
-
-    if (action === 'clear') {
-      this.updateExpression(idx, '');
-      const rafId = requestAnimationFrame(() => {
-        inputEl.selectionStart = inputEl.selectionEnd = 0;
-        inputEl.focus();
-      });
-      this.pendingRafIds.push(rafId);
-      return;
-    }
-
-    const start = inputEl.selectionStart ?? inputEl.value.length;
-
-    if (action === 'backspace') {
-      if (start > 0) {
-        const newValue = current.slice(0, start - 1) + current.slice(start);
-        this.updateExpression(idx, newValue);
-        const rafId = requestAnimationFrame(() => {
-          inputEl.selectionStart = inputEl.selectionEnd = start - 1;
-          inputEl.focus();
-        });
-        this.pendingRafIds.push(rafId);
-      }
-    } else if (action === 'left') {
-      const rafId = requestAnimationFrame(() => {
-        inputEl.selectionStart = inputEl.selectionEnd = Math.max(0, start - 1);
-        inputEl.focus();
-      });
-      this.pendingRafIds.push(rafId);
-    } else if (action === 'right') {
-      const rafId = requestAnimationFrame(() => {
-        inputEl.selectionStart = inputEl.selectionEnd = Math.min(current.length, start + 1);
-        inputEl.focus();
-      });
-      this.pendingRafIds.push(rafId);
-    }
-  }
-
   private parseLimit(value: string, key: string): number | null {
+    this.limitTexts.update((t) => ({ ...t, [key]: value }));
     const { value: v, invalid } = parseLimitText(value);
     this.limitErrors.update((e) => ({ ...e, [key]: invalid }));
     return v;
@@ -1830,7 +1803,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (!raw) return defaultVal;
     const trimmed = raw.trim();
     if (!trimmed) return defaultVal;
-    const num = parseFloat(trimmed);
+    const num = Number(trimmed);
     if (!isNaN(num)) return num;
     try {
       return evalConstantExpression(trimmed);

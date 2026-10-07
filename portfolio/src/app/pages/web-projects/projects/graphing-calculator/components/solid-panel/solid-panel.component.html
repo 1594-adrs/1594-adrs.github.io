@@ -49,24 +49,24 @@
     <div class="range-inputs">
       <label class="range-field">
         a =
-        <input
-          type="text"
+        <app-math-input
+          kind="limit"
           [value]="state.aText()"
-          (input)="state.setA($any($event.target).value)"
-          [class.input-error]="!!state.fieldErrors().a"
-          [attr.aria-invalid]="state.fieldErrors().a ? true : null"
-          [attr.aria-describedby]="state.fieldErrors().a ? 'solid-a-error' : null"
+          [label]="'Lower bound a'"
+          [invalid]="!!state.fieldErrors().a"
+          [describedBy]="state.fieldErrors().a ? 'solid-a-error' : null"
+          (valueChange)="state.setA($event)"
         />
       </label>
       <label class="range-field">
         b =
-        <input
-          type="text"
+        <app-math-input
+          kind="limit"
           [value]="state.bText()"
-          (input)="state.setB($any($event.target).value)"
-          [class.input-error]="!!state.fieldErrors().b"
-          [attr.aria-invalid]="state.fieldErrors().b ? true : null"
-          [attr.aria-describedby]="state.fieldErrors().b ? 'solid-b-error' : null"
+          [label]="'Upper bound b'"
+          [invalid]="!!state.fieldErrors().b"
+          [describedBy]="state.fieldErrors().b ? 'solid-b-error' : null"
+          (valueChange)="state.setB($event)"
         />
       </label>
     </div>
@@ -84,13 +84,13 @@
       <div class="range-inputs">
         <label class="range-field">
           {{ axisPrefix() }}
-          <input
-            type="text"
+          <app-math-input
+            kind="limit"
             [value]="state.axisValueText()"
-            (input)="state.setAxisValue($any($event.target).value)"
-            [class.input-error]="!!state.fieldErrors().axis"
-            [attr.aria-invalid]="state.fieldErrors().axis ? true : null"
-            [attr.aria-describedby]="state.fieldErrors().axis ? 'solid-axis-error' : null"
+            [label]="'Axis value'"
+            [invalid]="!!state.fieldErrors().axis"
+            [describedBy]="state.fieldErrors().axis ? 'solid-axis-error' : null"
+            (valueChange)="state.setAxisValue($event)"
           />
         </label>
       </div>
@@ -117,13 +117,13 @@
       @if (state.shape() === 'rectangle') {
         <label class="range-field" style="margin-top: 0.4rem">
           height ratio =
-          <input
-            type="text"
+          <app-math-input
+            kind="limit"
             [value]="state.heightRatioText()"
-            (input)="state.setHeightRatio($any($event.target).value)"
-            [class.input-error]="!!state.fieldErrors().ratio"
-            [attr.aria-invalid]="state.fieldErrors().ratio ? true : null"
-            [attr.aria-describedby]="state.fieldErrors().ratio ? 'solid-ratio-error' : null"
+            [label]="'Height ratio'"
+            [invalid]="!!state.fieldErrors().ratio"
+            [describedBy]="state.fieldErrors().ratio ? 'solid-ratio-error' : null"
+            (valueChange)="state.setHeightRatio($event)"
           />
         </label>
         @if (state.fieldErrors().ratio) {

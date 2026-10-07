@@ -210,20 +210,10 @@
   align-items: center;
   gap: 0.2rem;
 }
-.range-input-inline {
-  width: 48px;
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  color: var(--color-text);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 11px;
-  padding: 1px 4px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.range-input-inline:focus {
-  border-color: var(--color-primary);
+.range-math {
+  flex: 1;
+  min-width: 56px;
+  max-width: 110px;
 }
 
 /* Touch target >=44x44px for row action buttons and text inputs on coarse pointers. */
@@ -233,8 +223,7 @@
     min-width: 44px;
     min-height: 44px;
   }
-  .fn-input,
-  .range-input-inline {
+  .fn-input {
     min-height: 44px;
   }
 }

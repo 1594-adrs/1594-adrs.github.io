@@ -14,24 +14,26 @@
   <div class="value-table-controls">
     <label class="range-field-inline">
       start =
-      <input
-        type="text"
-        class="range-input-inline"
+      <app-math-input
+        kind="limit"
+        class="range-math"
         [value]="startText()"
-        (change)="setStart($any($event.target).value)"
-        [attr.aria-invalid]="startError() ? true : null"
-        [attr.aria-describedby]="startError() ? 'vt-start-error-' + index() : null"
+        [label]="'Table start'"
+        [invalid]="!!startError()"
+        [describedBy]="startError() ? 'vt-start-error-' + index() : null"
+        (valueChange)="setStart($event)"
       />
     </label>
     <label class="range-field-inline">
       step =
-      <input
-        type="text"
-        class="range-input-inline"
+      <app-math-input
+        kind="limit"
+        class="range-math"
         [value]="stepText()"
-        (change)="setStep($any($event.target).value)"
-        [attr.aria-invalid]="stepError() ? true : null"
-        [attr.aria-describedby]="stepError() ? 'vt-step-error-' + index() : null"
+        [label]="'Table step'"
+        [invalid]="!!stepError()"
+        [describedBy]="stepError() ? 'vt-step-error-' + index() : null"
+        (valueChange)="setStep($event)"
       />
     </label>
     <label class="range-field-inline">

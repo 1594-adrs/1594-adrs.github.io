@@ -15,9 +15,12 @@ export interface ValueTableRow {
 
 /** Table of values for a selected visible explicit (y = f(x)) or explicit-y (x = g(y)) function:
  *  start/step/row-count controls with inline validation, computed rows, "—" for undefined. */
+import { MathInput } from '../math-input/math-input';
+
 @Component({
   selector: 'app-value-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MathInput],
   templateUrl: './value-table.html',
   styleUrl: './value-table.css',
 })

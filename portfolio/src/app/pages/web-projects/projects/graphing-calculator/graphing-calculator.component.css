@@ -287,6 +287,10 @@
   align-items: center;
   gap: 0.25rem;
 }
+.range-field app-math-input {
+  flex: 1;
+  min-width: 60px;
+}
 .range-field input {
   width: 55px;
   background: rgba(255, 255, 255, 0.03);
@@ -355,21 +359,9 @@
   font-size: 11px;
   color: var(--color-text-muted);
 }
-.eval-input {
-  width: 50px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  color: var(--color-text);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 12px;
-  padding: 3px 5px;
-  outline: none;
-  margin-left: 0.3rem;
-  transition: border-color 0.15s;
-}
-.eval-input:focus {
-  border-color: var(--color-primary);
+.eval-math {
+  display: block;
+  width: 110px;
 }
 .eval-results {
   display: flex;
@@ -405,7 +397,6 @@
     display: flex;
     align-items: center;
   }
-  .eval-input,
   .range-field input {
     min-height: 44px;
   }

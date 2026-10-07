@@ -1,0 +1,89 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.fb,
+.mf {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: 13px;
+  padding: 4px 6px;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.fb {
+  outline: none;
+}
+
+.fb::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.mf {
+  display: block;
+  min-height: 1.9rem;
+  line-height: 1.4;
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: text;
+  --hue: 150;
+  --caret-color: var(--color-primary);
+  --selection-background-color: var(--color-glow-20);
+  --selection-color: var(--color-text);
+  --text-font-family: var(--font-family);
+  --placeholder-color: var(--color-text-muted);
+  --placeholder-opacity: 0.6;
+  --contains-highlight-background-color: transparent;
+  --smart-fence-color: currentcolor;
+  --smart-fence-opacity: 1;
+  --keyboard-toolbar-background: var(--color-bg-card);
+}
+
+.fb:hover,
+.mf:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.fb:focus,
+.mf:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-glow-10);
+}
+
+.fb:focus-visible,
+.mf:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.fb.invalid,
+.mf.invalid {
+  border-color: var(--color-corruption);
+}
+
+.mf::part(menu-toggle),
+.mf::part(virtual-keyboard-toggle) {
+  display: none;
+}
+
+.mf::part(container) {
+  min-height: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fb,
+  .mf {
+    transition: none;
+  }
+}
