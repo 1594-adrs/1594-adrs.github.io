@@ -14,7 +14,8 @@ export interface ParsedLimit {
 export function parseLimitText(raw: string): ParsedLimit {
   const trimmed = raw.trim();
   if (!trimmed) return { value: null, invalid: false };
-  const num = parseFloat(trimmed);
+  // Strict: parseFloat would read `2*pi` as 2 and `1/3` as 1.
+  const num = Number(trimmed);
   if (!isNaN(num)) return { value: num, invalid: false };
   try {
     return { value: evalConstantExpression(trimmed), invalid: false };
