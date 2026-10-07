@@ -88,9 +88,14 @@
 }
 
 .poi-pin {
-  margin-left: 6px;
-  padding: 0 6px;
-  font-size: 11px;
+  display: inline-block;
+  width: auto;
+  margin: 0 0 0 6px;
+  padding: 4px 10px;
+  min-height: 24px;
+  font-size: 12px;
+  line-height: 1.2;
+  vertical-align: middle;
 }
 
 .conic-card-title {

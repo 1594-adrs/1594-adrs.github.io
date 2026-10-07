@@ -67,6 +67,21 @@ export function describeIntegral(
   return rows;
 }
 
+/** Label for an area result: limits plus the curve names (`A [0, 1]: f1, f2`). */
+export function areaLabel(a: number, b: number, names: readonly string[]): string {
+  return `A [${formatValue(a)}, ${formatValue(b)}]: ${names.join(', ')}`;
+}
+
+/** Notes for the area tool's limits. `computeAreaRegions` returns no regions when a >= b, so the
+ *  area shown is 0 in both cases (it is NOT computed on the reversed interval). */
+export function areaLimitNotes(a: number, b: number): string[] {
+  if (a === b) return ['a = b: the interval is empty, so the area is 0.'];
+  if (a > b) {
+    return ['a > b: the limits are reversed and no area is computed (shown as 0). Set a < b.'];
+  }
+  return [];
+}
+
 export interface RegionLike {
   a: number;
   b: number;

@@ -90,6 +90,8 @@ import { formatValue } from './utils/format-value';
 import {
   conicInfoLines,
   describeIntegral,
+  areaLabel,
+  areaLimitNotes,
   limitErrorMessage,
   regionAreaText,
   statusValueText,
@@ -349,6 +351,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return this.uiLayout.sheetCoverFraction();
   }
 
+  /** Bottom fraction of the 3D view hidden by the mobile sheet. */
+  solidSheetInset = computed(() => this.targetInsetFrac());
+
   /** Shifts the view so the plot stays centred in the area above the bottom sheet. */
   private syncSheetInset(): void {
     const next = untracked(() => this.targetInsetFrac());
@@ -589,21 +594,28 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const geom = this.multiAreaGeometry();
     if (geom?.mode === 'multi') {
       const total = sumRegions(geom.regions);
-      const labels = geom.fns.map((f) => f.raw).join(', ');
+      const names = geom.fns.map((f) => `f${this.functions().indexOf(f) + 1}`);
       res.push({
-        label: `A [${labels}]`,
+        label: areaLabel(geom.a, geom.b, names),
         value: statusValueText(total.status, total.value),
         approx: total.status === 'inaccurate',
-        notes:
-          total.status === 'divergent'
+        notes: [
+          ...areaLimitNotes(geom.a, geom.b),
+          ...(total.status === 'divergent'
             ? ['At least one region has infinite area.']
             : total.status === 'undefined'
               ? ['The curves are undefined inside at least one region.']
-              : [],
+              : []),
+        ],
       });
     } else if (geom?.mode === 'single') {
-      const value = areaSingle(geom.fn, geom.a, geom.b);
-      res.push({ label: `A [${geom.expr.raw}]`, value: formatValue(value) });
+      const value = geom.b > geom.a ? areaSingle(geom.fn, geom.a, geom.b) : 0;
+      const name = `f${this.functions().indexOf(geom.expr) + 1}`;
+      res.push({
+        label: areaLabel(geom.a, geom.b, [name]),
+        value: formatValue(value),
+        notes: areaLimitNotes(geom.a, geom.b),
+      });
     }
 
     return res;

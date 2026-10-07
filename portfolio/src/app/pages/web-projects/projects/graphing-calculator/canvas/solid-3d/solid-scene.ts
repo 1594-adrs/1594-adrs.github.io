@@ -57,6 +57,12 @@ export class SolidScene {
   private minDist = 2;
   private maxDist = 20;
   private framedRadius = 0;
+  /** Fraction of the canvas height covered at the bottom (mobile sheet); the solid is framed in the rest. */
+  private bottomInset = 0;
+  /** Half-size of the helper axes / grid, scaled to the solid so they never dwarf it. */
+  private extent = 10;
+  private axisOrientation: 'horizontal' | 'vertical' | null = null;
+  private canvasSize = { w: 1, h: 1 };
 
   /** `createRenderer` exists so tests can run without a WebGL context. */
   constructor(
@@ -67,6 +73,7 @@ export class SolidScene {
     this.scene = new Scene();
     this.scene.background = new Color(0x0d0d15);
 
+    this.canvasSize = { w: canvas.width || 1, h: canvas.height || 1 };
     this.camera = new PerspectiveCamera(50, canvas.width / canvas.height, 0.1, 1000);
     this.camera.position.set(4, 3, 4);
     this.camera.lookAt(0, 0, 0);
@@ -126,13 +133,15 @@ export class SolidScene {
    * nothing to show). Keeps the viewing direction; skipped when the solid's size is within 25%
    * of the last fit, so tweaking a bound does not undo the user's zoom.
    */
-  private frameSolid(): void {
+  private frameSolid(force = false): void {
     const box = new Box3();
     for (const mesh of this.solidPieceMeshes) box.expandByObject(mesh);
     const hasBounds = !box.isEmpty();
     const radius = hasBounds ? Math.max(box.getBoundingSphere(new Sphere()).radius, 0.5) : 0;
+    this.extent = hasBounds ? Math.max(radius * 2.5, 2) : 10;
+    this.applyExtent();
     const ratio = this.framedRadius > 0 ? radius / this.framedRadius : 0;
-    if (this.framedRadius > 0 && ratio > 0.8 && ratio < 1.25) return;
+    if (!force && this.framedRadius > 0 && ratio > 0.8 && ratio < 1.25) return;
 
     const dir = this.camera.position.clone().sub(this.target);
     if (dir.lengthSq() === 0) dir.set(4, 3, 4);
@@ -148,7 +157,8 @@ export class SolidScene {
     }
     box.getCenter(this.target);
     const vFov = (this.camera.fov * Math.PI) / 180;
-    const fitHalf = Math.atan(Math.tan(vFov / 2) * Math.min(1, this.camera.aspect || 1));
+    const visible = 1 - this.bottomInset;
+    const fitHalf = Math.atan(Math.tan(vFov / 2) * Math.min(visible, this.camera.aspect || 1));
     const dist = (radius / Math.sin(fitHalf)) * 1.15;
     this.minDist = Math.max(0.5, dist * 0.15);
     this.maxDist = dist * 5;
@@ -156,6 +166,38 @@ export class SolidScene {
     this.camera.position.copy(this.target).addScaledVector(dir, dist);
     this.camera.lookAt(this.target);
     this.camera.far = Math.max(1000, this.maxDist * 4);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Scales the helper axes, grid and axis-of-revolution line to the solid's size. */
+  private applyExtent(): void {
+    const k = this.extent / 10;
+    this.axes.scale.setScalar(k);
+    this.grid.scale.setScalar(k);
+    if (this.axisLine && this.axisOrientation) {
+      const along = this.extent / 12;
+      if (this.axisOrientation === 'horizontal') this.axisLine.scale.set(along, 1, 1);
+      else this.axisLine.scale.set(1, along, 1);
+    }
+  }
+
+  /** Reserves the bottom `fraction` of the canvas (mobile sheet): the solid is re-fitted into
+   *  the remaining area and the view is shifted up so it is centred there. */
+  setBottomInset(fraction: number): void {
+    const f = Math.min(Math.max(fraction, 0), 0.8);
+    if (f === this.bottomInset) return;
+    this.bottomInset = f;
+    this.updateViewOffset();
+    this.frameSolid(true);
+  }
+
+  private updateViewOffset(): void {
+    const { w, h } = this.canvasSize;
+    if (this.bottomInset > 0) {
+      this.camera.setViewOffset(w, h, 0, (this.bottomInset * h) / 2, w, h);
+    } else {
+      this.camera.clearViewOffset();
+    }
     this.camera.updateProjectionMatrix();
   }
 
@@ -218,6 +260,7 @@ export class SolidScene {
       (this.axisLine.material as Material).dispose();
       this.axisLine = null;
     }
+    this.axisOrientation = axis ? axis.orientation : null;
     if (!axis) return;
 
     const length = 24;
@@ -232,6 +275,7 @@ export class SolidScene {
     line.computeLineDistances();
     this.scene.add(line);
     this.axisLine = line;
+    this.applyExtent();
   }
 
   render(): void {
@@ -260,7 +304,9 @@ export class SolidScene {
   }
 
   resize(width: number, height: number): void {
+    this.canvasSize = { w: width || 1, h: height || 1 };
     this.camera.aspect = width / height;
+    this.updateViewOffset();
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
   }

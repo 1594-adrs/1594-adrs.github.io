@@ -3,6 +3,8 @@ import { formatValue } from './format-value';
 import {
   conicInfoLines,
   describeIntegral,
+  areaLabel,
+  areaLimitNotes,
   limitErrorMessage,
   regionAreaText,
   sumRegions,
@@ -95,5 +97,16 @@ describe('conicInfoLines', () => {
     });
     expect(lines.map((l) => l.label)).toEqual(['Type', 'Center', 'Radius']);
     expect(lines[1].value).toBe('(0, 1)');
+  });
+});
+
+describe('area label and limit notes', () => {
+  it('includes limits and curve names', () => {
+    expect(areaLabel(0, 1, ['f1', 'f2'])).toBe('A [0, 1]: f1, f2');
+  });
+  it('explains reversed and empty intervals, nothing otherwise', () => {
+    expect(areaLimitNotes(3, 0)[0]).toContain('reversed');
+    expect(areaLimitNotes(1, 1)[0]).toContain('empty');
+    expect(areaLimitNotes(0, 1)).toEqual([]);
   });
 });

@@ -71,6 +71,8 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
 
   color = input('#00ff88');
   visible = input(false);
+  /** Fraction (0..1) of the canvas height covered at the bottom by the mobile sheet. */
+  bottomInset = input(0);
 
   /** Spec-driven "solids by integration" inputs. */
   spec = input<SolidSpec | null>(null);
@@ -161,6 +163,15 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
         this.rebuildSolidMesh(spec, pieces);
       });
 
+      // Re-frame the solid in the area not covered by the sheet.
+      effect(() => {
+        // Read the signal first: `scene?.f(signal())` would skip the read (no dependency) while
+        // the scene is still null.
+        const inset = this.bottomInset();
+        this.scene?.setBottomInset(inset);
+        this.scene?.render();
+      });
+
       // Color updates, independent of geometry rebuilds.
       effect(() => {
         const spec = this.spec();
@@ -218,6 +229,7 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     canvas.addEventListener('touchcancel', this.onTouchEnd);
 
     this.ngZone.runOutsideAngular(() => {
+      this.scene?.setBottomInset(this.bottomInset());
       const spec = this.spec();
       if (spec) this.rebuildSolidMesh(spec, this.pieces());
       this.updateSweep(spec, this.pieces(), this.sweepT());
