@@ -114,3 +114,13 @@
 .conic-card-list dd {
   margin: 0;
 }
+
+/* Phones: keep the results visible at the bottom edge of the scrolling sheet, so they
+   don't end up below the fold when the sheet is short. */
+@media (max-width: 768px) {
+  .results-panel {
+    position: sticky;
+    bottom: 0;
+    background: var(--color-bg-dark);
+  }
+}

@@ -322,3 +322,19 @@
   font-size: 12px;
   color: var(--color-text-muted);
 }
+
+/* Touch targets >=44px on coarse pointers (select, checkbox row, slider, sweep buttons). */
+@media (pointer: coarse) {
+  .axis-select,
+  .multi-fn-toggle,
+  .sweep-btn {
+    min-height: 44px;
+  }
+  .multi-fn-toggle input[type='checkbox'] {
+    width: 24px;
+    height: 24px;
+  }
+  .sweep-slider {
+    height: 44px;
+  }
+}

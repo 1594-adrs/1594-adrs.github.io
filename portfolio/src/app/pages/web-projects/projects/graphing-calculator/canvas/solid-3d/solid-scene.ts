@@ -18,6 +18,8 @@ import {
   Plane,
   Vector3,
   BufferGeometry,
+  Box3,
+  Sphere,
 } from 'three';
 import type { AxisLine } from '../../engine/solids/solid.types';
 
@@ -49,6 +51,12 @@ export class SolidScene {
   private axisLine: Line | null = null;
   private readonly clipPlane = new Plane(new Vector3(-1, 0, 0), 0);
   private clipActive = false;
+
+  // Camera framing: orbit target, zoom limits and the radius the camera was last fitted to.
+  private readonly target = new Vector3(0, 0, 0);
+  private minDist = 2;
+  private maxDist = 20;
+  private framedRadius = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new Scene();
@@ -86,6 +94,7 @@ export class SolidScene {
     this.disposeSolidPieces();
     this.updateSliceMesh(null, '#ffcc00');
     this.updateAxisLine(null);
+    this.frameSolid();
   }
 
   /** Replaces the spec-driven solid mesh with one Mesh per piece geometry. */
@@ -104,6 +113,45 @@ export class SolidScene {
       this.scene.add(mesh);
       this.solidPieceMeshes.push(mesh);
     }
+    this.frameSolid();
+  }
+
+  /**
+   * Fits the camera to the pieces' bounding sphere (or back to the default view when there is
+   * nothing to show). Keeps the viewing direction; skipped when the solid's size is within 25%
+   * of the last fit, so tweaking a bound does not undo the user's zoom.
+   */
+  private frameSolid(): void {
+    const box = new Box3();
+    for (const mesh of this.solidPieceMeshes) box.expandByObject(mesh);
+    const hasBounds = !box.isEmpty();
+    const radius = hasBounds ? Math.max(box.getBoundingSphere(new Sphere()).radius, 0.5) : 0;
+    const ratio = this.framedRadius > 0 ? radius / this.framedRadius : 0;
+    if (this.framedRadius > 0 && ratio > 0.8 && ratio < 1.25) return;
+
+    const dir = this.camera.position.clone().sub(this.target);
+    if (dir.lengthSq() === 0) dir.set(4, 3, 4);
+    dir.normalize();
+    if (!hasBounds) {
+      this.target.set(0, 0, 0);
+      this.minDist = 2;
+      this.maxDist = 20;
+      this.framedRadius = 0;
+      this.camera.position.copy(dir.multiplyScalar(Math.hypot(4, 3, 4)));
+      this.camera.lookAt(this.target);
+      return;
+    }
+    box.getCenter(this.target);
+    const vFov = (this.camera.fov * Math.PI) / 180;
+    const fitHalf = Math.atan(Math.tan(vFov / 2) * Math.min(1, this.camera.aspect || 1));
+    const dist = (radius / Math.sin(fitHalf)) * 1.15;
+    this.minDist = Math.max(0.5, dist * 0.15);
+    this.maxDist = dist * 5;
+    this.framedRadius = radius;
+    this.camera.position.copy(this.target).addScaledVector(dir, dist);
+    this.camera.lookAt(this.target);
+    this.camera.far = Math.max(1000, this.maxDist * 4);
+    this.camera.updateProjectionMatrix();
   }
 
   /** Updates the color of the existing spec-driven solid pieces without touching geometry. */
@@ -189,19 +237,21 @@ export class SolidScene {
   private readonly _spherical = new Spherical();
 
   rotateCamera(deltaX: number, deltaY: number): void {
-    this._spherical.setFromVector3(this.camera.position);
+    this._spherical.setFromVector3(this.camera.position.clone().sub(this.target));
     this._spherical.theta -= deltaX * 0.01;
     this._spherical.phi -= deltaY * 0.01;
     this._spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this._spherical.phi));
-    this.camera.position.setFromSpherical(this._spherical);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.setFromSpherical(this._spherical).add(this.target);
+    this.camera.lookAt(this.target);
   }
 
   zoomCamera(delta: number): void {
-    const dir = this.camera.position.clone().normalize();
-    const dist = this.camera.position.length();
-    const newDist = Math.max(2, Math.min(20, dist - delta * 0.01));
-    this.camera.position.copy(dir.multiplyScalar(newDist));
+    const offset = this.camera.position.clone().sub(this.target);
+    const dist = offset.length();
+    // Step scales with distance so zooming feels the same for small and large solids.
+    const step = delta * 0.01 * (dist / Math.hypot(4, 3, 4));
+    const newDist = Math.max(this.minDist, Math.min(this.maxDist, dist - step));
+    this.camera.position.copy(this.target).add(offset.normalize().multiplyScalar(newDist));
   }
 
   resize(width: number, height: number): void {

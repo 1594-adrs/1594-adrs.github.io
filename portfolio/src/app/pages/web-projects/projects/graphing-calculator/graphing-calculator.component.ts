@@ -13,6 +13,7 @@ import {
   NgZone,
   inject,
   PLATFORM_ID,
+  untracked,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -326,6 +327,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else if (prevWidth !== this.cssWidth || prevHeight !== this.cssHeight) {
       this.viewport.keepScaleOnResize(prevWidth, this.cssWidth, this.cssHeight);
     }
+    this.syncSheetInset();
     this.dpr =
       typeof devicePixelRatio !== 'undefined' && devicePixelRatio > 0
         ? Math.min(2, devicePixelRatio)
@@ -333,6 +335,27 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   private aspectFitted = false;
+
+  /** Fraction of the canvas height already compensated for in the viewport centre. */
+  private appliedInsetFrac = 0;
+
+  /** Covered fraction the viewport should compensate for: only on phones (sheet overlays the
+   *  canvas) and not while the math keyboard shrinks the layout above it. */
+  private targetInsetFrac(): number {
+    if (!this.isBrowser || this.kbHeight() > 0) return 0;
+    if (typeof matchMedia === 'undefined' || !matchMedia('(max-width: 768px)').matches) return 0;
+    return this.uiLayout.sheetCoverFraction();
+  }
+
+  /** Shifts the view so the plot stays centred in the area above the bottom sheet. */
+  private syncSheetInset(): void {
+    const next = untracked(() => this.targetInsetFrac());
+    if (next === this.appliedInsetFrac) return;
+    if (this.cssWidth > 0 && this.cssHeight > 0) {
+      this.viewport.shiftForBottomInset(this.appliedInsetFrac, next, this.cssWidth, this.cssHeight);
+    }
+    this.appliedInsetFrac = next;
+  }
 
   private getCanvasRect(canvas: HTMLCanvasElement): DOMRect {
     if (!this.cachedRect) this.cachedRect = canvas.getBoundingClientRect();
@@ -645,6 +668,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     });
 
     this.solidToolState.connect(this.functions, this.angleUnit);
+
+    // Snap or keyboard change: re-centre the plot above the sheet and repaint.
+    effect(() => {
+      this.uiLayout.sheetCoverFraction();
+      this.kbHeight();
+      if (!this.isBrowser) return;
+      this.syncSheetInset();
+      this.requestRender();
+    });
     this.uiLayout.connect(
       this.activeIntegral,
       this.showSolidTool,
@@ -1472,6 +1504,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   resetView(): void {
     this.viewport.reset();
     this.viewport.fitAspect(this.cssWidth, this.cssHeight);
+    this.appliedInsetFrac = 0;
+    this.syncSheetInset();
     this.render();
   }
 
@@ -1657,6 +1691,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.viewport.xMax = state.viewport.xMax;
     this.viewport.yMin = state.viewport.yMin;
     this.viewport.yMax = state.viewport.yMax;
+    // A shared view is shown exactly as saved: don't shift it for the sheet.
+    this.appliedInsetFrac = untracked(() => this.targetInsetFrac());
 
     const tool = state.tool;
     if (tool.active === 'integral' && tool.integral) {

@@ -3,6 +3,15 @@ import { Injectable, Signal, computed, signal } from '@angular/core';
 /** Mobile bottom-sheet snap position. Desktop ignores this (fixed sidebar). */
 export type SheetSnap = 'peek' | 'half' | 'full';
 
+/** Fraction of the canvas height the bottom sheet covers at each snap. Mirrors the `.panel.snap-*`
+ *  heights in the component CSS; `full` is capped at half because the user is then editing
+ *  expressions and the plot only needs to stay roughly centred in what remains. */
+export const SHEET_COVER_FRACTION: Record<SheetSnap, number> = {
+  peek: 0.16,
+  half: 0.5,
+  full: 0.5,
+};
+
 /** Which tool panel is open in the tab bar. 'none' means the "Graph" tab (no panel). */
 export type ToolTab = 'none' | 'integral' | 'area' | 'solids' | 'conics';
 
@@ -40,6 +49,9 @@ export class UiLayoutState {
       return 'none';
     });
   }
+
+  /** Covered fraction of the canvas by the sheet (0..1), ignoring whether the layout is mobile. */
+  sheetCoverFraction = computed(() => SHEET_COVER_FRACTION[this.sheetSnap()]);
 
   cycleSheet(): void {
     this.sheetSnap.update((s) => (s === 'peek' ? 'half' : s === 'half' ? 'full' : 'peek'));

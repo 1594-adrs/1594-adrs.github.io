@@ -101,3 +101,11 @@
     transition: none;
   }
 }
+
+@media (pointer: coarse) {
+  .mf,
+  .fb {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+}
