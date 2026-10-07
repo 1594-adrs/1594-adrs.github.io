@@ -9,7 +9,7 @@ const DEFAULT_STEP = '1';
 const DEFAULT_ROWS = '11';
 const MAX_ROWS = 200;
 
-export interface ValueTableRow {
+interface ValueTableRow {
   input: number;
   output: string;
 }

@@ -574,7 +574,7 @@ export function clearAstCache(): void {
   astCache.clear();
 }
 
-export interface LowercaseExponentWarning {
+interface LowercaseExponentWarning {
   /** The offending text as typed, e.g. `1e-9`. */
   text: string;
   /** The same number with an uppercase E, e.g. `1E-9`. */

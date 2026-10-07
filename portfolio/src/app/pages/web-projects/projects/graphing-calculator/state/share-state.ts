@@ -6,33 +6,33 @@ import type { CrossSectionShape, SolidMethod } from '../engine/solids/solid.type
  *  ignored (not partially restored). */
 export const SHARE_STATE_VERSION = 1;
 
-export interface ShareFunction {
+interface ShareFunction {
   raw: string;
   color: string;
   visible: boolean;
 }
 
-export interface ShareViewport {
+interface ShareViewport {
   xMin: number;
   xMax: number;
   yMin: number;
   yMax: number;
 }
 
-export interface ShareIntegralTool {
+interface ShareIntegralTool {
   fnIndex: number;
   a: number;
   b: number;
 }
 
-export interface ShareAreaTool {
+interface ShareAreaTool {
   functionIndices: number[];
   a: number;
   b: number;
   overlapMode: OverlapMode;
 }
 
-export interface ShareSolidTool {
+interface ShareSolidTool {
   method: SolidMethod;
   curveIndices: number[];
   a: string;
@@ -42,7 +42,7 @@ export interface ShareSolidTool {
   heightRatio: string;
 }
 
-export interface ShareTool {
+interface ShareTool {
   active: 'integral' | 'solid' | 'area' | null;
   integral?: ShareIntegralTool;
   area?: ShareAreaTool;

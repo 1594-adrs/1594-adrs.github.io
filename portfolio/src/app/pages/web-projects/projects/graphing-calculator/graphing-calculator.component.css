@@ -311,10 +311,6 @@
 .range-field input:focus {
   border-color: var(--color-primary);
 }
-.range-field input.input-error,
-.fn-input.input-error {
-  border-color: var(--color-corruption);
-}
 
 .panel-footer {
   padding: 0.5rem 0.75rem;

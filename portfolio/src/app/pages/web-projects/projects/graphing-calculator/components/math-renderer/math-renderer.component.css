@@ -92,7 +92,7 @@
 .operator {
   font-style: normal;
   margin: 0 2px;
-  color: var(--color-text-muted, #999);
+  color: var(--color-text-muted);
 }
 
 .paren {

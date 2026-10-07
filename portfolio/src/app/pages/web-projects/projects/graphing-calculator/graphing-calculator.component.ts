@@ -285,7 +285,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private renderRequested = false;
   private animFrameId = 0;
-  private pendingRafIds: number[] = [];
   private blurTimerId: ReturnType<typeof setTimeout> | null = null;
   private poiTimer: ReturnType<typeof setTimeout> | null = null;
   private poiKey: string | null = null;
@@ -771,8 +770,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.sheetPointerController?.abort();
     if (this.isBrowser) {
       cancelAnimationFrame(this.animFrameId);
-      for (const id of this.pendingRafIds) cancelAnimationFrame(id);
-      this.pendingRafIds = [];
     }
     if (this.blurTimerId !== null) {
       clearTimeout(this.blurTimerId);

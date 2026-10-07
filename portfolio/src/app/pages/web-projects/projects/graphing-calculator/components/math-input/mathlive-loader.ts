@@ -45,21 +45,12 @@ export function isMathliveReady(): boolean {
   return ready;
 }
 
-/** Element the keyboard is appended to (`null` restores `document.body`). */
-export function setMathKeyboardContainer(el: HTMLElement | null): void {
-  if (ready) window.mathVirtualKeyboard.container = el ?? document.body;
-}
-
 export function showMathKeyboard(): void {
   if (ready) window.mathVirtualKeyboard.show({ animate: false });
 }
 
 export function hideMathKeyboard(): void {
   if (ready) window.mathVirtualKeyboard.hide({ animate: false });
-}
-
-export function isMathKeyboardVisible(): boolean {
-  return ready && window.mathVirtualKeyboard.visible;
 }
 
 /** Switches the global keyboard layout for the focused field's kind. */

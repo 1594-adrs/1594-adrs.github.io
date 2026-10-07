@@ -6,10 +6,7 @@ import { computeSurfaceArea } from './solid-surface';
 import { SHELL_AXIS_OVERLAP_MESSAGE, shellAxisOverlap } from './solid-validation';
 import type { SolidIssue, SolidIssueCode, SolidResult, SolidSpec } from './solid.types';
 
-export { computePieces, sliceArea } from './solid-integrand';
-export { buildTerms } from './solid-formula';
 export { recognizeExact } from './solid-exact';
-export { computeSurfaceArea } from './solid-surface';
 export type * from './solid.types';
 
 /** Up to 4 significant figures, snapping a numerically-negligible value to '0' (an adaptive

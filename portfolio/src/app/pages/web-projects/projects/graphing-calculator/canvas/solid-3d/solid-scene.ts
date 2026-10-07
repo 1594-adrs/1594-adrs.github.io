@@ -24,7 +24,7 @@ import {
 import type { AxisLine } from '../../engine/solids/solid.types';
 
 /** Normal + constant of a THREE.Plane, kept DOM/three-agnostic at the call site. */
-export interface SweepClip {
+interface SweepClip {
   normal: [number, number, number];
   constant: number;
 }

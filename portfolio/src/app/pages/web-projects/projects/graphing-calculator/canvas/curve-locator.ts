@@ -8,7 +8,7 @@ export interface TraceCurve {
   fn: (v: number) => number;
 }
 
-export interface TracePoint {
+interface TracePoint {
   curveIndex: number;
   color: string;
   worldX: number;

@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import type { PointOfInterest } from '../engine/critical-points';
 
-export interface PinnedPoint extends PointOfInterest {
+interface PinnedPoint extends PointOfInterest {
   id: string;
 }
 

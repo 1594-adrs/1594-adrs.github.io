@@ -26,10 +26,10 @@ import type {
 import type { DetectedCurveMode } from '../engine/mode-detector';
 import type { MathExpression } from '../models/calculator.models';
 
-export type SolidFieldKey = 'curves' | 'a' | 'b' | 'axis' | 'shape' | 'ratio';
+type SolidFieldKey = 'curves' | 'a' | 'b' | 'axis' | 'shape' | 'ratio';
 
 /** One row of the curve-selection checklist rendered by the solid panel. */
-export interface SolidCurveOption {
+interface SolidCurveOption {
   index: number;
   fn: MathExpression;
   selected: boolean;
