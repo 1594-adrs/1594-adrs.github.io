@@ -49,9 +49,19 @@ function interiorBreakpoints(spec: SolidSpec): number[] {
     }
   }
 
-  if (spec.method === 'shell' && spec.axis) {
-    const k = spec.axis.value;
-    if (k > a + span * EPS && k < b - span * EPS) points.push(k);
+  if (spec.method === 'shell') {
+    // A single curve is ordered against the baseline y = 0: split where it crosses it so the
+    // (U - L) of every piece keeps one sign (y = x^2 - 1 is negative on (-1, 1) and positive
+    // outside), keeping the displayed formula terms equal to the computed integrand.
+    if (curves.length === 1) {
+      for (const p of findIntersections([curves[0].fn, () => 0], a, b)) {
+        if (p.x > a + span * EPS && p.x < b - span * EPS) points.push(p.x);
+      }
+    }
+    if (spec.axis) {
+      const k = spec.axis.value;
+      if (k > a + span * EPS && k < b - span * EPS) points.push(k);
+    }
   }
 
   return dedupeSorted(points.sort((x, y) => x - y));
@@ -213,13 +223,17 @@ export function sliceArea(spec: SolidSpec, pieces: SolidPiece[]): (t: number) =>
       const U = boundaryValue(spec, piece.upperIndex, t, 0);
       const L = boundaryValue(spec, piece.lowerIndex, t, 0);
       if (!Number.isFinite(U) || !Number.isFinite(L)) return NaN;
-      return 2 * Math.PI * Math.abs(t - k) * (U - L);
+      // |U - L|: a piece's upper/lower order is fixed at its midpoint, so far from it (or on a
+      // piece whose single curve crosses the baseline) U - L can go negative; a shell's lateral
+      // area is never negative.
+      return 2 * Math.PI * Math.abs(t - k) * Math.abs(U - L);
     }
 
     // cross-section
     const U = boundaryValue(spec, piece.upperIndex, t, 0);
     const L = boundaryValue(spec, piece.lowerIndex, t, 0);
     if (!Number.isFinite(U) || !Number.isFinite(L)) return NaN;
+    // Every shape's area is a multiple of s^2, so the sign of U - L cannot matter here.
     const s = U - L;
     switch (shape) {
       case 'square':

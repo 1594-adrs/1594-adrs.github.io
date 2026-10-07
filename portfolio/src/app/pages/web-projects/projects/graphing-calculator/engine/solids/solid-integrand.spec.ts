@@ -238,3 +238,40 @@ describe('sliceArea', () => {
     expect(area(t)).toBeCloseTo(expectedFromWidth(s), 10);
   });
 });
+
+describe('shell sliceArea sign (H1)', () => {
+  it('is never negative, even where the piece ordering assumed at its midpoint is violated', () => {
+    // One piece [-2, 2] ordered at x=0 (curve below the baseline), but y = x^2 - 1 is positive
+    // for |x| > 1: the raw 2π|x-k|(U-L) would be negative there.
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [curve((x) => x * x - 1)],
+      a: -2,
+      b: 2,
+      axis: { orientation: 'vertical', value: -3 },
+    };
+    const forced = [{ a: -2, b: 2, upperIndex: null, lowerIndex: 0 }];
+    const area = sliceArea(spec, forced);
+    expect(area(1.5)).toBeCloseTo(2 * Math.PI * 4.5 * 1.25, 10);
+    expect(area(0)).toBeCloseTo(2 * Math.PI * 3 * 1, 10);
+  });
+
+  it('computePieces splits a single shell curve where it crosses the baseline y = 0', () => {
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [curve((x) => x * x - 1)],
+      a: -2,
+      b: 2,
+      axis: { orientation: 'vertical', value: -3 },
+    };
+    const pieces = computePieces(spec);
+    expect(pieces.map((p) => [Math.round(p.a * 1e6) / 1e6, Math.round(p.b * 1e6) / 1e6])).toEqual([
+      [-2, -1],
+      [-1, 1],
+      [1, 2],
+    ]);
+    expect(pieces.map((p) => p.lowerIndex === 0)).toEqual([false, true, false]);
+  });
+});

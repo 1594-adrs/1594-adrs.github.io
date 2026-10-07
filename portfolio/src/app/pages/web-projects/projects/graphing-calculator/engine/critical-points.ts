@@ -1,4 +1,4 @@
-import { findAxisCrossings } from '../canvas/utils';
+import { findAxisCrossings } from './numeric-utils';
 import { derivative } from './calculus';
 import { findIntersections } from './intersection-finder';
 
@@ -25,6 +25,20 @@ export interface PointOfInterest {
  *  it against its immediate neighbors. */
 const CLASSIFY_DELTA = 1e-3;
 
+/** A candidate extremum must stand out from its neighbours by more than this (relative to
+ *  max(1, |y|)); otherwise it is floating-point noise on a flat curve (e.g. 1e-14*sin(1000x)). */
+const NOISE_REL = 1e-12;
+
+/** Upper bound of critical points returned per curve; denser results are thinned evenly. */
+export const MAX_CRITICAL_POINTS = 100;
+
+function thin<T>(items: T[], cap: number): T[] {
+  if (items.length <= cap) return items;
+  const out: T[] = [];
+  for (let i = 0; i < cap; i++) out.push(items[Math.floor((i * items.length) / cap)]);
+  return out;
+}
+
 function classifyExtremum(fn: (x: number) => number, x: number): CriticalPointKind | null {
   let y: number, yLeft: number, yRight: number;
   try {
@@ -35,8 +49,9 @@ function classifyExtremum(fn: (x: number) => number, x: number): CriticalPointKi
     return null;
   }
   if (!isFinite(y) || !isFinite(yLeft) || !isFinite(yRight)) return null;
-  if (y > yLeft && y > yRight) return 'max';
-  if (y < yLeft && y < yRight) return 'min';
+  const tol = NOISE_REL * Math.max(1, Math.abs(y));
+  if (y - yLeft > tol && y - yRight > tol) return 'max';
+  if (yLeft - y > tol && yRight - y > tol) return 'min';
   return null;
 }
 
@@ -66,7 +81,9 @@ export function findExtrema(fn: (x: number) => number, a: number, b: number): Cr
   return points;
 }
 
-/** Roots + local extrema of an explicit curve y = f(x) on [a, b], sorted by x. */
+/** Roots + local extrema of an explicit curve y = f(x) on [a, b], sorted by x. A curve that is
+ *  identically zero (or constant) has none, flat stretches count once, and the result is capped
+ *  at MAX_CRITICAL_POINTS (thinned evenly) so a rapidly oscillating curve cannot flood the UI. */
 export function findCriticalPoints(
   fn: (x: number) => number,
   a: number,
@@ -74,7 +91,7 @@ export function findCriticalPoints(
 ): CriticalPoint[] {
   const merged = [...findRoots(fn, a, b), ...findExtrema(fn, a, b)];
   merged.sort((p, q) => p.x - q.x);
-  return merged;
+  return thin(merged, MAX_CRITICAL_POINTS);
 }
 
 /** Points of interest for a set of named explicit curves: each curve's roots and

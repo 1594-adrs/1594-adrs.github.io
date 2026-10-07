@@ -118,3 +118,42 @@ describe('findIntersections', () => {
     expect(result.some((p) => Math.abs(p.x - PI / 2) < 0.01)).toBe(true);
   });
 });
+
+describe('findIntersections wave-1 (H2, H26)', () => {
+  it('x^2 vs 2 on [-100, 100] finds +-sqrt(2) (old absolute 0.05 guard dropped them)', () => {
+    const r = findIntersections([(x) => x * x, () => 2], -100, 100);
+    expect(r.length).toBe(2);
+    expect(r[0].x).toBeCloseTo(-Math.SQRT2, 9);
+    expect(r[1].x).toBeCloseTo(Math.SQRT2, 9);
+  });
+
+  it('100x^2 vs 200 on [-100, 100]', () => {
+    const r = findIntersections([(x) => 100 * x * x, () => 200], -100, 100);
+    expect(r.map((p) => p.x)).toEqual([
+      expect.closeTo(-Math.SQRT2, 9),
+      expect.closeTo(Math.SQRT2, 9),
+    ]);
+  });
+
+  it('exp(x) vs 1000 on [-10, 10] finds ln(1000)', () => {
+    const r = findIntersections([Math.exp, () => 1000], -10, 10);
+    expect(r.length).toBe(1);
+    expect(r[0].x).toBeCloseTo(Math.log(1000), 9);
+    expect(r[0].y).toBeCloseTo(1000, 6);
+  });
+
+  it('still rejects the pole of tan(x) vs 0.5-style jumps (no root at the asymptote)', () => {
+    const r = findIntersections([Math.tan, () => 0], 1, 2);
+    expect(r).toEqual([]);
+  });
+
+  it('coincident curves yield no intersections (was 95)', () => {
+    const r = findIntersections([(x) => x * x, (x) => x * x], -5, 5);
+    expect(r).toEqual([]);
+  });
+
+  it('a curve partly coincident with another reports the crossing once', () => {
+    const r = findIntersections([(x) => x, (x) => Math.max(0, x)], -2, 2);
+    expect(r.length).toBeLessThanOrEqual(1);
+  });
+});

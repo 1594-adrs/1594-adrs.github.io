@@ -29,10 +29,21 @@
  * or 'undefined' (values are NaN - outside the function's real domain).
  */
 
+import { bisectSignChange } from './numeric-utils';
+
+/**
+ * - 'ok': converged (or the residual error estimate is below INACCURATE_REL of the result).
+ * - 'divergent' / 'undefined': see the module comment; `badPoint` locates the trouble.
+ * - 'inaccurate': evaluations ran out (or the panels hit the minimum width) with the error
+ *   estimate still above the tolerance; `value` is a best effort and `error` says how far off
+ *   it may be (e.g. sin(1000x) over a wide interval, a very slowly converging endpoint).
+ */
+export type QuadratureStatus = 'ok' | 'divergent' | 'undefined' | 'inaccurate';
+
 export interface QuadratureResult {
   value: number;
   error: number;
-  status: 'ok' | 'divergent' | 'undefined';
+  status: QuadratureStatus;
   badPoint?: number;
 }
 
@@ -75,6 +86,18 @@ const GRADING_RATIO = 0.5;
 // yet the integral still does not converge.
 const STAGNANT_RATIO = 0.9;
 const MAX_STAGNANT = 12;
+// The summed K15-G7 error is a conservative estimate (it overstates the true error), so a result
+// is only reported 'inaccurate' when the leftover error exceeds max(tol, INACCURATE_REL) relative
+// to max(1, |value|). 1e-5 keeps ordinary endpoint-singularity integrals (1/sqrt(x), ln x, which
+// stall around 1e-6 within the default budget) 'ok' while flagging real failures (sin(1000x)
+// over [0, 10] reports an error of 0.38 on a value of 2.5e-4).
+const INACCURATE_REL = 1e-5;
+// Intervals wider than this get extra panel boundaries at 0 and +-10^k (see interestPoints).
+const WIDE_SPAN = 1e3;
+// Pole probing (see probePoles): how many of the strongest sign-change candidates are
+// bisected, and the minimum growth exponent p (|f| ~ |x - c|^-p) treated as non-integrable.
+const MAX_POLE_PROBES = 8;
+const POLE_EXPONENT = 0.95;
 
 interface Panel {
   a: number;
@@ -85,7 +108,32 @@ interface Panel {
   sawInfinity: boolean;
   maxFiniteAbs: number;
   stagnant: number;
+  /** Strongest sign change between two adjacent finite nodes: a pole candidate (see probePoles). */
+  flipLo: number;
+  flipHi: number;
+  flipScore: number;
 }
+
+// All 15 Kronrod nodes in ascending order with their Kronrod weight and (for the 7 shared
+// nodes) their Gauss weight, so each panel is sampled once, left to right.
+interface Node {
+  xi: number;
+  wk: number;
+  wg: number;
+}
+const NODES: Node[] = (() => {
+  const nodes: Node[] = [];
+  for (let idx = 0; idx < 7; idx++) {
+    const shared = GAUSS_SHARED_INDICES.indexOf(idx);
+    nodes.push({ xi: -XGK[idx], wk: WGK[idx], wg: shared >= 0 ? WG[shared] : 0 });
+  }
+  nodes.push({ xi: 0, wk: WGK[7], wg: WG[3] });
+  for (let idx = 6; idx >= 0; idx--) {
+    const shared = GAUSS_SHARED_INDICES.indexOf(idx);
+    nodes.push({ xi: XGK[idx], wk: WGK[idx], wg: shared >= 0 ? WG[shared] : 0 });
+  }
+  return nodes;
+})();
 
 function evalPanel(f: (x: number) => number, a: number, b: number): Panel {
   const center = 0.5 * (a + b);
@@ -95,43 +143,42 @@ function evalPanel(f: (x: number) => number, a: number, b: number): Panel {
   let nonFiniteCount = 0;
   let sawInfinity = false;
   let maxFiniteAbs = 0;
+  let flipLo = NaN;
+  let flipHi = NaN;
+  let flipScore = 0;
+  let prevX = NaN;
+  let prevV = NaN; // NaN when the previous node was non-finite
 
-  const sample = (xi: number): number => {
-    const x = center + halfLength * xi;
+  for (const node of NODES) {
+    const x = center + halfLength * node.xi;
     let v: number;
     try {
       v = f(x);
     } catch {
       v = NaN;
     }
+    let used = v;
     if (!Number.isFinite(v)) {
       nonFiniteCount++;
       if (v === Number.POSITIVE_INFINITY || v === Number.NEGATIVE_INFINITY) sawInfinity = true;
-      return 0;
+      used = 0;
+      v = NaN;
+    } else {
+      if (Math.abs(v) > maxFiniteAbs) maxFiniteAbs = Math.abs(v);
+      if (Math.abs(v) > BLOWUP_ABS) sawInfinity = true;
+      if (prevV * v < 0) {
+        const score = Math.min(Math.abs(prevV), Math.abs(v));
+        if (score > flipScore) {
+          flipScore = score;
+          flipLo = prevX;
+          flipHi = x;
+        }
+      }
     }
-    if (Math.abs(v) > maxFiniteAbs) maxFiniteAbs = Math.abs(v);
-    if (Math.abs(v) > BLOWUP_ABS) sawInfinity = true;
-    return v;
-  };
-
-  const fc = sample(0);
-  kronrod += WGK[7] * fc;
-  gauss += WG[3] * fc;
-
-  for (let i = 0; i < GAUSS_SHARED_INDICES.length; i++) {
-    const idx = GAUSS_SHARED_INDICES[i];
-    const xi = XGK[idx];
-    const fPlus = sample(xi);
-    const fMinus = sample(-xi);
-    kronrod += WGK[idx] * (fPlus + fMinus);
-    gauss += WG[i] * (fPlus + fMinus);
-  }
-
-  for (const idx of KRONROD_ONLY_INDICES) {
-    const xi = XGK[idx];
-    const fPlus = sample(xi);
-    const fMinus = sample(-xi);
-    kronrod += WGK[idx] * (fPlus + fMinus);
+    kronrod += node.wk * used;
+    gauss += node.wg * used;
+    prevX = x;
+    prevV = v;
   }
 
   kronrod *= halfLength;
@@ -146,6 +193,9 @@ function evalPanel(f: (x: number) => number, a: number, b: number): Panel {
     sawInfinity,
     maxFiniteAbs,
     stagnant: 0,
+    flipLo,
+    flipHi,
+    flipScore,
   };
 }
 
@@ -164,6 +214,26 @@ function gradedBoundaries(lo: number, hi: number): number[] {
   return Array.from(points).sort((x, y) => x - y);
 }
 
+/**
+ * Extra panel boundaries for very wide intervals: 0 and +-10^k (k >= -2) inside (a, b). A function
+ * that lives at a scale far smaller than the interval (1/(1+x^2) or exp(-x^2) over [-1e5, 1e5])
+ * would otherwise be sampled only at a few far-away nodes of one huge panel, which looks smooth
+ * and "converged" while missing all the mass near the origin. Log-spaced panels keep every scale
+ * between 0.01 and the interval size resolved. Not graded (adaptive bisection takes it from there).
+ */
+function interestPoints(a: number, b: number): number[] {
+  if (b - a <= WIDE_SPAN) return [];
+  const points: number[] = [];
+  if (a < 0 && b > 0) points.push(0);
+  const maxExp = Math.ceil(Math.log10(Math.max(Math.abs(a), Math.abs(b))));
+  for (let k = -2; k <= maxExp; k++) {
+    const p = Math.pow(10, k);
+    if (p > a && p < b) points.push(p);
+    if (-p > a && -p < b) points.push(-p);
+  }
+  return points;
+}
+
 function buildInitialBoundaries(a: number, b: number, breakpoints: number[]): number[] {
   const inner = breakpoints.filter((p) => p > a && p < b).sort((x, y) => x - y);
   const segments = [a, ...inner, b];
@@ -171,7 +241,53 @@ function buildInitialBoundaries(a: number, b: number, breakpoints: number[]): nu
   for (let i = 0; i < segments.length - 1; i++) {
     for (const p of gradedBoundaries(segments[i], segments[i + 1])) all.add(p);
   }
+  for (const p of interestPoints(a, b)) all.add(p);
   return Array.from(all).sort((x, y) => x - y);
+}
+
+/**
+ * Looks for non-integrable poles that sit *between* nodes. No Gauss-Kronrod node lands exactly on
+ * a pole, so every sample stays finite; and for an odd pole (tan near pi/2, 1/(x-c)) the two
+ * sides cancel so the stagnation heuristic never fires either. The strongest sign changes
+ * between adjacent finite nodes are bisected onto the discontinuity c, and |f| is compared at
+ * two distances from it: |f| ~ d^-p with p >= POLE_EXPONENT means the integral diverges, while a
+ * plain zero crossing (|f| shrinks towards c), a jump (p = 0) or an integrable cusp such as
+ * 1/cbrt(x) (p = 1/3) is left alone. Returns the pole location, if any.
+ */
+function probePoles(f: (x: number) => number, panels: Panel[]): number | undefined {
+  const candidates = panels
+    .filter((p) => p.flipScore > 0)
+    .sort((p, q) => q.flipScore - p.flipScore)
+    .slice(0, MAX_POLE_PROBES);
+
+  const safe = (x: number): number => {
+    try {
+      return f(x);
+    } catch {
+      return NaN;
+    }
+  };
+
+  for (const panel of candidates) {
+    const c = bisectSignChange(safe, panel.flipLo, panel.flipHi);
+    if (c === null) continue;
+    // Probe distances: relative to the panel but never closer to c than c's own resolution allows
+    // (panels around a pole are refined down to ~1e-9 of the interval).
+    const d2 = Math.max(
+      (panel.b - panel.a) * 1e-4,
+      1e5 * Number.EPSILON * Math.max(1, Math.abs(c)),
+    );
+    const d1 = 100 * d2;
+    for (const side of [1, -1]) {
+      const v1 = Math.abs(safe(c + side * d1));
+      const v2 = Math.abs(safe(c + side * d2));
+      if (!Number.isFinite(v1) || !Number.isFinite(v2) || v1 === 0) continue;
+      if (v2 <= v1 * 1.5) continue;
+      const p = Math.log(v2 / v1) / Math.log(d1 / d2);
+      if (p >= POLE_EXPONENT) return c;
+    }
+  }
+  return undefined;
 }
 
 export function integrateAdaptive(
@@ -279,11 +395,18 @@ export function integrateAdaptive(
     processPanel(mid, panel.b, lineage);
   }
 
+  if (divergentPoint === undefined && undefinedPoint === undefined) {
+    divergentPoint = probePoles(f, panels);
+  }
+
   if (divergentPoint !== undefined) {
     return { value: total, error: totalError, status: 'divergent', badPoint: divergentPoint };
   }
   if (undefinedPoint !== undefined) {
     return { value: total, error: totalError, status: 'undefined', badPoint: undefinedPoint };
+  }
+  if (totalError > Math.max(tol, INACCURATE_REL) * Math.max(1, Math.abs(total))) {
+    return { value: total, error: totalError, status: 'inaccurate' };
   }
   return { value: total, error: totalError, status: 'ok' };
 }

@@ -1,23 +1,52 @@
 import type { IntersectionPoint } from './intersection-finder';
+import { integrateAdaptive, type QuadratureStatus } from './quadrature';
 
-interface AreaRegion {
+export interface AreaRegion {
   a: number;
   b: number;
+  /**
+   * Area of the region. Finite for 'ok' / 'inaccurate'; +Infinity only when the region's area
+   * genuinely diverges (status 'divergent'); NaN when the curves are undefined inside it
+   * (status 'undefined'). Never a silently-zeroed or truncated number.
+   */
   area: number;
   topFunctionIndex: number;
   bottomFunctionIndex: number;
+  /** Quadrature outcome for this region ('ok' unless the integral misbehaves). */
+  status: QuadratureStatus;
+  /** Location of the singularity / undefined point when status is 'divergent' or 'undefined'. */
+  badPoint?: number;
 }
 
 const EPS = 1e-12;
 
+/**
+ * Splits [a, b] at the given intersections and integrates |top - bottom| over each region with
+ * the adaptive Gauss-Kronrod quadrature (the single integration path of the app). Intersections
+ * outside (a, b) are ignored and coincident ones merged, so a crossing beyond the interval can
+ * never create a region that reaches outside [a, b]. `steps` is kept for API compatibility.
+ */
 export function computeAreaRegions(
   functions: Array<(x: number) => number>,
   intersections: IntersectionPoint[],
   a: number,
   b: number,
-  steps = 200,
+  _steps = 200,
 ): AreaRegion[] {
-  const boundaries = [a, ...intersections.map((p) => p.x), b];
+  if (!(b > a)) return [];
+  const lo = a;
+  const hi = b;
+  const span = hi - lo;
+  const inner = intersections
+    .map((p) => p.x)
+    .filter((x) => Number.isFinite(x) && x > lo + span * EPS && x < hi - span * EPS)
+    .sort((p, q) => p - q);
+  const boundaries = [lo];
+  for (const x of inner) {
+    if (x - boundaries[boundaries.length - 1] > Math.max(EPS, span * 1e-9)) boundaries.push(x);
+  }
+  boundaries.push(hi);
+
   const regions: AreaRegion[] = [];
 
   for (let i = 0; i < boundaries.length - 1; i++) {
@@ -51,39 +80,36 @@ export function computeAreaRegions(
 
     if (topVal === -Infinity || bottomVal === Infinity) continue;
 
-    let area = 0;
-    const h = (rb - ra) / steps;
-    for (let k = 0; k < steps; k++) {
-      const x = ra + k * h;
-      const x2 = x + h;
-      let t1: number, b1: number, t2: number, b2: number;
+    const top = functions[topIdx];
+    const bottom = functions[bottomIdx];
+    const gap = (x: number): number => {
+      let t: number, bt: number;
       try {
-        t1 = functions[topIdx](x);
+        t = top(x);
       } catch {
-        t1 = NaN;
+        return NaN;
       }
       try {
-        b1 = functions[bottomIdx](x);
+        bt = bottom(x);
       } catch {
-        b1 = NaN;
+        return NaN;
       }
-      try {
-        t2 = functions[topIdx](x2);
-      } catch {
-        t2 = NaN;
-      }
-      try {
-        b2 = functions[bottomIdx](x2);
-      } catch {
-        b2 = NaN;
-      }
+      return Math.abs(t - bt);
+    };
 
-      const y1 = isNaN(t1) || isNaN(b1) ? 0 : t1 - b1;
-      const y2 = isNaN(t2) || isNaN(b2) ? 0 : t2 - b2;
-      area += ((Math.abs(y1) + Math.abs(y2)) * h) / 2;
-    }
+    const result = integrateAdaptive(gap, ra, rb);
+    const area =
+      result.status === 'divergent' ? Infinity : result.status === 'undefined' ? NaN : result.value;
 
-    regions.push({ a: ra, b: rb, area, topFunctionIndex: topIdx, bottomFunctionIndex: bottomIdx });
+    regions.push({
+      a: ra,
+      b: rb,
+      area,
+      topFunctionIndex: topIdx,
+      bottomFunctionIndex: bottomIdx,
+      status: result.status,
+      ...(result.badPoint !== undefined ? { badPoint: result.badPoint } : {}),
+    });
   }
 
   return regions;

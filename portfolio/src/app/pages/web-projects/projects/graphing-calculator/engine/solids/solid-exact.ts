@@ -9,6 +9,13 @@
 
 const MAX_DENOMINATOR = 60;
 const REL_TOL = 1e-9;
+// A candidate p/q (times the form's constant) is only trusted when its numerator is small. The
+// number of fractions p/q with q <= 60 near a value v grows with v, so with a relative tolerance a
+// large value matches *some* form by chance (measured: 3.7% of random values in [1e3, 1e4] and
+// 94% in [1e5, 1e6], e.g. 123456.789 -> '4134113√3/58'). Capping |p| at 1000 keeps the expected
+// false-positive rate under ~4e-4 at every magnitude; values above MAX_MAGNITUDE are never matched.
+const MAX_NUMERATOR = 1000;
+const MAX_MAGNITUDE = 1e5;
 
 interface Form {
   multiplier: number;
@@ -45,6 +52,7 @@ function format(p: number, q: number, unit: string): string {
 export function recognizeExact(value: number): string | null {
   if (!Number.isFinite(value)) return null;
   if (Math.abs(value) < 1e-12) return '0';
+  if (Math.abs(value) > MAX_MAGNITUDE) return null;
 
   const tol = REL_TOL * Math.max(1, Math.abs(value));
 
@@ -52,7 +60,7 @@ export function recognizeExact(value: number): string | null {
     for (const form of FORMS) {
       const scaled = (value / form.multiplier) * q;
       const p = Math.round(scaled);
-      if (p === 0) continue;
+      if (p === 0 || Math.abs(p) > MAX_NUMERATOR) continue;
       // Only accept already-reduced fractions: a reducible p/q would have
       // matched at its smaller, reduced q first.
       if (gcd(Math.abs(p), q) !== 1) continue;

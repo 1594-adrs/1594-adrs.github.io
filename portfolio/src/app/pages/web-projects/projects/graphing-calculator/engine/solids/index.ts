@@ -3,6 +3,7 @@ import { computePieces, sliceArea } from './solid-integrand';
 import { buildTerms } from './solid-formula';
 import { recognizeExact } from './solid-exact';
 import { computeSurfaceArea } from './solid-surface';
+import { SHELL_AXIS_OVERLAP_MESSAGE, shellAxisOverlap } from './solid-validation';
 import type { SolidIssue, SolidIssueCode, SolidResult, SolidSpec } from './solid.types';
 
 export { computePieces, sliceArea } from './solid-integrand';
@@ -31,6 +32,20 @@ function issueMessage(
     : `The integrand is undefined${where} (outside its real domain).`;
 }
 
+function failedResult(issues: SolidIssue[]): SolidResult {
+  return {
+    volume: null,
+    errorEstimate: 0,
+    exact: null,
+    terms: [],
+    pieces: [],
+    sliceArea: () => NaN,
+    issues,
+    surfaceArea: null,
+    surfaceExact: null,
+  };
+}
+
 /**
  * Computes a solid-of-revolution / cross-section volume from a structurally
  * valid SolidSpec: splits the domain into pieces, builds the closed-form
@@ -42,29 +57,31 @@ function issueMessage(
  */
 export function computeSolid(spec: SolidSpec): SolidResult {
   try {
+    // Shell with an axis cutting the region and the two sides overlapping: no correct volume.
+    if (shellAxisOverlap(spec)) {
+      return failedResult([
+        {
+          code: 'axis-inside-region',
+          severity: 'error',
+          message: SHELL_AXIS_OVERLAP_MESSAGE,
+          field: 'axis',
+        },
+      ]);
+    }
+
     const pieces = computePieces(spec);
 
     // Defence in depth: with a structurally valid, non-empty curve selection this shouldn't
     // happen (computePieces always returns at least one piece), but a volume of 0 must never
     // come from summing zero pieces - that would silently hide a real computation failure.
     if (spec.curves.length > 0 && pieces.length === 0) {
-      return {
-        volume: null,
-        errorEstimate: 0,
-        exact: null,
-        terms: [],
-        pieces: [],
-        sliceArea: () => NaN,
-        issues: [
-          {
-            code: 'undefined-domain',
-            severity: 'error',
-            message: 'The solid could not be computed (no valid region).',
-          },
-        ],
-        surfaceArea: null,
-        surfaceExact: null,
-      };
+      return failedResult([
+        {
+          code: 'undefined-domain',
+          severity: 'error',
+          message: 'The solid could not be computed (no valid region).',
+        },
+      ]);
     }
 
     const area = sliceArea(spec, pieces);
@@ -74,6 +91,7 @@ export function computeSolid(spec: SolidSpec): SolidResult {
     let errorEstimate = 0;
     const issues: SolidIssue[] = [];
     let failed = false;
+    let inaccurate = false;
 
     const axisValue = spec.axis?.value;
 
@@ -96,6 +114,12 @@ export function computeSolid(spec: SolidSpec): SolidResult {
       errorEstimate += result.error;
       volume += result.value;
 
+      if (result.status === 'inaccurate') {
+        // A usable but unreliable number: keep the volume, drop the "exact" form, and warn.
+        inaccurate = true;
+        continue;
+      }
+
       if (result.status !== 'ok') {
         failed = true;
         const code: SolidIssueCode =
@@ -109,12 +133,20 @@ export function computeSolid(spec: SolidSpec): SolidResult {
       }
     }
 
-    const surfaceArea = failed ? null : computeSurfaceArea(spec, pieces);
+    if (inaccurate && !failed) {
+      issues.push({
+        code: 'inaccurate',
+        severity: 'warning',
+        message: `The volume could not be computed to full precision (estimated error ± ${errorEstimate.toPrecision(2)}); treat it as approximate.`,
+      });
+    }
+
+    const surfaceArea = failed || inaccurate ? null : computeSurfaceArea(spec, pieces);
 
     return {
       volume: failed ? null : volume,
       errorEstimate,
-      exact: failed ? null : recognizeExact(volume),
+      exact: failed || inaccurate ? null : recognizeExact(volume),
       terms,
       pieces,
       sliceArea: area,
@@ -123,22 +155,12 @@ export function computeSolid(spec: SolidSpec): SolidResult {
       surfaceExact: surfaceArea === null ? null : recognizeExact(surfaceArea),
     };
   } catch {
-    return {
-      volume: null,
-      errorEstimate: 0,
-      exact: null,
-      terms: [],
-      pieces: [],
-      sliceArea: () => NaN,
-      issues: [
-        {
-          code: 'undefined-domain',
-          severity: 'error',
-          message: 'The solid could not be computed (unexpected error).',
-        },
-      ],
-      surfaceArea: null,
-      surfaceExact: null,
-    };
+    return failedResult([
+      {
+        code: 'undefined-domain',
+        severity: 'error',
+        message: 'The solid could not be computed (unexpected error).',
+      },
+    ]);
   }
 }

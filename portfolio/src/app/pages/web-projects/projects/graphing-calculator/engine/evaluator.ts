@@ -16,6 +16,9 @@ function factorial(n: number): number {
 }
 
 function gamma(x: number): number {
+  // Gamma has a pole at every non-positive integer; the reflection formula would return a huge
+  // but finite number there because sin(pi*x) is only ~1e-16, not 0.
+  if (x <= 0 && Number.isInteger(x)) return NaN;
   if (x < 0.5) {
     return Math.PI / (Math.sin(Math.PI * x) * gamma(1 - x));
   }
@@ -34,8 +37,61 @@ function gamma(x: number): number {
   return Math.sqrt(2 * Math.PI) * Math.pow(t, x + 0.5) * Math.exp(-t) * a;
 }
 
-const TRIG_FUNCTIONS = new Set(['sin', 'cos', 'tan', 'sec', 'csc', 'cot']);
 const INVERSE_TRIG_FUNCTIONS = new Set(['asin', 'acos', 'atan']);
+
+/** Euclidean remainder of `x` modulo `m` (always in [0, m)). */
+function posMod(x: number, m: number): number {
+  return ((x % m) + m) % m;
+}
+
+/**
+ * Trig in degrees. The angle is reduced modulo 360 *before* converting to radians, so the
+ * multiples of 90 are exact (cos(90) === 0, sin(180) === 0) instead of ~6e-17 residues, and
+ * tan(90) is undefined (NaN) rather than the 1.6e16 that tan(pi/2) gives in floating point.
+ */
+function sinDeg(x: number): number {
+  const r = posMod(x, 360);
+  if (r === 0 || r === 180) return 0;
+  if (r === 90) return 1;
+  if (r === 270) return -1;
+  return Math.sin((r * Math.PI) / 180);
+}
+
+function cosDeg(x: number): number {
+  const r = posMod(x, 360);
+  if (r === 90 || r === 270) return 0;
+  if (r === 0) return 1;
+  if (r === 180) return -1;
+  return Math.cos((r * Math.PI) / 180);
+}
+
+function tanDeg(x: number): number {
+  const r = posMod(x, 180);
+  if (r === 90) return NaN;
+  if (r === 0) return 0;
+  return Math.tan((r * Math.PI) / 180);
+}
+
+const DEG_FUNCTIONS: Record<string, (x: number) => number> = {
+  sin: sinDeg,
+  cos: cosDeg,
+  tan: tanDeg,
+  sec: (x) => 1 / cosDeg(x),
+  csc: (x) => 1 / sinDeg(x),
+  cot: (x) => {
+    const s = sinDeg(x);
+    return s === 0 ? Infinity : cosDeg(x) / s;
+  },
+};
+
+/** The function implementing `name` for the given angle unit (degree variants for trig). */
+function pickFunction(name: string, angleUnit: 'rad' | 'deg'): ((x: number) => number) | undefined {
+  if (angleUnit === 'deg') {
+    const d = DEG_FUNCTIONS[name];
+    if (d) return d;
+  }
+  return FUNCTIONS[name];
+}
 
 const FUNCTIONS: Record<string, (x: number) => number> = {
   sin: Math.sin,
@@ -132,14 +188,30 @@ const MULTI_ARG_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   atan2: (y, x) => Math.atan2(y, x),
 };
 
+/**
+ * Both are computed multiplicatively (no factorial(n)), so ncr(200, 2) = 19900 instead of the
+ * Infinity/Infinity = NaN that factorial(200) / ... produced. The factors are >= 1, so the
+ * running product only grows and the loop stops as soon as it overflows to Infinity.
+ */
 function nPr(n: number, r: number): number {
-  if (r < 0 || r > n) return NaN;
-  return factorial(n) / factorial(n - r);
+  if (!Number.isInteger(n) || !Number.isInteger(r) || n < 0 || r < 0 || r > n) return NaN;
+  let result = 1;
+  for (let i = 0; i < r; i++) {
+    result *= n - i;
+    if (!isFinite(result)) return Infinity;
+  }
+  return result;
 }
 
 function nCr(n: number, r: number): number {
-  if (r < 0 || r > n) return NaN;
-  return factorial(n) / (factorial(r) * factorial(n - r));
+  if (!Number.isInteger(n) || !Number.isInteger(r) || n < 0 || r < 0 || r > n) return NaN;
+  const k = Math.min(r, n - r);
+  let result = 1;
+  for (let i = 1; i <= k; i++) {
+    result = (result * (n - k + i)) / i;
+    if (!isFinite(result)) return Infinity;
+  }
+  return result < Number.MAX_SAFE_INTEGER ? Math.round(result) : result;
 }
 
 const TWO_ARG_FUNCTIONS: Record<string, (a: number, b: number) => number> = {
@@ -208,14 +280,9 @@ export function evaluate(
       }
 
       case 'FunctionCall': {
-        const fn = FUNCTIONS[node.name];
+        const fn = pickFunction(node.name, angleUnit);
         if (!fn) throw new Error(`Unknown function: '${node.name}'`);
-        let arg = evalNode(node.arg);
-
-        if (TRIG_FUNCTIONS.has(node.name) && angleUnit === 'deg') {
-          arg = (arg * Math.PI) / 180;
-        }
-
+        const arg = evalNode(node.arg);
         const result = fn(arg);
 
         if (INVERSE_TRIG_FUNCTIONS.has(node.name) && angleUnit === 'deg') {
@@ -241,14 +308,9 @@ export function evaluate(
       }
 
       case 'PoweredFunctionCall': {
-        const fn = FUNCTIONS[node.name];
+        const fn = pickFunction(node.name, angleUnit);
         if (!fn) throw new Error(`Unknown function: '${node.name}'`);
-        let arg = evalNode(node.arg);
-
-        if (TRIG_FUNCTIONS.has(node.name) && angleUnit === 'deg') {
-          arg = (arg * Math.PI) / 180;
-        }
-
+        const arg = evalNode(node.arg);
         const result = fn(arg);
         const power = evalNode(node.power);
 
@@ -354,16 +416,13 @@ function compileNode(node: ExpressionNode, angleUnit: 'rad' | 'deg'): CompiledEx
     }
 
     case 'FunctionCall': {
-      const fn = FUNCTIONS[node.name];
+      const fn = pickFunction(node.name, angleUnit);
       if (!fn) return unknownFunction(node.name);
       const argFn = compileNode(node.arg, angleUnit);
-      const isTrig = TRIG_FUNCTIONS.has(node.name);
       const isInvTrig = INVERSE_TRIG_FUNCTIONS.has(node.name);
       const toDeg = angleUnit === 'deg';
       return (a, b) => {
-        let arg = argFn(a, b);
-        if (isTrig && toDeg) arg = (arg * Math.PI) / 180;
-        const result = fn(arg);
+        const result = fn(argFn(a, b));
         if (isInvTrig && toDeg) return (result * 180) / Math.PI;
         return result;
       };
@@ -389,17 +448,14 @@ function compileNode(node: ExpressionNode, angleUnit: 'rad' | 'deg'): CompiledEx
     }
 
     case 'PoweredFunctionCall': {
-      const fn = FUNCTIONS[node.name];
+      const fn = pickFunction(node.name, angleUnit);
       if (!fn) return unknownFunction(node.name);
       const argFn = compileNode(node.arg, angleUnit);
       const powerFn = compileNode(node.power, angleUnit);
-      const isTrig = TRIG_FUNCTIONS.has(node.name);
       const isInvTrig = INVERSE_TRIG_FUNCTIONS.has(node.name);
       const toDeg = angleUnit === 'deg';
       return (a, b) => {
-        let arg = argFn(a, b);
-        if (isTrig && toDeg) arg = (arg * Math.PI) / 180;
-        const result = fn(arg);
+        const result = fn(argFn(a, b));
         const power = powerFn(a, b);
         if (isInvTrig && toDeg) return signedRealPow((result * 180) / Math.PI, power);
         return signedRealPow(result, power);

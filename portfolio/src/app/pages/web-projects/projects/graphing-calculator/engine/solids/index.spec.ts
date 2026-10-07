@@ -356,7 +356,7 @@ describe('computeSolid', () => {
     expect(divergent!.message).toContain('x = 0');
   });
 
-  it('21: shell y=x^2 on [0,1] about x=0.5 (axis inside domain) splits into 2 pieces, same volume', () => {
+  it('21: shell y=x^2 on [0,1] about x=0.5 (sides overlap when revolved) is blocked, not double counted', () => {
     const spec: SolidSpec = {
       method: 'shell',
       variable: 'x',
@@ -366,9 +366,51 @@ describe('computeSolid', () => {
       axis: { orientation: 'vertical', value: 0.5 },
     };
     const r = computeSolid(spec);
+    // The old shell sum gave 2*pi*Integral(|x-0.5|*x^2) = 0.58905; the real (union) solid is
+    // 2*pi*Integral_0^0.5 r*(0.5+r)^2 dr = 0.4909, so no volume is better than the wrong one.
+    expect(r.volume).toBeNull();
+    expect(r.issues).toEqual([
+      expect.objectContaining({ code: 'axis-inside-region', severity: 'error', field: 'axis' }),
+    ]);
+  });
+
+  it('21b: shell y=x on [-1,1] about x=0 (sides never overlap) is still computed: 4π/3', () => {
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('x')],
+      a: -1,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0 },
+    };
+    const r = computeSolid(spec);
+    expect(r.volume).not.toBeNull();
+    expect(relErr(r.volume!, (4 * Math.PI) / 3)).toBeLessThanOrEqual(1e-7);
     expect(r.pieces).toHaveLength(2);
-    // Hand-checked via Simpson's rule (1e6 panels): 2*pi*Integral(|x-0.5|*x^2, 0, 1) ~= 0.5890486225.
-    expect(relErr(r.volume!, 0.5890486225480873)).toBeLessThanOrEqual(1e-6);
+  });
+
+  it('H14: shell y=1 on [-1,1] about x=0 (union is a cylinder, π) is blocked instead of 2π', () => {
+    const spec: SolidSpec = {
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('1')],
+      a: -1,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0 },
+    };
+    const r = computeSolid(spec);
+    expect(r.volume).toBeNull();
+    expect(r.issues[0]).toMatchObject({ code: 'axis-inside-region', severity: 'error' });
+    // The disk method models the union correctly for the same region: π.
+    const disk = computeSolid({
+      method: 'disk-washer',
+      variable: 'y',
+      curves: [curveFromExpr('1')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0 },
+    });
+    expect(relErr(disk.volume!, Math.PI)).toBeLessThanOrEqual(1e-9);
   });
 
   it("22: computeSolid never throws with 6 curves (too-many-curves is validateSolidSpec's job)", () => {
@@ -442,5 +484,72 @@ describe('computeSolid', () => {
       `computeSolid: ${iterations * specs.length} calls took ${elapsedMs.toFixed(2)}ms (${perCall.toFixed(3)}ms/call)`,
     );
     expect(elapsedMs).toBeLessThan(5000);
+  });
+});
+
+describe('computeSolid wave-1 regressions', () => {
+  it('H1: shell y=x^2-1 on [-2,2] about x=-3 -> 24π (75.398), not the signed -25.13', () => {
+    const r = computeSolid({
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('x^2-1')],
+      a: -2,
+      b: 2,
+      axis: { orientation: 'vertical', value: -3 },
+    });
+    expect(r.volume).not.toBeNull();
+    expect(relErr(r.volume!, 24 * Math.PI)).toBeLessThanOrEqual(1e-7);
+    expect(r.exact).toBe('24π');
+    // Split where the curve crosses the baseline y = 0, so every piece has one sign.
+    expect(r.pieces.map((p) => [p.a, p.b])).toEqual([
+      [-2, -1],
+      [-1, 1],
+      [1, 2],
+    ]);
+    for (const t of r.terms) expect(t.integrand).toBeDefined();
+  });
+
+  it('H1: shell y=sin(x) on [0,2π] about x=-1 -> 2π(4π+4) (104.09), not -39.48', () => {
+    const r = computeSolid({
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('sin(x)')],
+      a: 0,
+      b: 2 * Math.PI,
+      axis: { orientation: 'vertical', value: -1 },
+    });
+    expect(r.volume).not.toBeNull();
+    expect(relErr(r.volume!, 2 * Math.PI * (4 * Math.PI + 4))).toBeLessThanOrEqual(1e-7);
+  });
+
+  it('H1: cross-section (square) over y=x^2-1 on [-2,2] is sign independent', () => {
+    const r = computeSolid({
+      method: 'cross-section',
+      variable: 'x',
+      curves: [curveFromExpr('x^2-1')],
+      a: -2,
+      b: 2,
+      shape: 'square',
+    });
+    // ∫(x^2-1)^2 = 2*(32/5 - 16/3 + 2) = 2*(96-80+30)/15 = 92/15
+    expect(relErr(r.volume!, 92 / 15)).toBeLessThanOrEqual(1e-9);
+  });
+
+  it('H6: an unconvergeable integrand keeps the volume but warns and drops the exact form', () => {
+    const r = computeSolid({
+      method: 'cross-section',
+      variable: 'x',
+      curves: [curveFromExpr('sin(3000*x)')],
+      a: 0,
+      b: 10,
+      shape: 'square',
+    });
+    // True volume is 5; the budget only gets within ~0.2, and says so.
+    expect(r.volume).not.toBeNull();
+    expect(Math.abs(r.volume! - 5)).toBeLessThan(0.5);
+    expect(r.exact).toBeNull();
+    expect(r.issues).toEqual([
+      expect.objectContaining({ code: 'inaccurate', severity: 'warning' }),
+    ]);
   });
 });
