@@ -195,4 +195,26 @@ describe('Viewport', () => {
       expect(v.xMax).toBeCloseTo(10, 12);
     });
   });
+
+  describe('shiftForBottomInset', () => {
+    it('moves content up by half the newly covered height and back again', () => {
+      const v = new Viewport(-10, 10, -7, 7);
+      const [, y0] = v.worldToScreen(0, 0, 400, 700);
+      v.shiftForBottomInset(0, 0.5, 400, 700);
+      const [, y1] = v.worldToScreen(0, 0, 400, 700);
+      expect(y0 - y1).toBeCloseTo(175, 9);
+      // Origin now sits at the centre of the free area (top 50%).
+      expect(y1).toBeCloseTo(175, 9);
+      v.shiftForBottomInset(0.5, 0, 400, 700);
+      expect(v.worldToScreen(0, 0, 400, 700)[1]).toBeCloseTo(y0, 9);
+    });
+
+    it('does not change zoom and ignores degenerate sizes', () => {
+      const v = new Viewport(-10, 10, -7, 7);
+      v.shiftForBottomInset(0, 0.16, 400, 700);
+      expect(v.yMax - v.yMin).toBeCloseTo(14, 12);
+      v.shiftForBottomInset(0.16, 0.5, 0, 0);
+      expect(v.yMax - v.yMin).toBeCloseTo(14, 12);
+    });
+  });
 });

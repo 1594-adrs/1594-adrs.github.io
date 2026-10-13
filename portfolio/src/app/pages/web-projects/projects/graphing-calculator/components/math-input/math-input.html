@@ -1,0 +1,31 @@
+@if (mathReady()) {
+  <math-field
+    #mf
+    class="mf"
+    [class.invalid]="invalid()"
+    [attr.id]="inputId()"
+    [attr.aria-label]="label()"
+    [attr.aria-invalid]="invalid() ? 'true' : null"
+    [attr.aria-describedby]="describedBy()"
+  ></math-field>
+} @else {
+  <input
+    #fallback
+    class="fb"
+    [class.invalid]="invalid()"
+    type="text"
+    autocomplete="off"
+    autocapitalize="off"
+    spellcheck="false"
+    [attr.id]="inputId()"
+    [value]="value()"
+    [placeholder]="placeholder()"
+    [attr.aria-label]="label()"
+    [attr.aria-invalid]="invalid() ? 'true' : null"
+    [attr.aria-describedby]="describedBy()"
+    (input)="onFallbackInput($event)"
+    (focus)="focused.emit()"
+    (blur)="blurred.emit()"
+    (keydown)="keyDown.emit($event)"
+  />
+}

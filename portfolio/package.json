@@ -22,6 +22,7 @@
     "@angular/platform-browser": "^21.2.21",
     "@angular/platform-server": "^21.2.21",
     "@angular/router": "^21.2.21",
+    "mathlive": "^0.111.0",
     "three": "^0.185.1",
     "tslib": "^2.3.0"
   },

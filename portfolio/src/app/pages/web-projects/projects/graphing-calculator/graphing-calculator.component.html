@@ -1,4 +1,8 @@
-<div class="calculator-layout" [class.sheet-full]="uiLayout.sheetSnap() === 'full'">
+<div
+  class="calculator-layout"
+  [class.kb-open]="kbHeight() > 0"
+  [class.sheet-full]="uiLayout.sheetSnap() === 'full'"
+>
   <div
     class="canvas-container"
     tabindex="0"
@@ -12,13 +16,22 @@
     <canvas #graphCanvas [attr.aria-hidden]="show3DSolid() && hasSolidResult()"></canvas>
     @if (show3DSolid() && hasSolidResult()) {
       <div class="solid-3d-container">
-        <app-solid-3d
-          [spec]="solidToolState.spec()"
-          [pieces]="solidToolState.result()?.pieces ?? []"
-          [sweepT]="solidToolState.sweepT()"
-          [color]="solidColor()"
-          [visible]="show3DSolid()"
-        />
+        <!-- Three.js (~530 kB) is only downloaded when the 3D view is first opened. -->
+        @defer (on immediate) {
+          <app-solid-3d
+            #solid3d
+            [spec]="solidToolState.spec()"
+            [pieces]="solidToolState.result()?.pieces ?? []"
+            [sweepT]="solidToolState.sweepT()"
+            [color]="solidColor()"
+            [visible]="show3DSolid()"
+            [bottomInset]="solidSheetInset()"
+          />
+        } @placeholder {
+          <p class="solid-3d-loading" role="status">Loading 3D view…</p>
+        } @error {
+          <p class="solid-3d-loading" role="alert">The 3D view could not be loaded.</p>
+        }
       </div>
     }
     @if (!show3DSolid()) {
@@ -120,7 +133,8 @@
           <div
             class="function-row"
             [class.selected]="focusedInputIndex() === $index"
-            draggable="true"
+            [attr.draggable]="rowDraggable()"
+            (pointerdown)="onRowPointerDown($event)"
             (dragstart)="onDragStart($index, $event)"
             (dragover)="onDragOver($index, $event)"
             (drop)="onDrop($index, $event)"
@@ -135,67 +149,60 @@
                 (click)="toggleVisibility($index)"
                 [attr.aria-pressed]="fn.visible"
                 [attr.aria-label]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
-                [title]="fn.visible ? 'Hide' : 'Show'"
+                [title]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
               ></button>
               <app-color-picker
                 [color]="fn.color"
-                [label]="'Color for f' + ($index + 1)"
+                [label]="'Change colour of f' + ($index + 1)"
                 (colorChange)="updateColor($index, $event)"
               />
             </div>
             <div class="fn-expression">
-              @if (fn.ast && focusedInputIndex() !== $index && fn.raw) {
-                <div class="math-rendered" (click)="onInputFocus($index)">
-                  <app-math-renderer [ast]="fn.ast" [fontSize]="14" />
-                </div>
-              }
-              <input
-                #fnInput
-                class="fn-input"
-                [class.hidden-input]="fn.ast && focusedInputIndex() !== $index && fn.raw"
-                [class.input-error]="fn.error"
-                [id]="'fn-input-' + $index"
+              <app-math-input
+                [inputId]="'fn-input-' + $index"
                 [value]="fn.raw"
-                [attr.aria-label]="'Function ' + ($index + 1) + ' expression'"
-                [attr.aria-describedby]="fn.error ? 'fn-error-' + $index : null"
-                [attr.aria-invalid]="fn.error ? true : null"
-                (input)="updateExpression($index, $any($event.target).value)"
-                (focus)="onInputFocus($index)"
-                (blur)="onInputBlur()"
-                (keydown)="onFnInputKeyDown($index, $event)"
+                [label]="'Function ' + ($index + 1) + ' expression'"
+                [invalid]="!!fn.error"
+                [describedBy]="fn.error ? 'fn-error-' + $index : null"
                 [placeholder]="
                   fn.mode === 'implicit'
-                    ? 'e.g. x^2+y^2=1'
+                    ? 'x^2+y^2=1'
                     : fn.mode === 'explicit-y'
-                      ? 'e.g. x=y^2'
+                      ? 'x=y^2'
                       : fn.mode === 'parametric'
-                        ? 'e.g. cos(t),sin(t)'
+                        ? 'cos(t),sin(t)'
                         : fn.mode === 'polar'
-                          ? 'e.g. r=cos(3*theta)'
-                          : 'e.g. sin(x)'
+                          ? 'r=cos(3*theta)'
+                          : 'x^2, sin(x), x=y^2'
                 "
-                spellcheck="false"
+                (valueChange)="updateExpression($index, $event)"
+                (issuesChange)="onMathIssues($index, $event)"
+                (focused)="onInputFocus($index)"
+                (blurred)="onInputBlur()"
+                (keyDown)="onFnInputKeyDown($index, $event)"
               />
             </div>
             <div class="fn-actions">
-              <button
-                class="action-btn move-btn"
-                (click)="moveFunctionUp($index)"
-                [disabled]="!canMoveFunctionUp($index)"
-                [attr.aria-label]="'Move ' + functionLabel($index) + ' up'"
-                title="Move up (Alt+ArrowUp)"
-              >
-                <app-icon name="arrow-up" />
-              </button>
-              <button
-                class="action-btn move-btn"
-                (click)="moveFunctionDown($index)"
-                [disabled]="!canMoveFunctionDown($index)"
-                [attr.aria-label]="'Move ' + functionLabel($index) + ' down'"
-                title="Move down (Alt+ArrowDown)"
-              >
-                <app-icon name="arrow-down" />
-              </button>
+              <span class="move-stack">
+                <button
+                  class="action-btn move-btn"
+                  (click)="moveFunctionUp($index)"
+                  [disabled]="!canMoveFunctionUp($index)"
+                  [attr.aria-label]="'Move ' + functionLabel($index) + ' up'"
+                  title="Move up (Alt+ArrowUp)"
+                >
+                  <app-icon name="arrow-up" />
+                </button>
+                <button
+                  class="action-btn move-btn"
+                  (click)="moveFunctionDown($index)"
+                  [disabled]="!canMoveFunctionDown($index)"
+                  [attr.aria-label]="'Move ' + functionLabel($index) + ' down'"
+                  title="Move down (Alt+ArrowDown)"
+                >
+                  <app-icon name="arrow-down" />
+                </button>
+              </span>
               <button
                 class="action-btn mode-btn"
                 (click)="cycleMode($index)"
@@ -227,6 +234,8 @@
                 >
                   <app-icon name="table" />
                 </button>
+              } @else {
+                <span class="action-btn action-slot" aria-hidden="true"></span>
               }
               <button
                 class="action-btn delete"
@@ -242,6 +251,10 @@
             <p [id]="'fn-error-' + $index" role="alert" aria-live="polite" class="fn-error">
               {{ fn.error }}
             </p>
+          } @else if (fnIssues()[$index]?.length) {
+            <p role="status" aria-live="polite" class="fn-error">{{ fnIssues()[$index][0] }}</p>
+          } @else if (expHint(fn.raw); as hint) {
+            <p role="status" aria-live="polite" class="fn-error">{{ hint }}</p>
           }
           @if (tableOpenIndex() === $index && canShowValueTable(fn)) {
             <app-value-table
@@ -255,22 +268,24 @@
             <div class="range-row">
               <label class="range-field-inline">
                 t_min =
-                <input
-                  type="text"
+                <app-math-input
+                  kind="limit"
+                  class="range-math"
                   [value]="fn.tMin || '0'"
-                  (input)="updateParamRange($index, 'tMin', $any($event.target).value)"
+                  label="t min"
                   placeholder="0"
-                  class="range-input-inline"
+                  (valueChange)="updateParamRange($index, 'tMin', $event)"
                 />
               </label>
               <label class="range-field-inline">
                 t_max =
-                <input
-                  type="text"
+                <app-math-input
+                  kind="limit"
+                  class="range-math"
                   [value]="fn.tMax || '2*pi'"
-                  (input)="updateParamRange($index, 'tMax', $any($event.target).value)"
+                  label="t max"
                   placeholder="2*pi"
-                  class="range-input-inline"
+                  (valueChange)="updateParamRange($index, 'tMax', $event)"
                 />
               </label>
             </div>
@@ -279,22 +294,24 @@
             <div class="range-row">
               <label class="range-field-inline">
                 θ_min =
-                <input
-                  type="text"
+                <app-math-input
+                  kind="limit"
+                  class="range-math"
                   [value]="fn.thetaMin || '0'"
-                  (input)="updateParamRange($index, 'thetaMin', $any($event.target).value)"
+                  label="Theta min"
                   placeholder="0"
-                  class="range-input-inline"
+                  (valueChange)="updateParamRange($index, 'thetaMin', $event)"
                 />
               </label>
               <label class="range-field-inline">
                 θ_max =
-                <input
-                  type="text"
+                <app-math-input
+                  kind="limit"
+                  class="range-math"
                   [value]="fn.thetaMax || '2*pi'"
-                  (input)="updateParamRange($index, 'thetaMax', $any($event.target).value)"
+                  label="Theta max"
                   placeholder="2*pi"
-                  class="range-input-inline"
+                  (valueChange)="updateParamRange($index, 'thetaMax', $event)"
                 />
               </label>
             </div>
@@ -388,25 +405,35 @@
           <div class="range-inputs">
             <label class="range-field">
               a =
-              <input
-                type="text"
-                [value]="activeIntegral()!.a"
-                (input)="updateIntegralA($any($event.target).value)"
+              <app-math-input
+                kind="limit"
+                [value]="limitText('integralA', activeIntegral()!.a)"
+                label="Integral lower bound a"
                 placeholder="pi"
-                [class.input-error]="limitErrors()['integralA']"
+                [invalid]="!!limitErrors()['integralA']"
+                [describedBy]="limitErrors()['integralA'] ? 'int-a-error' : null"
+                (valueChange)="updateIntegralA($event)"
               />
             </label>
             <label class="range-field">
               b =
-              <input
-                type="text"
-                [value]="activeIntegral()!.b"
-                (input)="updateIntegralB($any($event.target).value)"
+              <app-math-input
+                kind="limit"
+                [value]="limitText('integralB', activeIntegral()!.b)"
+                label="Integral upper bound b"
                 placeholder="e/2"
-                [class.input-error]="limitErrors()['integralB']"
+                [invalid]="!!limitErrors()['integralB']"
+                [describedBy]="limitErrors()['integralB'] ? 'int-b-error' : null"
+                (valueChange)="updateIntegralB($event)"
               />
             </label>
           </div>
+          @if (limitError('integralA'); as msg) {
+            <p id="int-a-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (limitError('integralB'); as msg) {
+            <p id="int-b-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
         </div>
       }
 
@@ -426,18 +453,28 @@
               3D view
             </button>
           </div>
+          @if (limitError('multiA'); as msg) {
+            <p id="multi-a-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (limitError('multiB'); as msg) {
+            <p id="multi-b-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (areaHint(); as hint) {
+            <p class="tool-note" role="status">{{ hint }}</p>
+          }
         </div>
       }
 
       @if (activeMultiArea()) {
         <div class="range-section">
           <span class="range-label">Area between curves</span>
-          <div class="bounded-fn-selects">
+          <div class="bounded-fn-selects" role="group" aria-label="Curves for the area">
             @for (fn of functions(); track $index) {
               <label class="range-field multi-fn-toggle">
                 <input
                   type="checkbox"
                   [checked]="activeMultiArea()!.functionIndices.includes($index)"
+                  [attr.aria-label]="'Include f' + ($index + 1) + ' in the area'"
                   (change)="toggleMultiAreaFunction($index)"
                 />
                 <span class="color-swatch" [style.background]="fn.color"></span>
@@ -445,35 +482,29 @@
               </label>
             }
           </div>
-          @if (activeMultiArea()!.functionIndices.length >= 2) {
-            <label class="range-field">
-              <input
-                type="checkbox"
-                [checked]="activeMultiArea()!.overlapMode === 'all'"
-                (change)="updateMultiAreaOverlapMode($any($event.target).checked)"
-              />
-              Only where all overlap
-            </label>
-          }
           <div class="range-inputs">
             <label class="range-field">
               a =
-              <input
-                type="text"
-                [value]="activeMultiArea()!.a"
-                (input)="updateMultiAreaA($any($event.target).value)"
+              <app-math-input
+                kind="limit"
+                [value]="limitText('multiA', activeMultiArea()!.a)"
+                label="Area lower bound a"
                 placeholder="0"
-                [class.input-error]="limitErrors()['multiA']"
+                [invalid]="!!limitErrors()['multiA']"
+                [describedBy]="limitErrors()['multiA'] ? 'multi-a-error' : null"
+                (valueChange)="updateMultiAreaA($event)"
               />
             </label>
             <label class="range-field">
               b =
-              <input
-                type="text"
-                [value]="activeMultiArea()!.b"
-                (input)="updateMultiAreaB($any($event.target).value)"
+              <app-math-input
+                kind="limit"
+                [value]="limitText('multiB', activeMultiArea()!.b)"
+                label="Area upper bound b"
                 placeholder="2*pi"
-                [class.input-error]="limitErrors()['multiB']"
+                [invalid]="!!limitErrors()['multiB']"
+                [describedBy]="limitErrors()['multiB'] ? 'multi-b-error' : null"
+                (valueChange)="updateMultiAreaB($event)"
               />
             </label>
           </div>
@@ -482,12 +513,13 @@
 
       <div class="evaluate-section">
         <span class="eval-label">Evaluate at x =</span>
-        <input
-          type="text"
-          class="eval-input"
+        <app-math-input
+          kind="limit"
+          class="eval-math"
           [value]="evalPoint()"
-          (input)="evalPoint.set($any($event.target).value)"
+          label="Evaluate at x"
           placeholder="0"
+          (valueChange)="evalPoint.set($event)"
         />
         @if (evalResults().length > 0) {
           <div class="eval-results">
@@ -508,25 +540,106 @@
             <div class="result-row">
               <span class="result-label">{{ r.label }}</span>
               <span class="result-eq">=</span>
-              <span class="result-value">{{ r.value }}</span>
+              <span class="result-value">{{ r.approx ? '≈ ' : '' }}{{ r.value }}</span>
+              @if (r.error) {
+                <span class="result-err">{{ r.error }}</span>
+              }
             </div>
+            @if (r.notes?.length) {
+              <p class="result-note" role="status">{{ r.notes![0] }}</p>
+            }
           }
         </div>
       }
 
+      @if (areaBreakdown(); as bd) {
+        <details class="breakdown">
+          <summary>Regions and intersections</summary>
+          @if (bd.regions.length) {
+            <table class="breakdown-table">
+              <caption class="sr-only">
+                Area of each region
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Interval</th>
+                  <th scope="col">Top − bottom</th>
+                  <th scope="col">Area</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of bd.regions; track $index) {
+                  <tr>
+                    <td>{{ r.range }}</td>
+                    <td>{{ r.pair }}</td>
+                    <td>{{ r.area }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="tool-note">No regions in this interval.</p>
+          }
+          @if (bd.intersections.length) {
+            <ul class="breakdown-list" aria-label="Intersections">
+              @for (p of bd.intersections; track $index) {
+                <li>{{ p.pair }} at {{ p.point }}</li>
+              }
+            </ul>
+          }
+        </details>
+      }
+
+      @if (interactionState.pointsOfInterest().length > 0) {
+        <details class="breakdown">
+          <summary>Points of interest ({{ interactionState.pointsOfInterest().length }})</summary>
+          <ul class="breakdown-list" aria-label="Points of interest">
+            @for (p of interactionState.pointsOfInterest(); track $index) {
+              <li>
+                {{ p.label }}: ({{ fmt(p.x) }}, {{ fmt(p.y) }})
+                <button
+                  type="button"
+                  class="t-btn poi-pin"
+                  (click)="interactionState.togglePin(p)"
+                  [attr.aria-label]="'Pin or unpin ' + p.label"
+                >
+                  Pin
+                </button>
+              </li>
+            }
+          </ul>
+        </details>
+      }
+
+      @for (c of conicCards(); track c.index) {
+        <section class="conic-card" [attr.aria-label]="'Conic properties of f' + (c.index + 1)">
+          <h3 class="conic-card-title">
+            <span class="eval-dot" [style.background]="c.color"></span>
+            f{{ c.index + 1 }}
+          </h3>
+          <dl class="conic-card-list">
+            @for (l of c.lines; track l.label) {
+              <dt>{{ l.label }}</dt>
+              <dd>{{ l.value }}</dd>
+            }
+          </dl>
+        </section>
+      }
+
       <div class="panel-footer">
         <button class="t-btn" (click)="toggleAngleUnit()">Angle: {{ angleUnit() }}</button>
-        <button class="t-btn" (click)="toggleKeyboard()" [class.active]="showKeyboard()">
-          Keyboard
+        <button
+          class="t-btn"
+          (click)="toggleKeyboard()"
+          [class.active]="showKeyboard()"
+          [attr.aria-pressed]="showKeyboard()"
+        >
+          Math keyboard
         </button>
         <button class="t-btn" (click)="share()">Share</button>
         <button class="t-btn" (click)="exportPng()">Export PNG</button>
       </div>
-      <p class="sr-only" role="status" aria-live="polite">{{ shareNotice() }}</p>
-
-      @if (showKeyboard()) {
-        <app-onscreen-keyboard (keyPress)="onKeyPress($event)" (keyAction)="onKeyAction($event)" />
-      }
+      <p class="share-notice" role="status" aria-live="polite">{{ shareNotice() }}</p>
     </div>
   </aside>
 </div>

@@ -66,3 +66,66 @@ describe('computeAreaRegions', () => {
     expect(regions[0].area).toBeCloseTo(2, 0);
   });
 });
+
+describe('computeAreaRegions wave-1 (H4, H26)', () => {
+  const total = (rs: ReturnType<typeof computeAreaRegions>) => rs.reduce((s, r) => s + r.area, 0);
+
+  it('x^2 vs x+2 on [-1, 2] has area 4.5 within 1e-9', () => {
+    const fns = [(x: number) => x * x, (x: number) => x + 2];
+    const inter: IntersectionPoint[] = [
+      { x: -1, y: 1, functionIndices: [0, 1] },
+      { x: 2, y: 4, functionIndices: [0, 1] },
+    ];
+    const rs = computeAreaRegions(fns, inter, -1, 2);
+    expect(Math.abs(total(rs) - 4.5)).toBeLessThan(1e-9);
+    expect(rs.every((r) => r.status === 'ok')).toBe(true);
+  });
+
+  it('an intersection outside [a, b] does not create an out-of-range region (was 29.5 vs 1/6)', () => {
+    const fns = [(x: number) => x * x, (x: number) => x];
+    // true crossings are x=0 and x=1; area over [0, 1] is 1/6, but pass a far-away one too
+    const inter: IntersectionPoint[] = [
+      { x: 0, y: 0, functionIndices: [0, 1] },
+      { x: 1, y: 1, functionIndices: [0, 1] },
+      { x: 5, y: 5, functionIndices: [0, 1] },
+      { x: -3, y: -3, functionIndices: [0, 1] },
+    ];
+    const rs = computeAreaRegions(fns, inter, 0, 1);
+    expect(total(rs)).toBeCloseTo(1 / 6, 9);
+    for (const r of rs) {
+      expect(r.a).toBeGreaterThanOrEqual(0);
+      expect(r.b).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('duplicate / coincident intersections do not create empty regions', () => {
+    const fns = [(x: number) => x * x, (x: number) => x];
+    const inter: IntersectionPoint[] = [
+      { x: 0.5, y: 0.25, functionIndices: [0, 1] },
+      { x: 0.5, y: 0.25, functionIndices: [0, 1] },
+    ];
+    const rs = computeAreaRegions(fns, inter, 0, 1);
+    expect(rs.length).toBe(2);
+    expect(total(rs)).toBeCloseTo(1 / 6, 9);
+  });
+
+  it('propagates divergence: area between 1/x and 0 on [0, 1] is Infinity, status divergent, never 0', () => {
+    const rs = computeAreaRegions([(x) => 1 / x, () => 0], [], 0, 1);
+    expect(rs.length).toBe(1);
+    expect(rs[0].status).toBe('divergent');
+    expect(rs[0].area).toBe(Infinity);
+    expect(rs[0].badPoint).toBeDefined();
+  });
+
+  it('propagates undefined: sqrt(x) vs -sqrt(x) shifted off its domain is NaN, not 0', () => {
+    const rs = computeAreaRegions([(x) => Math.sqrt(x - 5), (x) => Math.sqrt(x - 5) - 1], [], 0, 4);
+    // both curves are undefined on the whole interval, so no region can be formed
+    expect(rs.every((r) => r.status !== 'ok' || Number.isFinite(r.area))).toBe(true);
+    expect(rs.some((r) => r.area === 0 && r.status === 'ok')).toBe(false);
+  });
+
+  it('degenerate interval returns no regions', () => {
+    expect(computeAreaRegions([(x) => x], [], 1, 1)).toEqual([]);
+    expect(computeAreaRegions([(x) => x], [], 2, 1)).toEqual([]);
+  });
+});

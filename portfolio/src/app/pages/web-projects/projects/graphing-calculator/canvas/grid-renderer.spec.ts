@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Viewport } from './viewport';
+import { drawGrid } from './grid-renderer';
 
 // Test helpers
 function niceStep(range: number): number {
@@ -158,5 +159,21 @@ describe('drawGrid', () => {
       method: 'fillText',
       args: expect.arrayContaining(['0']),
     } as unknown as { method: string; args: unknown[] });
+  });
+});
+
+describe('drawGrid hardening', () => {
+  it('terminates for a viewport where x + step === x (1e16)', () => {
+    const ctx = createMockContext();
+    const vp = new Viewport(1e16, 1e16 + 4, -1, 1);
+    drawGrid(ctx, vp, 800, 600);
+    expect(ctx.calls.length).toBeLessThan(5000);
+  });
+
+  it('caps the number of lines for huge ranges relative to step', () => {
+    const ctx = createMockContext();
+    const vp = new Viewport(-1e300, 1e300, -1e300, 1e300);
+    drawGrid(ctx, vp, 800, 600);
+    expect(ctx.calls.length).toBeLessThan(10000);
   });
 });

@@ -80,8 +80,9 @@ export type SolidIssueCode =
   | 'curve-variable' // a curve is not expressed in the integration variable
   | 'undefined-domain' // curve is NaN somewhere in [a, b]
   | 'divergent' // integral diverges / pole in [a, b]
+  | 'inaccurate' // warning: quadrature ran out of budget; the volume is approximate
   | 'curves-cross' // info: region split at crossings
-  | 'axis-inside-region' // warning: axis cuts the region, solid overlaps itself
+  | 'axis-inside-region' // warning: axis cuts the region, solid overlaps itself; error for shells whose sides overlap
   | 'interior-curve'; // info: a selected curve never bounds the region (always dominated)
 
 export interface SolidIssue {

@@ -29,7 +29,7 @@ describe('ValueTable', () => {
     expect(rows[0].input).toBe(0);
     expect(rows[0].output).toBe('0');
     expect(rows[2].input).toBe(2);
-    expect(rows[2].output).toBe('4.000000');
+    expect(rows[2].output).toBe('4');
   });
 
   it('flags a zero step as invalid and produces no rows', () => {
@@ -65,7 +65,7 @@ describe('ValueTable', () => {
     expect(fixture.componentInstance.inputVariable()).toBe('y');
     const rows = fixture.componentInstance.rows();
     expect(rows.length).toBe(11);
-    expect(rows[2].output).toBe('4.000000');
+    expect(rows[2].output).toBe('4');
   });
 
   it('formats the input column like a typed value, trimming trailing zeros', () => {

@@ -8,12 +8,12 @@ import {
   afterRenderEffect,
   ElementRef,
   viewChild,
-  viewChildren,
   AfterViewInit,
   OnDestroy,
   NgZone,
   inject,
   PLATFORM_ID,
+  untracked,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -40,7 +40,7 @@ import { detectConic, detectConicDomain } from './engine/conic-detector';
 import type { ConicInfo } from './engine/conic-detector';
 import { detectAsymptotes } from './engine/asymptote-detector';
 import { drawSolidRegion } from './canvas/solid-region-renderer';
-import { parse } from './engine/parser';
+import { parse, lowercaseExponentWarning } from './engine/parser';
 import type { ExpressionNode } from './engine/parser';
 import {
   evalExpression,
@@ -61,8 +61,15 @@ import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode } from './engine/mode-detector';
 import { FUNCTION_COLORS } from './utils/color';
-import { OnscreenKeyboardComponent } from './keyboard/onscreen-keyboard.component';
-import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
+import { MathInput } from './components/math-input/math-input';
+import {
+  hideMathKeyboard,
+  isMathliveReady,
+  loadMathlive,
+  onMathKeyboardGeometry,
+  onMathKeyboardVisibility,
+  showMathKeyboard,
+} from './components/math-input/mathlive-loader';
 import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
 import { SolidPanelComponent } from './components/solid-panel/solid-panel.component';
 import { ValueTable } from './components/value-table/value-table';
@@ -80,10 +87,20 @@ import {
   type ShareState,
 } from './state/share-state';
 import { formatValue } from './utils/format-value';
+import {
+  conicInfoLines,
+  describeIntegral,
+  areaLabel,
+  areaLimitNotes,
+  limitErrorMessage,
+  regionAreaText,
+  statusValueText,
+  sumRegions,
+  type ResultRow,
+} from './utils/result-format';
 import { downloadCanvasAsPng } from './utils/export-png';
 import type {
   MathExpression,
-  IntegralResult,
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
@@ -95,9 +112,13 @@ const POI_HIT_PX_FINE = 12;
 const POI_HIT_PX_COARSE = 22;
 /** Debounce for recomputing points of interest after a pan/zoom. */
 const POI_RECOMPUTE_DELAY_MS = 150;
+/** Quiet time after the last wheel/key/button view change before the full-resolution redraw. */
+const GESTURE_IDLE_MS = 150;
 /** Movement (screen px) beyond which a single-finger touch commits to panning
  *  instead of holding still to trace a curve. */
 const TOUCH_PAN_THRESHOLD_PX = 10;
+/** Rows longer than this skip the inequality regex split (it is quadratic on long input). */
+const MAX_INEQUALITY_RAW = 500;
 
 /**
  * Rewrites the evaluator's "Unknown variable: 'foo'" into a display message.
@@ -122,10 +143,9 @@ function roundLimit(v: number): number {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    OnscreenKeyboardComponent,
     Solid3DComponent,
     HelpModalComponent,
-    MathRendererComponent,
+    MathInput,
     ConicAssistantComponent,
     SolidPanelComponent,
     ValueTable,
@@ -133,6 +153,7 @@ function roundLimit(v: number): number {
     IconComponent,
     ShortcutsPopover,
   ],
+  host: { '[style.--kb-h.px]': 'kbHeight()' },
   providers: [SolidToolState, GraphInteractionState, UiLayoutState],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
@@ -157,9 +178,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   uiLayout = inject(UiLayoutState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
-  fnInputs = viewChildren<ElementRef<HTMLInputElement>>('fnInput');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
-  solid3dRef = viewChild(Solid3DComponent);
+  // Template ref (not the class token): a class-token query would keep Three.js in the route chunk.
+  solid3dRef = viewChild<Solid3DComponent>('solid3d');
 
   functions = signal<MathExpression[]>([
     {
@@ -177,7 +198,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   activeMultiArea = signal<MultiFunctionAreaConfig | null>(null);
   angleUnit = signal<'deg' | 'rad'>('rad');
   limitErrors = signal<Record<string, boolean>>({});
+  private limitTexts = signal<Record<string, string>>({});
   showKeyboard = signal(false);
+  rowDraggable = signal(true);
+  fnIssues = signal<Record<number, string[]>>({});
+  /** On-screen height of the math keyboard (0 hidden); drives `--kb-h` so the layout makes room. */
+  kbHeight = signal(0);
+  private keyboardUnsub: (() => void) | null = null;
+  private keyboardGeoUnsub: (() => void) | null = null;
   show3DSolid = signal(false);
   showHelp = signal(false);
   showConicAssistant = signal(false);
@@ -223,8 +251,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   evalResults = computed(() => {
-    const point = parseFloat(this.evalPoint());
-    if (isNaN(point)) return [];
+    const point = parseLimitText(this.evalPoint()).value;
+    if (point === null || isNaN(point)) return [];
     const au = this.angleUnit();
     return this.functions()
       .filter((f) => f.visible && f.ast && f.mode !== 'explicit-y')
@@ -259,7 +287,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private renderRequested = false;
   private animFrameId = 0;
-  private pendingRafIds: number[] = [];
   private blurTimerId: ReturnType<typeof setTimeout> | null = null;
   private poiTimer: ReturnType<typeof setTimeout> | null = null;
   private poiKey: string | null = null;
@@ -304,6 +331,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else if (prevWidth !== this.cssWidth || prevHeight !== this.cssHeight) {
       this.viewport.keepScaleOnResize(prevWidth, this.cssWidth, this.cssHeight);
     }
+    this.syncSheetInset();
     this.dpr =
       typeof devicePixelRatio !== 'undefined' && devicePixelRatio > 0
         ? Math.min(2, devicePixelRatio)
@@ -311,6 +339,30 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   private aspectFitted = false;
+
+  /** Fraction of the canvas height already compensated for in the viewport centre. */
+  private appliedInsetFrac = 0;
+
+  /** Covered fraction the viewport should compensate for: only on phones (sheet overlays the
+   *  canvas) and not while the math keyboard shrinks the layout above it. */
+  private targetInsetFrac(): number {
+    if (!this.isBrowser || this.kbHeight() > 0) return 0;
+    if (typeof matchMedia === 'undefined' || !matchMedia('(max-width: 768px)').matches) return 0;
+    return this.uiLayout.sheetCoverFraction();
+  }
+
+  /** Bottom fraction of the 3D view hidden by the mobile sheet. */
+  solidSheetInset = computed(() => this.targetInsetFrac());
+
+  /** Shifts the view so the plot stays centred in the area above the bottom sheet. */
+  private syncSheetInset(): void {
+    const next = untracked(() => this.targetInsetFrac());
+    if (next === this.appliedInsetFrac) return;
+    if (this.cssWidth > 0 && this.cssHeight > 0) {
+      this.viewport.shiftForBottomInset(this.appliedInsetFrac, next, this.cssWidth, this.cssHeight);
+    }
+    this.appliedInsetFrac = next;
+  }
 
   private getCanvasRect(canvas: HTMLCanvasElement): DOMRect {
     if (!this.cachedRect) this.cachedRect = canvas.getBoundingClientRect();
@@ -519,8 +571,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return null;
   });
 
-  results = computed<IntegralResult[]>(() => {
-    const res: IntegralResult[] = [];
+  results = computed<ResultRow[]>(() => {
+    const res: ResultRow[] = [];
     const au = this.angleUnit();
     const intg = this.activeIntegral();
     if (intg) {
@@ -529,13 +581,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const compiled = compileExpression(expr.ast, au);
         const fn = (x: number) => compiled(x, 0);
         const result = integrateAdaptive(fn, intg.a, intg.b);
-        const value =
-          result.status === 'divergent'
-            ? 'diverges'
-            : result.status === 'undefined'
-              ? `undefined near x ≈ ${result.badPoint?.toFixed(4) ?? '?'}`
-              : formatValue(result.value);
-        res.push({ label: `∫ ${expr.raw} dx`, value });
+        const abs =
+          result.status === 'ok' || result.status === 'inaccurate'
+            ? areaSingle(fn, Math.min(intg.a, intg.b), Math.max(intg.a, intg.b))
+            : undefined;
+        res.push(...describeIntegral(expr.raw, intg.a, intg.b, result, abs));
       }
     }
     // Solid-of-revolution / cross-section results are shown inline by <app-solid-panel>
@@ -543,19 +593,88 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     const geom = this.multiAreaGeometry();
     if (geom?.mode === 'multi') {
-      let total = 0;
-      for (const r of geom.regions) total += r.area;
-      const labels = geom.fns.map((f) => f.raw).join(', ');
-      res.push({ label: `A [${labels}]`, value: formatValue(total) });
+      const total = sumRegions(geom.regions);
+      const names = geom.fns.map((f) => `f${this.functions().indexOf(f) + 1}`);
+      res.push({
+        label: areaLabel(geom.a, geom.b, names),
+        value: statusValueText(total.status, total.value),
+        approx: total.status === 'inaccurate',
+        notes: [
+          ...areaLimitNotes(geom.a, geom.b),
+          ...(total.status === 'divergent'
+            ? ['At least one region has infinite area.']
+            : total.status === 'undefined'
+              ? ['The curves are undefined inside at least one region.']
+              : []),
+        ],
+      });
     } else if (geom?.mode === 'single') {
-      const value = areaSingle(geom.fn, geom.a, geom.b);
-      res.push({ label: `A [${geom.expr.raw}]`, value: formatValue(value) });
+      const value = geom.b > geom.a ? areaSingle(geom.fn, geom.a, geom.b) : 0;
+      const name = `f${this.functions().indexOf(geom.expr) + 1}`;
+      res.push({
+        label: areaLabel(geom.a, geom.b, [name]),
+        value: formatValue(value),
+        notes: areaLimitNotes(geom.a, geom.b),
+      });
     }
 
     return res;
   });
 
+  /** Empty-state hint for the area tool until it has two usable curves. */
+  areaHint = computed(() => {
+    const cfg = this.activeMultiArea();
+    if (!cfg) return null;
+    return cfg.functionIndices.length < 2
+      ? 'Select 2 or more curves to see the area between them.'
+      : null;
+  });
+
+  /** Per-region breakdown and intersection list for the area tool (null for single curves). */
+  areaBreakdown = computed(() => {
+    const geom = this.multiAreaGeometry();
+    if (geom?.mode !== 'multi') return null;
+    const name = (i: number) =>
+      `f${geom.fns[i] ? this.functions().indexOf(geom.fns[i]) + 1 : i + 1}`;
+    return {
+      regions: geom.regions.map((r) => ({
+        range: `[${formatValue(r.a)}, ${formatValue(r.b)}]`,
+        pair: `${name(r.topFunctionIndex)} − ${name(r.bottomFunctionIndex)}`,
+        area: regionAreaText(r),
+      })),
+      intersections: geom.intersections.map((p) => ({
+        point: `(${formatValue(p.x)}, ${formatValue(p.y)})`,
+        pair: p.functionIndices.map(name).join(' = '),
+      })),
+    };
+  });
+
+  /** Info cards for recognised conics among the visible implicit rows. */
+  conicCards = computed(() =>
+    this.functions().flatMap((fn, i) => {
+      if (fn.mode !== 'implicit' || !fn.visible || !fn.ast) return [];
+      const info = this.getConicInfo(fn.ast);
+      return info ? [{ index: i, color: fn.color, lines: conicInfoLines(info) }] : [];
+    }),
+  );
+
+  fmt = formatValue;
+
+  /** "use uppercase E" hint for a row's raw text, or null. */
+  expHint(raw: string): string | null {
+    return lowercaseExponentWarning(raw)?.message ?? null;
+  }
+
+  /** Field error text for a limit key (replaces the boolean-only red outline). */
+  limitError(key: string): string | null {
+    return limitErrorMessage(!!this.limitErrors()[key]);
+  }
+
   constructor() {
+    // Start the MathLive chunk (a separate lazy chunk, not in the initial bundle) now rather than
+    // when the first <app-math-input> finishes rendering; the loader memoizes the promise.
+    if (this.isBrowser) void loadMathlive();
+
     // Re-bind whenever the <canvas> element itself changes (dev-server HMR swaps the
     // template DOM without re-running ngAfterViewInit; any future @if around the canvas
     // would do the same). No-op while it's the element we're already bound to.
@@ -567,6 +686,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     });
 
     this.solidToolState.connect(this.functions, this.angleUnit);
+
+    // Snap or keyboard change: re-centre the plot above the sheet and repaint.
+    effect(() => {
+      this.uiLayout.sheetCoverFraction();
+      this.kbHeight();
+      if (!this.isBrowser) return;
+      this.syncSheetInset();
+      this.requestRender();
+    });
     this.uiLayout.connect(
       this.activeIntegral,
       this.showSolidTool,
@@ -646,13 +774,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.keyboardUnsub?.();
+    this.keyboardGeoUnsub?.();
+    if (this.showKeyboard()) hideMathKeyboard();
     this.resizeObserver?.disconnect();
     this.canvasListenerController?.abort();
     this.sheetPointerController?.abort();
     if (this.isBrowser) {
       cancelAnimationFrame(this.animFrameId);
-      for (const id of this.pendingRafIds) cancelAnimationFrame(id);
-      this.pendingRafIds = [];
     }
     if (this.blurTimerId !== null) {
       clearTimeout(this.blurTimerId);
@@ -689,6 +818,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   removeFunction(index: number): void {
+    this.fnIssues.set({});
     this.functions.update((fns) => fns.filter((_, i) => i !== index));
     if (this.functions().length < 2) {
       this.activeMultiArea.set(null);
@@ -741,7 +871,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           };
         }
         if (mode === 'implicit') {
-          const inequalityMatch = raw.match(/(.*?)(>=|<=|>|<)(.*)/);
+          // Length guard: the lazy `.*?` regex is quadratic on long inputs without an operator.
+          const inequalityMatch =
+            raw.length <= MAX_INEQUALITY_RAW ? raw.match(/(.*?)(>=|<=|>|<)(.*)/) : null;
           if (inequalityMatch) {
             const lhs = inequalityMatch[1].trim();
             const op = inequalityMatch[2] as '>' | '<' | '>=' | '<=';
@@ -858,7 +990,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
         if (mode === 'polar') {
           const expr = raw.replace(/^r\s*=\s*/i, '');
-          const { ast, error } = this.parseAndValidate(expr, { x: 1 });
+          // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
+          const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 });
           return {
             ...fn,
             raw,
@@ -1109,13 +1242,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  updateMultiAreaOverlapMode(checked: boolean): void {
-    this.activeMultiArea.update((cfg) =>
-      cfg ? { ...cfg, overlapMode: checked ? 'all' : 'pairwise' } : null,
-    );
-    this.requestRender();
-  }
-
   onCanvasMouseMove(event: MouseEvent): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
@@ -1144,6 +1270,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   private wheelIdleTimerId: ReturnType<typeof setTimeout> | null = null;
 
+  /** Marks a burst of discrete view changes (wheel ticks, key auto-repeat, +/- buttons) as one
+   *  gesture: implicit curves use the coarse grid and POI recompute is skipped until it's quiet. */
+  private beginTransientGesture(): void {
+    this.gestureActive = true;
+    if (this.wheelIdleTimerId !== null) clearTimeout(this.wheelIdleTimerId);
+    this.wheelIdleTimerId = setTimeout(() => {
+      this.wheelIdleTimerId = null;
+      if (!this.isDragging()) this.gestureActive = false;
+      this.requestRender();
+    }, GESTURE_IDLE_MS);
+  }
+
   onCanvasWheel(event: WheelEvent): void {
     event.preventDefault();
     const canvas = this.canvasRef()?.nativeElement;
@@ -1154,16 +1292,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
     this.viewport.zoom(factor, x, y, this.cssWidth, this.cssHeight);
 
-    // A wheel/trackpad zoom fires many events in quick succession; treat it as one
-    // gesture (coarser implicit-curve grid, no POI recompute) until it's quiet.
-    this.gestureActive = true;
-    if (this.wheelIdleTimerId !== null) clearTimeout(this.wheelIdleTimerId);
-    this.wheelIdleTimerId = setTimeout(() => {
-      this.wheelIdleTimerId = null;
-      this.gestureActive = false;
-      this.requestRender();
-    }, 150);
-
+    // A wheel/trackpad zoom fires many events in quick succession.
+    this.beginTransientGesture();
     this.requestRender();
   }
 
@@ -1268,6 +1398,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         return;
     }
     event.preventDefault();
+    this.beginTransientGesture();
     this.requestRender();
   }
 
@@ -1394,6 +1525,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   resetView(): void {
     this.viewport.reset();
     this.viewport.fitAspect(this.cssWidth, this.cssHeight);
+    this.appliedInsetFrac = 0;
+    this.syncSheetInset();
     this.render();
   }
 
@@ -1401,6 +1534,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) return;
     this.viewport.zoom(1.3, this.cssWidth / 2, this.cssHeight / 2, this.cssWidth, this.cssHeight);
+    this.beginTransientGesture();
     this.requestRender();
   }
 
@@ -1414,6 +1548,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.cssWidth,
       this.cssHeight,
     );
+    this.beginTransientGesture();
     this.requestRender();
   }
 
@@ -1500,10 +1635,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       } else {
         this.copyViaFallbackInput(url);
       }
-      this.announceShare('Link copied');
+      this.announceShare('Link copied to clipboard');
     } catch {
       this.copyViaFallbackInput(url);
-      this.announceShare('Link copied');
+      this.announceShare('Link copied to clipboard');
     }
   }
 
@@ -1540,6 +1675,29 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
+    const fallback = {
+      functions: this.functions(),
+      viewport: { ...this.viewport } as Viewport,
+    };
+    try {
+      this.applyShareState(state);
+    } catch {
+      // A crafted link must never leave the app half-restored or unbound.
+      this.functions.set(fallback.functions);
+      this.viewport.xMin = fallback.viewport.xMin;
+      this.viewport.xMax = fallback.viewport.xMax;
+      this.viewport.yMin = fallback.viewport.yMin;
+      this.viewport.yMax = fallback.viewport.yMax;
+      this.activeIntegral.set(null);
+      this.activeMultiArea.set(null);
+      this.showSolidTool.set(false);
+      this.announceShare('Ignored an invalid share link.');
+    }
+    this.clearShareHash();
+    this.requestRender();
+  }
+
+  private applyShareState(state: ShareState): void {
     this.functions.set(
       state.functions.map((f) => ({
         raw: f.raw,
@@ -1556,6 +1714,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.viewport.xMax = state.viewport.xMax;
     this.viewport.yMin = state.viewport.yMin;
     this.viewport.yMax = state.viewport.yMax;
+    // A shared view is shown exactly as saved: don't shift it for the sheet.
+    this.appliedInsetFrac = untracked(() => this.targetInsetFrac());
 
     const tool = state.tool;
     if (tool.active === 'integral' && tool.integral) {
@@ -1578,9 +1738,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.solidToolState.setShape(tool.solid.shape);
       this.solidToolState.setHeightRatio(tool.solid.heightRatio);
     }
-
-    this.clearShareHash();
-    this.requestRender();
   }
 
   /** Drops the `#s=...` fragment from the URL once it's been applied (or rejected), so a
@@ -1613,12 +1770,60 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return false;
   }
 
-  toggleKeyboard(): void {
-    this.showKeyboard.update((v) => !v);
+  async toggleKeyboard(): Promise<void> {
+    if (this.showKeyboard()) {
+      hideMathKeyboard();
+      this.showKeyboard.set(false);
+      return;
+    }
+    if (!(await loadMathlive())) return;
+    this.watchKeyboard();
+    showMathKeyboard();
+    this.showKeyboard.set(true);
+  }
+
+  /** Idempotent: mirrors the keyboard's visibility and height into signals, however it was opened. */
+  private watchKeyboard(): void {
+    if (!isMathliveReady()) return;
+    this.keyboardUnsub ??= onMathKeyboardVisibility((visible) => this.showKeyboard.set(visible));
+    this.keyboardGeoUnsub ??= onMathKeyboardGeometry((h) => {
+      if (h === this.kbHeight()) return;
+      this.kbHeight.set(h);
+      if (h > 0) this.revealFocusedField();
+    });
+  }
+
+  /** After the layout shrinks for the keyboard, keep the field being edited on screen. */
+  private revealFocusedField(): void {
+    requestAnimationFrame(() =>
+      (document.activeElement as HTMLElement | null)
+        ?.closest?.('app-math-input')
+        ?.scrollIntoView({ block: 'nearest' }),
+    );
+  }
+
+  /** Row drag is armed on press: a press inside a math field must select text, not drag the row. */
+  onRowPointerDown(event: PointerEvent): void {
+    const inField = (event.target as Element | null)?.closest?.('app-math-input') != null;
+    this.rowDraggable.set(!inField);
+  }
+
+  /** Text shown in a limit field: what the user typed while it parses to `num` or is still
+   *  incomplete (keeps `pi/2`, and `pi/` mid-typing, instead of echoing 1.5707…), else the number. */
+  limitText(key: string, num: number): string {
+    const typed = this.limitTexts()[key];
+    if (typed === undefined) return String(num);
+    const { value } = parseLimitText(typed);
+    return value === null || value === num ? typed : String(num);
+  }
+
+  onMathIssues(index: number, issues: string[]): void {
+    this.fnIssues.update((m) => ({ ...m, [index]: issues }));
   }
 
   onInputFocus(index: number): void {
     this.focusedInputIndex.set(index);
+    this.watchKeyboard();
   }
 
   onInputBlur(): void {
@@ -1657,6 +1862,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
    *  integral/solid-tool selections pointed at the same underlying function.
    *  Shared by drag-and-drop and the keyboard-accessible move up/down controls. */
   private reorderFunction(sourceIndex: number, targetIndex: number): void {
+    this.fnIssues.set({});
     this.functions.update((fns) => {
       const updated = [...fns];
       const [moved] = updated.splice(sourceIndex, 1);
@@ -1754,73 +1960,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.showConicAssistant.set(false);
   }
 
-  onKeyPress(symbol: string): void {
-    const idx = this.focusedInputIndex();
-    if (idx === null) return;
-    const inputs = this.fnInputs();
-    const inputEl = inputs?.[idx]?.nativeElement;
-    if (!inputEl) return;
-
-    const start = inputEl.selectionStart ?? inputEl.value.length;
-    const end = inputEl.selectionEnd ?? start;
-    const current = this.functions()[idx].raw;
-    const newValue = current.slice(0, start) + symbol + current.slice(end);
-    this.updateExpression(idx, newValue);
-
-    const rafId = requestAnimationFrame(() => {
-      inputEl.selectionStart = inputEl.selectionEnd = start + symbol.length;
-      inputEl.focus();
-    });
-    this.pendingRafIds.push(rafId);
-  }
-
-  onKeyAction(action: 'backspace' | 'left' | 'right' | 'clear'): void {
-    const idx = this.focusedInputIndex();
-    if (idx === null) return;
-    const inputs = this.fnInputs();
-    const inputEl = inputs?.[idx]?.nativeElement;
-    if (!inputEl) return;
-
-    const current = this.functions()[idx].raw;
-
-    if (action === 'clear') {
-      this.updateExpression(idx, '');
-      const rafId = requestAnimationFrame(() => {
-        inputEl.selectionStart = inputEl.selectionEnd = 0;
-        inputEl.focus();
-      });
-      this.pendingRafIds.push(rafId);
-      return;
-    }
-
-    const start = inputEl.selectionStart ?? inputEl.value.length;
-
-    if (action === 'backspace') {
-      if (start > 0) {
-        const newValue = current.slice(0, start - 1) + current.slice(start);
-        this.updateExpression(idx, newValue);
-        const rafId = requestAnimationFrame(() => {
-          inputEl.selectionStart = inputEl.selectionEnd = start - 1;
-          inputEl.focus();
-        });
-        this.pendingRafIds.push(rafId);
-      }
-    } else if (action === 'left') {
-      const rafId = requestAnimationFrame(() => {
-        inputEl.selectionStart = inputEl.selectionEnd = Math.max(0, start - 1);
-        inputEl.focus();
-      });
-      this.pendingRafIds.push(rafId);
-    } else if (action === 'right') {
-      const rafId = requestAnimationFrame(() => {
-        inputEl.selectionStart = inputEl.selectionEnd = Math.min(current.length, start + 1);
-        inputEl.focus();
-      });
-      this.pendingRafIds.push(rafId);
-    }
-  }
-
   private parseLimit(value: string, key: string): number | null {
+    this.limitTexts.update((t) => ({ ...t, [key]: value }));
     const { value: v, invalid } = parseLimitText(value);
     this.limitErrors.update((e) => ({ ...e, [key]: invalid }));
     return v;
@@ -1830,7 +1971,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (!raw) return defaultVal;
     const trimmed = raw.trim();
     if (!trimmed) return defaultVal;
-    const num = parseFloat(trimmed);
+    const num = Number(trimmed);
     if (!isNaN(num)) return num;
     try {
       return evalConstantExpression(trimmed);

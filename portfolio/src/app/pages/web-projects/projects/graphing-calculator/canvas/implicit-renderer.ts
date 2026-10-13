@@ -39,6 +39,8 @@ interface ContourCacheEntry {
   /** Screen-space segments, 4 numbers per segment: x0, y0, x1, y1. */
   segments: Float64Array;
   segmentCount: number;
+  /** Lazily built stroke path for `segments` (absent where Path2D is unavailable). */
+  path?: Path2D;
 }
 
 // Keyed on the eval function's identity (stable across frames when callers pass a
@@ -184,6 +186,13 @@ export function drawImplicitCurve(
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
+  // The Path2D is built once per cache entry, so a redraw that only moves the crosshair
+  // strokes the existing path instead of re-issuing thousands of moveTo/lineTo calls.
+  if (typeof Path2D !== 'undefined') {
+    entry.path ??= buildPath(entry.segments);
+    ctx.stroke(entry.path);
+    return;
+  }
   ctx.beginPath();
   const segs = entry.segments;
   for (let i = 0; i < segs.length; i += 4) {
@@ -191,4 +200,13 @@ export function drawImplicitCurve(
     ctx.lineTo(segs[i + 2], segs[i + 3]);
   }
   ctx.stroke();
+}
+
+function buildPath(segs: Float64Array): Path2D {
+  const path = new Path2D();
+  for (let i = 0; i < segs.length; i += 4) {
+    path.moveTo(segs[i], segs[i + 1]);
+    path.lineTo(segs[i + 2], segs[i + 3]);
+  }
+  return path;
 }

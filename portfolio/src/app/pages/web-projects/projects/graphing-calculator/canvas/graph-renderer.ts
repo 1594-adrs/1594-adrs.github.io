@@ -233,6 +233,21 @@ export function drawExplicitY(
   ctx.stroke();
 }
 
+/** Upper bound of samples when shading a region; keeps a frame bounded for any a/b. */
+const MAX_FILL_STEPS = 4000;
+
+/** Clamps integration limits to the viewport plus one viewport-width of margin on each side;
+ *  only what is on screen is drawn, and absurd limits (1e308) cannot blow up the step count.
+ *  Non-finite limits fall back to the viewport edges. */
+function clampToViewportX(viewport: Viewport, a: number, b: number): [number, number] {
+  const margin = viewport.xMax - viewport.xMin;
+  const lo = viewport.xMin - margin;
+  const hi = viewport.xMax + margin;
+  const clamp = (v: number, fallback: number): number =>
+    Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback;
+  return [clamp(a, lo), clamp(b, hi)];
+}
+
 export function drawIntegralArea(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
@@ -243,30 +258,33 @@ export function drawIntegralArea(
   width: number,
   height: number,
 ): void {
+  [a, b] = clampToViewportX(viewport, a, b);
   const [sa] = viewport.worldToScreen(a, 0, width, height);
   const [sb] = viewport.worldToScreen(b, 0, width, height);
   const [, oy] = viewport.worldToScreen(0, 0, width, height);
 
-  const steps = Math.max(100, Math.abs(sb - sa));
+  const steps = Math.min(MAX_FILL_STEPS, Math.max(100, Math.ceil(Math.abs(sb - sa))));
   const h = (b - a) / steps;
 
   ctx.fillStyle = color + '30';
+  // Non-finite stretches are skipped (never filled as 0): the polygon is closed at the last
+  // valid sample so a diverging/undefined integrand does not look shaded as if valid.
   let drawing = false;
+  let lastSx = 0;
+  const closeShape = (): void => {
+    ctx.lineTo(lastSx, oy);
+    ctx.closePath();
+    ctx.fill();
+    drawing = false;
+  };
   for (let i = 0; i <= steps; i++) {
     const x = a + i * h;
     const y = tryEval(fn, x);
-    const [sx, sy] = viewport.worldToScreen(x, isNaN(y) ? 0 : y, width, height);
-
-    if (isNaN(y)) {
-      if (drawing) {
-        ctx.lineTo(sx, oy);
-        ctx.closePath();
-        ctx.fill();
-        drawing = false;
-      }
+    if (!Number.isFinite(y)) {
+      if (drawing) closeShape();
       continue;
     }
-
+    const [sx, sy] = viewport.worldToScreen(x, y, width, height);
     if (!drawing) {
       ctx.beginPath();
       ctx.moveTo(sx, oy);
@@ -275,12 +293,9 @@ export function drawIntegralArea(
     } else {
       ctx.lineTo(sx, sy);
     }
+    lastSx = sx;
   }
-  if (drawing) {
-    ctx.lineTo(sb, oy);
-    ctx.closePath();
-    ctx.fill();
-  }
+  if (drawing) closeShape();
 
   ctx.save();
   ctx.beginPath();
@@ -314,7 +329,8 @@ export function drawAreaBetween(
   width: number,
   height: number,
 ): void {
-  const steps = Math.max(200, Math.abs(b - a) * 20);
+  [a, b] = clampToViewportX(viewport, a, b);
+  const steps = Math.min(MAX_FILL_STEPS, Math.max(200, Math.abs(b - a) * 20));
   const subIntervals: Array<{ start: number; end: number; topIsUpper: boolean }> = [];
   const crossPoints = findAxisCrossings(
     (x) => tryEval(fUpper, x) - tryEval(fLower, x),
@@ -339,7 +355,10 @@ export function drawAreaBetween(
 
   for (const interval of subIntervals) {
     const { start, end, topIsUpper } = interval;
-    const intervalSteps = Math.max(50, Math.abs(end - start) * 20);
+    const intervalSteps = Math.min(
+      MAX_FILL_STEPS,
+      Math.max(50, Math.ceil(Math.abs(end - start) * 20)),
+    );
     const ih = (end - start) / intervalSteps;
 
     ctx.beginPath();

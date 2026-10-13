@@ -120,3 +120,56 @@ describe('integrateAdaptive', () => {
     expect(elapsedMs).toBeLessThan(3000);
   });
 });
+
+describe('integrateAdaptive wave-1 (H5, H6)', () => {
+  it('1/(1+x^2) on [-1e5, 1e5] converges to atan-based value, status ok (was false divergent)', () => {
+    const r = integrateAdaptive((x) => 1 / (1 + x * x), -1e5, 1e5);
+    expect(r.status).toBe('ok');
+    expect(Math.abs(r.value - 2 * Math.atan(1e5))).toBeLessThan(1e-6);
+    expect(Math.abs(r.value - Math.PI)).toBeLessThan(1e-4);
+  });
+
+  it('1/(1+x^2) on [-1e3, 1e3] and [0, 1e6]', () => {
+    const a = integrateAdaptive((x) => 1 / (1 + x * x), -1e3, 1e3);
+    expect(a.status).toBe('ok');
+    expect(a.value).toBeCloseTo(2 * Math.atan(1e3), 8);
+    const b = integrateAdaptive((x) => 1 / (1 + x * x), 0, 1e6);
+    expect(b.status).toBe('ok');
+    expect(b.value).toBeCloseTo(Math.atan(1e6), 7);
+  });
+
+  it('tan(x) on [0, 3] crosses the pole at pi/2: not ok', () => {
+    const r = integrateAdaptive(Math.tan, 0, 3);
+    expect(r.status).not.toBe('ok');
+    expect(r.status).toBe('divergent');
+    expect(r.badPoint).toBeCloseTo(Math.PI / 2, 3);
+  });
+
+  it('1/x on [-1, 1] is divergent at 0', () => {
+    const r = integrateAdaptive((x) => 1 / x, -1, 1);
+    expect(r.status).toBe('divergent');
+  });
+
+  it('ordinary endpoint singularities stay ok: int_0^1 x^-0.5 = 2, ln(x) = -1', () => {
+    const a = integrateAdaptive((x) => Math.pow(x, -0.5), 0, 1);
+    expect(a.status).toBe('ok');
+    expect(a.value).toBeCloseTo(2, 4);
+    const b = integrateAdaptive(Math.log, 0, 1);
+    expect(b.status).toBe('ok');
+    expect(b.value).toBeCloseTo(-1, 5);
+  });
+
+  it("reports 'inaccurate' (not 'ok') when the error estimate stays above tolerance", () => {
+    // a wildly oscillating integrand that the evaluation budget cannot resolve
+    const r = integrateAdaptive((x) => Math.sin(1 / (x + 1e-9) ** 2), 0, 1, { maxEvals: 600 });
+    expect(r.status).toBe('inaccurate');
+    expect(Number.isFinite(r.value)).toBe(true);
+    expect(r.error).toBeGreaterThan(0);
+  });
+
+  it('smooth integrands remain ok and tight', () => {
+    const r = integrateAdaptive(Math.sin, 0, Math.PI);
+    expect(r.status).toBe('ok');
+    expect(r.value).toBeCloseTo(2, 12);
+  });
+});

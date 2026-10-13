@@ -59,6 +59,14 @@ export class Viewport {
     this.setScale((this.xMax - this.xMin) / prevWidth, width, height);
   }
 
+  /** Moves the plotted content up (growing inset) or down (shrinking inset) so it stays
+   *  centred in the part of the canvas not covered by the bottom sheet. `prevFrac`/`nextFrac`
+   *  are the covered fractions (0..1) of the canvas height. */
+  shiftForBottomInset(prevFrac: number, nextFrac: number, width: number, height: number): void {
+    if (!(width > 0 && height > 0)) return;
+    this.pan(0, (-(nextFrac - prevFrac) * height) / 2, width, height);
+  }
+
   private setScale(unitsPerPx: number, width: number, height: number): void {
     const cx = (this.xMin + this.xMax) / 2;
     const cy = (this.yMin + this.yMax) / 2;

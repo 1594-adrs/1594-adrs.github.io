@@ -416,3 +416,87 @@ describe('compileExpression', () => {
     expect(deg(90, 0)).toBeCloseTo(1, 10);
   });
 });
+
+describe('evaluator wave-1 regressions (H24)', () => {
+  const deg = (src: string, x = 0): number => evalExpression(src, x, undefined, 'deg');
+  const degCompiled = (src: string, x = 0): number => compileExpression(parse(src), 'deg')(x, 0);
+
+  it('degrees: cos(90) is exactly 0 and sin(180) is exactly 0 (interpreted and compiled)', () => {
+    for (const run of [deg, degCompiled]) {
+      expect(run('cos(90)')).toBe(0);
+      expect(run('sin(180)')).toBe(0);
+      expect(run('sin(90)')).toBe(1);
+      expect(run('cos(180)')).toBe(-1);
+      expect(run('sin(270)')).toBe(-1);
+      expect(run('cos(360)')).toBe(1);
+    }
+  });
+
+  it('degrees: tan(90) is undefined instead of 1.6e16, tan(180) is 0', () => {
+    for (const run of [deg, degCompiled]) {
+      expect(run('tan(90)')).toBeNaN();
+      expect(run('tan(270)')).toBeNaN();
+      expect(run('tan(-90)')).toBeNaN();
+      expect(run('tan(180)')).toBe(0);
+      expect(run('tan(45)')).toBeCloseTo(1, 12);
+    }
+  });
+
+  it('degrees: reduces mod 360 so large and negative angles stay accurate', () => {
+    expect(deg('sin(36030)')).toBeCloseTo(0.5, 12); // 36030 = 100*360 + 30
+    expect(deg('cos(-60)')).toBeCloseTo(0.5, 12);
+    expect(deg('sin(-30)')).toBeCloseTo(-0.5, 12);
+  });
+
+  it('degrees: sec/csc/cot at multiples of 90', () => {
+    expect(deg('cot(90)')).toBe(0);
+    expect(deg('sec(0)')).toBe(1);
+    expect(deg('csc(0)')).toBe(Infinity);
+    expect(deg('cot(0)')).toBe(Infinity);
+  });
+
+  it('degrees: powered trig uses the exact variant too', () => {
+    expect(deg('cos^2(90)')).toBe(0);
+    expect(deg('sin^2(90)')).toBe(1);
+  });
+
+  it('radians are unchanged', () => {
+    expect(evalExpression('sin(pi)', 0)).toBeCloseTo(0, 12);
+    expect(evalExpression('sin(pi)', 0)).not.toBe(0);
+    expect(evalExpression('cos(0)', 0)).toBe(1);
+  });
+
+  it('ncr(200,2) = 19900, ncr(52,5) = 2598960, ncr(5,0) = 1, ncr(5,5) = 1', () => {
+    expect(evalExpression('ncr(200,2)', 0)).toBe(19900);
+    expect(evalExpression('ncr(52,5)', 0)).toBe(2598960);
+    expect(evalExpression('ncr(5,0)', 0)).toBe(1);
+    expect(evalExpression('ncr(5,5)', 0)).toBe(1);
+    expect(evalExpression('ncr(100,50)', 0)).toBeCloseTo(1.0089134454556419e29, -15);
+  });
+
+  it('ncr/npr reject invalid arguments and overflow to Infinity quickly', () => {
+    expect(evalExpression('ncr(5,6)', 0)).toBeNaN();
+    expect(evalExpression('ncr(-1,0)', 0)).toBeNaN();
+    expect(evalExpression('ncr(5.5,2)', 0)).toBeNaN();
+    expect(evalExpression('ncr(5,-1)', 0)).toBeNaN();
+    const t = performance.now();
+    expect(evalExpression('ncr(1000000000000,500000000000)', 0)).toBe(Infinity);
+    expect(performance.now() - t).toBeLessThan(100);
+  });
+
+  it('npr(200,2) = 39800, npr(5,2) = 20, npr(5,0) = 1', () => {
+    expect(evalExpression('npr(200,2)', 0)).toBe(39800);
+    expect(evalExpression('npr(5,2)', 0)).toBe(20);
+    expect(evalExpression('npr(5,0)', 0)).toBe(1);
+    expect(evalExpression('npr(3,4)', 0)).toBeNaN();
+  });
+
+  it('gamma at non-positive integers is NaN; elsewhere unchanged', () => {
+    expect(evalExpression('gamma(0)', 0)).toBeNaN();
+    expect(evalExpression('gamma(-1)', 0)).toBeNaN();
+    expect(evalExpression('gamma(-7)', 0)).toBeNaN();
+    expect(evalExpression('gamma(5)', 0)).toBeCloseTo(24, 9);
+    expect(evalExpression('gamma(0.5)', 0)).toBeCloseTo(Math.sqrt(Math.PI), 9);
+    expect(evalExpression('gamma(-0.5)', 0)).toBeCloseTo(-2 * Math.sqrt(Math.PI), 9);
+  });
+});

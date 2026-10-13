@@ -10,16 +10,16 @@
   color: var(--color-corruption);
 }
 .functions-list {
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 .function-row {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  padding: 5px 8px;
+  padding: 4px;
   border-radius: 6px;
   transition: background 0.15s;
   gap: 6px;
@@ -30,7 +30,7 @@
 .function-row.selected {
   background: rgba(255, 255, 255, 0.04);
   border-left: 2px solid var(--color-primary);
-  padding-left: 6px;
+  padding-left: 2px;
 }
 .fn-gutter {
   display: flex;
@@ -68,10 +68,11 @@
   background: var(--dot-color, transparent);
 }
 .visibility-dot:not(.visible) {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 .visibility-dot:not(.visible)::before {
   background: transparent;
+  border-style: dashed;
 }
 .visibility-dot:hover {
   opacity: 1;
@@ -87,23 +88,6 @@
 .fn-expression {
   min-width: 0;
   position: relative;
-}
-.math-rendered {
-  font-family: 'Cambria Math', 'Latin Modern Math', serif;
-  font-size: 14px;
-  cursor: text;
-  padding: 2px 0;
-  min-height: 24px;
-  display: flex;
-  align-items: center;
-  /* Long expressions scroll inside their column instead of running under the buttons. */
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-.math-rendered:hover {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 4px;
 }
 .fn-input {
   width: 100%;
@@ -132,15 +116,6 @@
   border-color: var(--color-primary);
   box-shadow: 0 0 0 1px rgba(0, 255, 136, 0.1);
 }
-.fn-input.hidden-input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  width: 0;
-  height: 0;
-  padding: 0;
-  border: none;
-}
 .fn-input::placeholder {
   color: var(--color-text-muted);
   opacity: 0.6;
@@ -148,7 +123,19 @@
 .fn-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
+}
+/* Up/down stacked on fine pointers to give the expression the width. */
+.move-stack {
+  display: flex;
+  flex-direction: column;
+}
+.move-stack .action-btn {
+  height: 13px;
+}
+.action-slot {
+  visibility: hidden;
+  pointer-events: none;
 }
 .action-btn {
   background: none;
@@ -210,20 +197,10 @@
   align-items: center;
   gap: 0.2rem;
 }
-.range-input-inline {
-  width: 48px;
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  color: var(--color-text);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 11px;
-  padding: 1px 4px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.range-input-inline:focus {
-  border-color: var(--color-primary);
+.range-math {
+  flex: 1;
+  min-width: 56px;
+  max-width: 110px;
 }
 
 /* Touch target >=44x44px for row action buttons and text inputs on coarse pointers. */
@@ -233,15 +210,20 @@
     min-width: 44px;
     min-height: 44px;
   }
-  .fn-input,
-  .range-input-inline {
+  .fn-input {
     min-height: 44px;
+  }
+  .move-stack {
+    flex-direction: row;
+  }
+  .move-stack .action-btn {
+    height: auto;
   }
 }
 
 @media (max-width: 375px) {
   .function-row {
-    grid-template-columns: 40px 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     padding: 4px;
     gap: 4px;
   }
@@ -249,7 +231,7 @@
 
 @media (pointer: coarse) {
   .function-row {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .visibility-dot::before {
     width: 20px;

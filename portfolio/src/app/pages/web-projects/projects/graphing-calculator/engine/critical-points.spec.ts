@@ -4,6 +4,7 @@ import {
   findExtrema,
   findCriticalPoints,
   computePointsOfInterest,
+  MAX_CRITICAL_POINTS,
 } from './critical-points';
 
 describe('critical-points', () => {
@@ -88,5 +89,39 @@ describe('critical-points', () => {
       expect(points.every((p) => !p.label.includes('intersection'))).toBe(true);
       expect(points.length).toBe(3);
     });
+  });
+});
+
+describe('critical-points wave-1 (H25)', () => {
+  it('f(x) = 0 on [-5, 5] has no roots (was 231) and no extrema', () => {
+    expect(findRoots(() => 0, -5, 5)).toEqual([]);
+    expect(findExtrema(() => 0, -5, 5)).toEqual([]);
+    expect(findCriticalPoints(() => 0, -5, 5)).toEqual([]);
+  });
+
+  it('a nonzero constant has no critical points', () => {
+    expect(findCriticalPoints(() => 3, -5, 5)).toEqual([]);
+  });
+
+  it('a flat stretch counts once: max(0, x) has a single root-run entry', () => {
+    const pts = findCriticalPoints((x) => Math.max(0, x), -5, 5);
+    expect(pts.filter((p) => p.kind === 'root').length).toBe(1);
+    expect(pts.filter((p) => p.kind !== 'root').length).toBe(0);
+  });
+
+  it('floating-point noise on a flat curve produces no extrema (was 162)', () => {
+    expect(findExtrema((x) => 1e-14 * Math.sin(1000 * x), -5, 5)).toEqual([]);
+  });
+
+  it('caps a rapidly oscillating curve at MAX_CRITICAL_POINTS, still sorted by x', () => {
+    const pts = findCriticalPoints((x) => Math.sin(100 * x), -5, 5);
+    expect(pts.length).toBe(MAX_CRITICAL_POINTS);
+    for (let i = 1; i < pts.length; i++) expect(pts[i].x).toBeGreaterThanOrEqual(pts[i - 1].x);
+  });
+
+  it('real extrema of small-amplitude curves are still found', () => {
+    const pts = findExtrema((x) => 1e-3 * x * x, -5, 5);
+    expect(pts.length).toBe(1);
+    expect(pts[0].kind).toBe('min');
   });
 });

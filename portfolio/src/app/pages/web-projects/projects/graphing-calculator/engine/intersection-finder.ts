@@ -1,45 +1,9 @@
+import { bisectSignChange, goldenSectionMinimize, ROOT_RESIDUAL_REL } from './numeric-utils';
+
 export interface IntersectionPoint {
   x: number;
   y: number;
   functionIndices: number[];
-}
-
-// A diff jump is treated as passing through a pole (not a genuine crossing)
-// when it's either absurdly large outright, or wildly larger than the
-// surrounding, otherwise-well-behaved samples.
-const POLE_ABS_THRESHOLD = 1e6;
-const POLE_NEIGHBOR_RATIO = 30;
-
-/** Minimizes a unimodal function on [lo, hi] via golden-section search. */
-function goldenSectionMinimize(
-  f: (x: number) => number,
-  lo: number,
-  hi: number,
-  iterations = 60,
-): number {
-  const gr = (Math.sqrt(5) - 1) / 2;
-  let a = lo;
-  let b = hi;
-  let c = b - gr * (b - a);
-  let d = a + gr * (b - a);
-  let fc = f(c);
-  let fd = f(d);
-  for (let i = 0; i < iterations; i++) {
-    if (fc < fd) {
-      b = d;
-      d = c;
-      fd = fc;
-      c = b - gr * (b - a);
-      fc = f(c);
-    } else {
-      a = c;
-      c = d;
-      fc = fd;
-      d = a + gr * (b - a);
-      fd = f(d);
-    }
-  }
-  return (a + b) / 2;
 }
 
 export function findIntersections(
@@ -83,31 +47,17 @@ export function findIntersections(
         diffs.push(validI && validJ ? vi - vj : null);
       }
 
-      /** Median |diff| of a few samples straddling `i` (excluding it) — a "normal" baseline. */
-      function neighborScale(i: number, exclude: number[]): number {
-        const vals: number[] = [];
-        for (let o = 3; o <= 8; o++) {
-          for (const k of [i - o, i + o]) {
-            if (k < 0 || k >= diffs.length || exclude.includes(k)) continue;
-            const d = diffs[k];
-            if (d !== null && isFinite(d)) vals.push(Math.abs(d));
-          }
-        }
-        if (vals.length === 0) return 0;
-        vals.sort((x1, x2) => x1 - x2);
-        return vals[Math.floor(vals.length / 2)];
+      // Coincident curves (diff ~ 0 on every sample where both are defined) have no discrete
+      // intersections - skip them instead of reporting one point per sample.
+      let validCount = 0;
+      let zeroCount = 0;
+      for (let i = 0; i <= steps; i++) {
+        const d = diffs[i];
+        if (d === null) continue;
+        validCount++;
+        if (Math.abs(d) <= 1e-9 * Math.max(1, Math.abs(yI[i] ?? 0))) zeroCount++;
       }
-
-      /** Whether the sign change straddling sample `i` is a pole discontinuity, not a real crossing. */
-      function isPoleJump(i: number): boolean {
-        const dPrev = diffs[i - 1];
-        const dCur = diffs[i];
-        if (dPrev === null || dCur === null) return true;
-        const big = Math.max(Math.abs(dPrev), Math.abs(dCur));
-        if (big > POLE_ABS_THRESHOLD) return true;
-        const scale = neighborScale(i, [i - 1, i]);
-        return scale > 0 && big > scale * POLE_NEIGHBOR_RATIO;
-      }
+      if (validCount > 0 && zeroCount === validCount) continue;
 
       const found: Array<{ x: number; y: number }> = [];
 
@@ -150,29 +100,55 @@ export function findIntersections(
           } catch {
             bj = NaN;
           }
-          if (isFinite(bi) && isFinite(bj) && Math.abs(bi - bj) < 1e-6) {
+          if (
+            isFinite(bi) &&
+            isFinite(bj) &&
+            Math.abs(bi - bj) <= ROOT_RESIDUAL_REL * Math.max(1, Math.abs(bi))
+          ) {
             found.push({ x: hi, y: bi });
           }
         }
         prevBothValid = bothValid;
       }
 
-      // Exact zeros and sign changes, skipping pole jumps (e.g. tan(x) vs 1:
-      // the huge +Infinity -> -Infinity jump at x=pi/2 is not a crossing).
+      // Exact zeros and sign changes. Each sign change is bisected on diff = fnI - fnJ and kept
+      // only when the residual there is negligible relative to the curves' magnitude: a pole jump
+      // (tan(x) vs 1 at x=pi/2) or a step discontinuity never converges to a small residual, while
+      // a genuine crossing of a steep or distant curve (x^2 vs 2 on [-100, 100], exp(x) vs 1000)
+      // always does. A run of consecutive zero samples (flat overlap) is reported once.
+      const diffAt = (x: number): number => {
+        let vi: number, vj: number;
+        try {
+          vi = fnI(x);
+        } catch {
+          vi = NaN;
+        }
+        try {
+          vj = fnJ(x);
+        } catch {
+          vj = NaN;
+        }
+        return vi - vj;
+      };
+      let prevWasZero = false;
       for (let i = 0; i <= steps; i++) {
         const dCur = diffs[i];
-        if (dCur === null) continue;
-        if (Math.abs(dCur) < EPS) {
-          found.push({ x: xs[i], y: yI[i]! });
+        if (dCur === null) {
+          prevWasZero = false;
           continue;
         }
+        if (Math.abs(dCur) < EPS) {
+          if (!prevWasZero) found.push({ x: xs[i], y: yI[i]! });
+          prevWasZero = true;
+          continue;
+        }
+        prevWasZero = false;
         if (i === 0) continue;
         const dPrev = diffs[i - 1];
         if (dPrev === null) continue;
         if (dPrev * dCur < 0) {
-          if (isPoleJump(i)) continue;
-          const t = dPrev / (dPrev - dCur);
-          const rootX = xs[i - 1] + t * h;
+          const rootX = bisectSignChange(diffAt, xs[i - 1], xs[i]);
+          if (rootX === null) continue;
           let rvi: number, rvj: number;
           try {
             rvi = fnI(rootX);
@@ -184,10 +160,9 @@ export function findIntersections(
           } catch {
             rvj = NaN;
           }
-          // Guards against a bisection that converges onto the pole itself
-          // (where the interpolated x lands near a singularity rather than
-          // an actual root, so f no longer -> the same value on both sides).
-          if (!isFinite(rvi) || !isFinite(rvj) || Math.abs(rvi - rvj) > 0.05) continue;
+          if (!isFinite(rvi) || !isFinite(rvj)) continue;
+          const tolerance = ROOT_RESIDUAL_REL * Math.max(1, Math.abs(rvi), Math.abs(rvj));
+          if (Math.abs(rvi - rvj) > tolerance) continue;
           found.push({ x: rootX, y: rvi });
         }
       }
@@ -238,7 +213,7 @@ export function findIntersections(
           vj = NaN;
         }
         if (!isFinite(vi) || !isFinite(vj)) continue;
-        if (Math.abs(vi - vj) > 1e-6) continue;
+        if (Math.abs(vi - vj) > ROOT_RESIDUAL_REL * Math.max(1, Math.abs(vi))) continue;
         found.push({ x: xMin, y: vi });
       }
 

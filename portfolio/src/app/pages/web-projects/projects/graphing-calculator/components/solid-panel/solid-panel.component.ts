@@ -1,4 +1,6 @@
+import { formatValue } from '../../utils/format-value';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { MathInput } from '../math-input/math-input';
 import { IntegralFormulaComponent } from '../integral-formula/integral-formula.component';
 import { SolidToolState } from '../../state/solid-tool.state';
 import type { CrossSectionShape, SolidMethod } from '../../engine/solids/solid.types';
@@ -20,13 +22,6 @@ const SHAPE_LABELS: Record<CrossSectionShape, string> = {
   semicircle: 'Semicircle',
 };
 
-function formatValue(v: number): string {
-  if (Number.isNaN(v)) return 'undefined';
-  if (Math.abs(v) < 1e-10) return '0';
-  if (Math.abs(v) >= 1e12 || Math.abs(v) < 0.001) return v.toExponential(3);
-  return v.toFixed(6);
-}
-
 /**
  * Tool panel for "solids by integration": method selection, curve/bounds/axis inputs, inline
  * validation, the volume result, and the sweep (Play/Pause/Reset) controls. Reads/writes
@@ -35,7 +30,7 @@ function formatValue(v: number): string {
 @Component({
   selector: 'app-solid-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IntegralFormulaComponent],
+  imports: [IntegralFormulaComponent, MathInput],
   templateUrl: './solid-panel.component.html',
   styleUrl: './solid-panel.component.css',
 })

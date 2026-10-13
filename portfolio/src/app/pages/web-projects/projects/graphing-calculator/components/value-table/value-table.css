@@ -9,13 +9,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.3rem;
+  margin-bottom: 8px;
 }
 .range-label {
   display: block;
-  font-size: 10px;
+  font-size: 11px;
+  text-transform: uppercase;
   color: var(--color-text-muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 .action-btn {
   background: none;
@@ -33,26 +34,30 @@
   background: rgba(255, 255, 255, 0.05);
 }
 .value-table-controls {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 8px;
 }
 .range-field-inline {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 8px;
 }
 .range-input-inline {
-  width: 52px;
+  box-sizing: border-box;
+  flex: 1;
+  width: 100%;
+  min-width: 6ch;
+  min-height: 1.9rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--color-border);
-  border-radius: 3px;
+  border-radius: 4px;
   color: var(--color-text);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 10px;
-  padding: 1px 4px;
+  font-family: var(--font-family);
+  font-size: 13px;
+  padding: 4px 6px;
   outline: none;
   transition: border-color 0.15s;
 }
@@ -62,29 +67,34 @@
 .range-input-inline[aria-invalid='true'] {
   border-color: var(--color-corruption);
 }
+.range-math {
+  display: block;
+  flex: 1;
+  min-width: 6ch;
+}
 .fn-error {
-  margin: 2px 0 0;
-  font-size: 10px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--color-corruption);
 }
 .value-table-scroll {
   max-height: 220px;
   overflow-y: auto;
-  margin-top: 0.4rem;
+  margin-top: 8px;
   border-top: 1px solid var(--color-border);
 }
 .value-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 11px;
+  font-family: var(--font-family);
+  font-size: 12px;
 }
 .value-table caption {
   caption-side: top;
   text-align: left;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--color-text-muted);
-  padding: 0.3rem 0 0.2rem;
+  padding: 4px 0;
 }
 .value-table th,
 .value-table td {
@@ -108,4 +118,16 @@
     min-width: 44px;
     min-height: 44px;
   }
+}
+
+.value-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.value-table-notice {
+  font-size: 12px;
+  color: var(--color-text-muted);
 }

@@ -9,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { evalExpression, evaluate } from '../engine/evaluator';
+import { compileExpression } from '../engine/evaluator';
 import { solveConicForY } from '../engine/conic-solver';
 import { parseLimitText, type ParsedLimit } from '../engine/parse-limit';
 import { computeSolid } from '../engine/solids';
@@ -26,10 +26,10 @@ import type {
 import type { DetectedCurveMode } from '../engine/mode-detector';
 import type { MathExpression } from '../models/calculator.models';
 
-export type SolidFieldKey = 'curves' | 'a' | 'b' | 'axis' | 'shape' | 'ratio';
+type SolidFieldKey = 'curves' | 'a' | 'b' | 'axis' | 'shape' | 'ratio';
 
 /** One row of the curve-selection checklist rendered by the solid panel. */
-export interface SolidCurveOption {
+interface SolidCurveOption {
   index: number;
   fn: MathExpression;
   selected: boolean;
@@ -346,11 +346,13 @@ function buildCurve(fn: MathExpression, index: number, au: 'deg' | 'rad'): Solid
   const label = `f${index + 1}`;
   if (fn.mode === 'explicit' && fn.ast) {
     const ast = fn.ast;
-    return { fn: (x) => evalExpression(ast, x, undefined, au), ast, label, color: fn.color };
+    const compiled = compileExpression(ast, au);
+    return { fn: (x) => compiled(x, NaN), ast, label, color: fn.color };
   }
   if (fn.mode === 'explicit-y' && fn.ast) {
     const ast = fn.ast;
-    return { fn: (y) => evaluate(ast, { y }, au), ast, label, color: fn.color };
+    const compiled = compileExpression(ast, au);
+    return { fn: (y) => compiled(NaN, y), ast, label, color: fn.color };
   }
   if (fn.mode === 'implicit' && fn.ast) {
     const branches = solveConicForY(fn.ast);
@@ -359,8 +361,10 @@ function buildCurve(fn: MathExpression, index: number, au: 'deg' | 'rad'): Solid
     return { fn: (x) => branchFn(x) ?? NaN, ast: null, label, color: fn.color };
   }
   if (fn.mode === 'parametric' && fn.paramX && fn.paramY) {
-    const evalX = (t: number) => evaluate(fn.paramX!, { x: t, t }, au);
-    const evalY = (t: number) => evaluate(fn.paramY!, { x: t, t }, au);
+    const compiledX = compileExpression(fn.paramX, au);
+    const compiledY = compileExpression(fn.paramY, au);
+    const evalX = (t: number) => compiledX(t, NaN);
+    const evalY = (t: number) => compiledY(t, NaN);
     const tMin = evalRangeOrDefault(fn.tMin, 0);
     const tMax = evalRangeOrDefault(fn.tMax, 2 * Math.PI);
     const pts = samplePoints(evalX, evalY, tMin, tMax);
@@ -368,7 +372,8 @@ function buildCurve(fn: MathExpression, index: number, au: 'deg' | 'rad'): Solid
   }
   if (fn.mode === 'polar' && fn.ast) {
     const ast = fn.ast;
-    const evalR = (theta: number) => evalExpression(ast, theta, undefined, au);
+    const compiledR = compileExpression(ast, au);
+    const evalR = (theta: number) => compiledR(theta, NaN);
     const thetaMin = evalRangeOrDefault(fn.thetaMin, 0);
     const thetaMax = evalRangeOrDefault(fn.thetaMax, 2 * Math.PI);
     const pts = samplePoints(

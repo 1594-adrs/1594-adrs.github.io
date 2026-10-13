@@ -51,6 +51,55 @@ function sampleCurve(fn: (t: number) => number, a: number, b: number, n: number)
 }
 
 /**
+ * Whether a shell spec whose axis lies strictly inside (a, b) revolves two overlapping sides onto
+ * each other: at distance r from the axis the region occupies the y-interval of t = k - r and the
+ * one of t = k + r, and where those intervals intersect the solid is only one layer thick while the
+ * shell sum 2*pi*|t - k|*(U - L) counts both. The disk/washer method models that union; for shells
+ * there is no single-integral formula, so such specs are rejected (see computeSolid) instead of
+ * returning a volume that is too large. Sides that never overlap (e.g. one above and one below
+ * the x-axis) sum correctly and stay valid.
+ */
+export function shellAxisOverlap(spec: SolidSpec): boolean {
+  if (spec.method !== 'shell' || !spec.axis || spec.curves.length === 0) return false;
+  const k = spec.axis.value;
+  const rMax = Math.min(k - spec.a, spec.b - k);
+  if (!(rMax > 0)) return false;
+
+  const interval = (t: number): [number, number] | null => {
+    let lo = spec.curves.length === 1 ? 0 : Infinity;
+    let hi = spec.curves.length === 1 ? 0 : -Infinity;
+    let any = spec.curves.length === 1;
+    for (const curve of spec.curves) {
+      let v: number;
+      try {
+        v = curve.fn(t);
+      } catch {
+        continue;
+      }
+      if (!Number.isFinite(v)) continue;
+      any = true;
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    return any ? [lo, hi] : null;
+  };
+
+  for (let i = 1; i <= SAMPLE_COUNT; i++) {
+    const r = (rMax * i) / SAMPLE_COUNT;
+    const left = interval(k - r);
+    const right = interval(k + r);
+    if (!left || !right) continue;
+    const overlap = Math.min(left[1], right[1]) - Math.max(left[0], right[0]);
+    const scale = Math.max(1, Math.abs(left[1] - left[0]), Math.abs(right[1] - right[0]));
+    if (overlap > 1e-9 * scale) return true;
+  }
+  return false;
+}
+
+export const SHELL_AXIS_OVERLAP_MESSAGE =
+  'The axis passes through the region and both sides overlap when revolved, so the shell method would count the overlap twice. Use the disk/washer method or move the axis outside the interval.';
+
+/**
  * Validates a solid-of-revolution / cross-section spec, producing English,
  * user-facing issues. Static (structural) checks run first; sampling-based
  * checks (domain, divergence, crossings, axis placement) only run when there
@@ -273,10 +322,14 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
     }
 
     if (axisInside) {
+      // Shell + overlapping sides cannot be computed correctly (see shellAxisOverlap): block it.
+      const blocking = spec.method === 'shell' && shellAxisOverlap(spec);
       issues.push({
         code: 'axis-inside-region',
-        severity: 'warning',
-        message: 'The axis passes through the region — the solid may overlap itself.',
+        severity: blocking ? 'error' : 'warning',
+        message: blocking
+          ? SHELL_AXIS_OVERLAP_MESSAGE
+          : 'The axis passes through the region — the solid may overlap itself.',
         field: 'axis',
       });
     }

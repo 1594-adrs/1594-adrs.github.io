@@ -42,3 +42,32 @@ describe('recognizeExact', () => {
     expect(recognizeExact(0.5)).toBe('1/2');
   });
 });
+
+describe('recognizeExact false positives (H13)', () => {
+  it('rejects large arbitrary values instead of fitting a far-fetched closed form', () => {
+    expect(recognizeExact(123456.789)).toBeNull();
+    expect(recognizeExact(1e6 + 0.123)).toBeNull();
+  });
+
+  it('keeps the false-positive rate negligible on random values in [1e3, 1e6]', () => {
+    let seed = 12345;
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    let hits = 0;
+    const n = 4000;
+    for (let i = 0; i < n; i++) {
+      const v = 1e3 * Math.pow(1e3, rand());
+      if (recognizeExact(v) !== null) hits++;
+    }
+    // Was 3.7% on [1e3, 1e4] and 94% on [1e5, 1e6].
+    expect(hits / n).toBeLessThan(0.005);
+  });
+
+  it('still recognises genuine moderate-size forms', () => {
+    expect(recognizeExact(Math.PI * 16)).toBe('16π');
+    expect(recognizeExact(900)).toBe('900');
+    expect(recognizeExact((256 * Math.PI) / 15)).toBe('256π/15');
+  });
+});

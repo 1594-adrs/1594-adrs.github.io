@@ -21,7 +21,7 @@ import { buildLoft } from './loft';
  *   lofted into a closed mesh.
  */
 
-export interface SolidMeshOptions {
+interface SolidMeshOptions {
   /** Segments around the axis of revolution (phi resolution). */
   radialSegments?: number;
   /** Sampling budget along t, distributed across pieces by piece length. */

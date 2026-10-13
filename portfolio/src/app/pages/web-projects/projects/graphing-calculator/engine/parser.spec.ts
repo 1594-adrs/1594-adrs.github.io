@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { parse, clearAstCache } from './parser';
+import {
+  parse,
+  clearAstCache,
+  ParseError,
+  MAX_EXPR_LENGTH,
+  lowercaseExponentWarning,
+} from './parser';
 import { evaluate } from './evaluator';
 
 afterEach(() => {
@@ -585,7 +591,10 @@ describe('parser', () => {
 
   describe('complexity limit', () => {
     it('should throw on expression exceeding 500 nodes', () => {
-      const expr = Array(251).fill('1+').join('') + '1';
+      // The 500-character cap fits ~250 '1+' terms (501 chars), so reach >500 nodes with
+      // implicit multiplication: 'xy...' is one variable node per char plus one product node each.
+      const expr = 'xy'.repeat(150);
+      expect(expr.length).toBeLessThanOrEqual(500);
       expect(() => parse(expr)).toThrow('Expression too complex');
     });
   });
@@ -624,5 +633,65 @@ describe('parser', () => {
     it('should leave E followed by a non-digit as an unknown variable', () => {
       expect(() => evaluate(parse('5E+x'), {})).toThrow();
     });
+  });
+});
+
+describe('parser hardening (H12, H23)', () => {
+  it('rejects expressions longer than MAX_EXPR_LENGTH with a ParseError', () => {
+    expect(MAX_EXPR_LENGTH).toBe(500);
+    const long = 'x+'.repeat(300) + 'x';
+    expect(() => parse(long)).toThrow(ParseError);
+    expect(() => parse('x'.repeat(MAX_EXPR_LENGTH + 1))).toThrow(/too long/);
+    expect(() => parse('1+'.repeat(100) + '1')).not.toThrow();
+  });
+
+  it('turns 80k repetitions of "sin^(" into an immediate ParseError, not a multi-second scan', () => {
+    const start = performance.now();
+    expect(() => parse('sin^('.repeat(80000))).toThrow(ParseError);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
+  it('gives a ParseError (never a RangeError) for deep nesting', () => {
+    const depth = 240; // within the 500 char limit, beyond the nesting limit
+    expect(() => parse('('.repeat(depth) + '1' + ')'.repeat(depth))).toThrow(ParseError);
+    expect(() => parse('-'.repeat(400) + 'x')).toThrow(ParseError);
+    expect(() => parse('('.repeat(5000) + '1' + ')'.repeat(5000))).toThrow(ParseError);
+    expect(() => parse('('.repeat(30) + 'x' + ')'.repeat(30))).not.toThrow();
+  });
+
+  it('keeps powered-function groups working after the O(n) rewrite', () => {
+    expect(evaluate(parse('sin^(2)(1)'), {})).toBeCloseTo(Math.sin(1) ** 2, 12);
+    expect(evaluate(parse('sin^(1/(1+1))(1)'), {})).toBeCloseTo(Math.sqrt(Math.sin(1)), 12);
+    expect(evaluate(parse('(2)(3)'), {})).toBe(6);
+    expect(evaluate(parse('sin^(2)(1)(2)'), {})).toBeCloseTo(2 * Math.sin(1) ** 2, 12);
+  });
+
+  it('rejects malformed numbers: 1.2.3, a lone dot, 1..2', () => {
+    expect(() => parse('1.2.3')).toThrow(ParseError);
+    expect(() => parse('.')).toThrow(ParseError);
+    expect(() => parse('..')).toThrow(ParseError);
+    expect(() => parse('1..2')).toThrow(ParseError);
+    expect(() => parse('2x.')).toThrow(ParseError);
+  });
+
+  it('still accepts .5, 5. and 2.5E3', () => {
+    expect(evaluate(parse('.5'), {})).toBe(0.5);
+    expect(evaluate(parse('5.'), {})).toBe(5);
+    expect(evaluate(parse('2.5E3'), {})).toBe(2500);
+  });
+
+  it('warns about lowercase-e exponents without changing how they evaluate', () => {
+    const w = lowercaseExponentWarning('1e-9');
+    expect(w).not.toBeNull();
+    expect(w!.text).toBe('1e-9');
+    expect(w!.suggestion).toBe('1E-9');
+    expect(lowercaseExponentWarning('2.5e3*x')?.suggestion).toBe('2.5E3');
+    // evaluation is intentionally untouched: 1e-9 is 1*e - 9
+    expect(evaluate(parse('1e-9'), {})).toBeCloseTo(Math.E - 9, 12);
+    expect(lowercaseExponentWarning('1E-9')).toBeNull();
+    expect(lowercaseExponentWarning('2e')).toBeNull();
+    expect(lowercaseExponentWarning('x2e3')).toBeNull();
+    expect(lowercaseExponentWarning('e^x')).toBeNull();
+    expect(lowercaseExponentWarning('3e^2')).toBeNull();
   });
 });

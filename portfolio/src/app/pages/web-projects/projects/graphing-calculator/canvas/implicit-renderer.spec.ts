@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Viewport } from './viewport';
+import { drawImplicitCurve } from './implicit-renderer';
 
 // Extracted from implicit-renderer.ts for testing
 function evalImplicit(fn: (x: number, y: number) => number, x: number, y: number): number {
@@ -211,5 +212,91 @@ describe('marching squares case handling', () => {
     expect(c2 !== 0 && c2 !== 15).toBe(true);
     expect(c4 !== 0 && c4 !== 15).toBe(true);
     expect(c8 !== 0 && c8 !== 15).toBe(true);
+  });
+});
+
+describe('drawImplicitCurve (real renderer)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function makeCtx() {
+    return {
+      strokeStyle: '',
+      lineWidth: 0,
+      lineJoin: '',
+      lineCap: '',
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+    };
+  }
+  const draw = (
+    ctx: ReturnType<typeof makeCtx>,
+    vp: Viewport,
+    fn: (x: number, y: number) => number,
+    coarse = false,
+  ) =>
+    drawImplicitCurve(ctx as unknown as CanvasRenderingContext2D, vp, fn, '#fff', 400, 300, coarse);
+
+  it('reuses the contour and the Path2D when only a redraw is requested', () => {
+    const paths: Array<{ moves: number }> = [];
+    class FakePath2D {
+      moves = 0;
+      constructor() {
+        paths.push(this);
+      }
+      moveTo() {
+        this.moves++;
+      }
+      lineTo() {}
+    }
+    vi.stubGlobal('Path2D', FakePath2D);
+    const fn = vi.fn((x: number, y: number) => x * x + y * y - 4);
+    const vp = new Viewport();
+    const ctx = makeCtx();
+
+    draw(ctx, vp, fn);
+    const evals = fn.mock.calls.length;
+    expect(evals).toBeGreaterThan(0);
+    draw(ctx, vp, fn);
+
+    expect(fn.mock.calls.length).toBe(evals);
+    expect(paths.length).toBe(1);
+    expect(paths[0].moves).toBeGreaterThan(0);
+    expect(ctx.stroke).toHaveBeenCalledTimes(2);
+    expect(ctx.stroke.mock.calls[0][0]).toBe(ctx.stroke.mock.calls[1][0]);
+    expect(ctx.moveTo).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds after the viewport changes and when switching resolution', () => {
+    class FakePath2D {
+      moveTo() {}
+      lineTo() {}
+    }
+    vi.stubGlobal('Path2D', FakePath2D);
+    const fn = vi.fn((x: number, y: number) => x * x + y * y - 4);
+    const vp = new Viewport();
+    const ctx = makeCtx();
+    draw(ctx, vp, fn);
+    const first = ctx.stroke.mock.calls[0][0];
+    vp.pan(20, 0, 400, 300);
+    draw(ctx, vp, fn);
+    expect(ctx.stroke.mock.calls[1][0]).not.toBe(first);
+
+    const coarseFn = vi.fn((x: number, y: number) => x * x + y * y - 4);
+    draw(ctx, vp, coarseFn, true);
+    const coarseEvals = coarseFn.mock.calls.length;
+    draw(ctx, vp, coarseFn, false);
+    expect(coarseFn.mock.calls.length).toBeGreaterThan(coarseEvals * 2);
+  });
+
+  it('falls back to immediate moveTo/lineTo when Path2D is unavailable', () => {
+    vi.stubGlobal('Path2D', undefined);
+    const fn = (x: number, y: number) => x * x + y * y - 4;
+    const ctx = makeCtx();
+    draw(ctx, new Viewport(), fn);
+    expect(ctx.beginPath).toHaveBeenCalledTimes(1);
+    expect(ctx.moveTo.mock.calls.length).toBeGreaterThan(0);
+    expect(ctx.stroke).toHaveBeenCalledWith();
   });
 });

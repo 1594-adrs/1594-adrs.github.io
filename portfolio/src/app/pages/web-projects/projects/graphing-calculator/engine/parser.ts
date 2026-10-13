@@ -49,6 +49,14 @@ export interface PoweredFunctionCall {
   power: ExpressionNode;
 }
 
+/** Raised for every syntax / complexity problem in an expression (never a RangeError). */
+export class ParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ParseError';
+  }
+}
+
 type TokenType = 'number' | 'variable' | 'operator' | 'lparen' | 'rparen' | 'comma' | 'eof';
 
 interface Token {
@@ -97,6 +105,10 @@ const MULTI_ARG_REQUIRED_ARGS = new Map([
 ]);
 
 const MAX_AST_NODES = 500;
+/** Longest accepted expression text. Bounds lexing/parsing work and recursion depth up front. */
+export const MAX_EXPR_LENGTH = 500;
+/** Deepest nesting of parentheses / function calls / unary signs the parser will recurse into. */
+const MAX_NESTING_DEPTH = 100;
 
 // Single-letter names the evaluator binds directly (explicit x/y, parametric
 // t) — used to split a concatenated run like `xy` or `2xt` into implicit
@@ -166,7 +178,7 @@ class Lexer {
         this.tokens.push({ type: 'operator', value: ch });
         this.pos++;
       } else {
-        throw new Error(`Unexpected character: '${ch}' at position ${this.pos}`);
+        throw new ParseError(`Unexpected character: '${ch}' at position ${this.pos}`);
       }
     }
     this.insertImplicitMultiplication();
@@ -217,28 +229,23 @@ class Lexer {
    * nested parens inside the exponent (`sin^(1/(2+3))`) are handled too.
    */
   private findPowerGroupCloses(): Set<number> {
+    // Single pass with a stack of "is this paren a power group's opener" flags: O(n) instead of
+    // rescanning the rest of the token list for every `func ^ (`.
     const marked = new Set<number>();
+    const stack: boolean[] = [];
     for (let i = 0; i < this.tokens.length; i++) {
       const tok = this.tokens[i];
-      if (
-        tok.type === 'variable' &&
-        isKnownFunction(tok.value) &&
-        this.tokens[i + 1]?.type === 'operator' &&
-        this.tokens[i + 1].value === '^' &&
-        this.tokens[i + 2]?.type === 'lparen'
-      ) {
-        let depth = 0;
-        for (let j = i + 2; j < this.tokens.length; j++) {
-          if (this.tokens[j].type === 'lparen') {
-            depth++;
-          } else if (this.tokens[j].type === 'rparen') {
-            depth--;
-            if (depth === 0) {
-              marked.add(j);
-              break;
-            }
-          }
-        }
+      if (tok.type === 'lparen') {
+        const caret = this.tokens[i - 1];
+        const fn = this.tokens[i - 2];
+        stack.push(
+          caret?.type === 'operator' &&
+            caret.value === '^' &&
+            fn?.type === 'variable' &&
+            isKnownFunction(fn.value),
+        );
+      } else if (tok.type === 'rparen') {
+        if (stack.pop()) marked.add(i);
       }
     }
     return marked;
@@ -263,6 +270,12 @@ class Lexer {
     ) {
       num += input[this.pos];
       this.pos++;
+    }
+
+    // At most one decimal point and at least one digit: `1.2.3` and a lone `.` are syntax errors
+    // (they used to parse silently as 1.2 / NaN).
+    if (!/^(\d+\.?\d*|\.\d+)$/.test(num)) {
+      throw new ParseError(`Invalid number: '${num}'`);
     }
 
     // Uppercase-E scientific notation only (e.g. 1E-3, 2.5E4, 1E+2). Lowercase
@@ -325,15 +338,20 @@ class Parser {
   private tokens: Token[] = [];
   private pos = 0;
   private nodeCount = 0;
+  private depth = 0;
 
   parse(input: string): ExpressionNode {
+    if (input.length > MAX_EXPR_LENGTH) {
+      throw new ParseError(`Expression too long (max ${MAX_EXPR_LENGTH} characters)`);
+    }
+    this.depth = 0;
     const lexer = new Lexer();
     this.tokens = lexer.tokenize(input);
     this.pos = 0;
     this.nodeCount = 0;
     const expr = this.parseExpression();
     if (this.current().type !== 'eof') {
-      throw new Error(`Unexpected token: '${this.current().value}'`);
+      throw new ParseError(`Unexpected token: '${this.current().value}'`);
     }
     return expr;
   }
@@ -341,7 +359,7 @@ class Parser {
   private countNode(): void {
     this.nodeCount++;
     if (this.nodeCount > MAX_AST_NODES) {
-      throw new Error('Expression too complex');
+      throw new ParseError('Expression too complex');
     }
   }
 
@@ -358,13 +376,25 @@ class Parser {
   private expect(type: TokenType): Token {
     const tok = this.current();
     if (tok.type !== type) {
-      throw new Error(`Expected ${type} but got ${tok.type} ('${tok.value}')`);
+      throw new ParseError(`Expected ${type} but got ${tok.type} ('${tok.value}')`);
     }
     return this.advance();
   }
 
   private parseExpression(): ExpressionNode {
-    return this.parseComparison();
+    return this.nested(() => this.parseComparison());
+  }
+
+  /** Runs `fn` one nesting level deeper, failing with a ParseError (not a RangeError) when too deep. */
+  private nested<T>(fn: () => T): T {
+    if (++this.depth > MAX_NESTING_DEPTH) {
+      throw new ParseError('Expression nested too deeply');
+    }
+    try {
+      return fn();
+    } finally {
+      this.depth--;
+    }
   }
 
   private parseComparison(): ExpressionNode {
@@ -426,6 +456,10 @@ class Parser {
   }
 
   private parseUnary(): ExpressionNode {
+    return this.nested(() => this.parseUnaryInner());
+  }
+
+  private parseUnaryInner(): ExpressionNode {
     if (
       this.current().type === 'operator' &&
       (this.current().value === '+' || this.current().value === '-')
@@ -469,7 +503,7 @@ class Parser {
         this.expect('rparen');
         const expected = MULTI_ARG_REQUIRED_ARGS.get(name);
         if (expected !== undefined && args.length !== expected) {
-          throw new Error(`${name}() expects ${expected} arguments, got ${args.length}`);
+          throw new ParseError(`${name}() expects ${expected} arguments, got ${args.length}`);
         }
         this.countNode();
         return { type: 'FunctionCallMultiArg', name, args };
@@ -513,7 +547,7 @@ class Parser {
       return expr;
     }
 
-    throw new Error(`Unexpected token: '${tok.value}' at position ${this.pos}`);
+    throw new ParseError(`Unexpected token: '${tok.value}' at position ${this.pos}`);
   }
 }
 
@@ -538,4 +572,30 @@ export function parse(expression: string): ExpressionNode {
 
 export function clearAstCache(): void {
   astCache.clear();
+}
+
+interface LowercaseExponentWarning {
+  /** The offending text as typed, e.g. `1e-9`. */
+  text: string;
+  /** The same number with an uppercase E, e.g. `1E-9`. */
+  suggestion: string;
+  message: string;
+}
+
+/**
+ * Detects scientific-notation-looking input with a lowercase `e` (`1e-9`, `2.5e3`). By design only
+ * uppercase `E` is a decimal exponent, because lowercase `e` is Euler's constant: `1e-9` is
+ * evaluated as `1*e - 9` (about -6.28), silently. Evaluation is deliberately unchanged; callers
+ * (UI) can use this to warn the user. Returns the first match, or null.
+ */
+export function lowercaseExponentWarning(expression: string): LowercaseExponentWarning | null {
+  const match = /(?<![A-Za-z_\d.])(\d+\.?\d*|\.\d+)e([+-]?\d+)/.exec(expression);
+  if (!match) return null;
+  const text = match[0];
+  const suggestion = `${match[1]}E${match[2]}`;
+  return {
+    text,
+    suggestion,
+    message: `'${text}' is not scientific notation: lowercase e is Euler's number. Use uppercase E (${suggestion}).`,
+  };
 }

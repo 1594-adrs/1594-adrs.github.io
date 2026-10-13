@@ -3,12 +3,7 @@
 
 :host {
   display: block;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: var(--font-family);
 }
 
 .solid-panel {
@@ -18,50 +13,45 @@
 
 .range-section {
   padding: 0.5rem 0.75rem;
-  border-top: 1px solid #1a1a2e;
+  border-top: 1px solid var(--color-border);
 }
 
 .range-label {
   display: block;
-  font-size: 10px;
-  color: #555;
-  letter-spacing: 0.04em;
-  margin-bottom: 0.3rem;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
 }
 
 .range-inputs {
-  display: flex;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: auto minmax(6ch, 1fr) auto minmax(6ch, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.range-inputs.single {
+  grid-template-columns: auto minmax(6ch, 1fr);
+}
+
+.range-inputs .range-field {
+  display: contents;
+}
+
+.range-inputs app-math-input {
+  min-width: 6ch;
 }
 
 .range-field {
-  flex: 1;
-  font-size: 11px;
-  color: #666;
+  font-size: 12px;
+  color: var(--color-text-muted);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-}
-
-.range-field input {
-  width: 55px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid #1a1a2e;
-  border-radius: 4px;
-  color: var(--color-text);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 11px;
-  padding: 2px 5px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.range-field input:focus {
-  border-color: var(--color-primary);
-}
-
-.range-field input.input-error {
-  border-color: var(--color-corruption);
+  gap: 8px;
 }
 
 .color-swatch {
@@ -69,16 +59,16 @@
   height: 12px;
   border-radius: 3px;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-border-hover);
 }
 
 .axis-select {
   flex: 1;
-  background: #0a0a0f;
-  border: 1px solid #1a1a2e;
+  background: var(--color-bg-dark);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   color: var(--color-text);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-family);
   font-size: 11px;
   padding: 4px 5px;
   outline: none;
@@ -97,11 +87,11 @@
   margin: 3px 0.75rem;
   padding: 5px 8px;
   background: none;
-  border: 1px solid #1a1a2e;
+  border: 1px solid var(--color-border);
   border-radius: 5px;
-  color: #555;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
+  font-size: 12px;
   letter-spacing: 0.02em;
   cursor: pointer;
   text-align: left;
@@ -112,7 +102,7 @@
 }
 
 .t-btn:hover {
-  border-color: #333;
+  border-color: var(--color-border-hover);
   color: var(--color-text);
   background: rgba(255, 255, 255, 0.03);
 }
@@ -120,7 +110,7 @@
 .t-btn.active {
   border-color: var(--color-primary);
   color: var(--color-primary);
-  background: rgba(0, 255, 136, 0.06);
+  background: var(--color-glow-10);
 }
 
 .t-btn:disabled {
@@ -133,7 +123,7 @@
   border: none;
   margin: 0;
   padding: 0.5rem 0.75rem;
-  border-top: 1px solid #1a1a2e;
+  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -149,7 +139,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 6px 8px;
-  border: 1px solid #1a1a2e;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   cursor: pointer;
   min-height: 44px;
@@ -160,19 +150,19 @@
 }
 
 .method-option:hover {
-  border-color: #333;
+  border-color: var(--color-border-hover);
 }
 
 .method-option.selected {
   border-color: var(--color-primary);
-  background: rgba(0, 255, 136, 0.06);
+  background: var(--color-glow-10);
 }
 
 .method-option-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text);
   font-weight: 500;
 }
@@ -184,8 +174,8 @@
 }
 
 .method-guidance {
-  font-size: 10px;
-  color: #666;
+  font-size: 12px;
+  color: var(--color-text-muted);
   line-height: 1.4;
   padding-left: 22px;
 }
@@ -194,7 +184,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  margin-bottom: 0.3rem;
+  margin-bottom: 4px;
 }
 
 .multi-fn-toggle {
@@ -202,8 +192,8 @@
   align-items: center;
   gap: 0.25rem;
   cursor: pointer;
-  font-size: 10px;
-  color: #555;
+  font-size: 12px;
+  color: var(--color-text-muted);
   min-height: 28px;
 }
 
@@ -220,14 +210,14 @@
 
 .variable-readout {
   margin: 0.3rem 0 0;
-  font-size: 10px;
-  color: #666;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
 }
 
 .field-error {
-  margin: 0.25rem 0 0;
-  font-size: 10px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--color-corruption);
   line-height: 1.4;
 }
@@ -236,20 +226,20 @@
   list-style: none;
   margin: 0;
   padding: 0.4rem 0.75rem;
-  border-top: 1px solid #1a1a2e;
+  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
 .issue-row {
-  font-size: 10px;
-  color: #667;
+  font-size: 12px;
+  color: var(--color-text-muted);
   line-height: 1.4;
 }
 
 .issue-row.warning {
-  color: #ffaa00;
+  color: var(--color-warning);
 }
 
 .issue-row.error {
@@ -262,19 +252,23 @@
 
 .volume-line {
   margin: 0.5rem 0 0;
-  font-size: 12px;
-  color: var(--color-text);
-  font-family: 'Cambria Math', serif;
+  font-size: 13px;
+  color: var(--color-primary);
+  font-family: var(--font-family);
 }
 
 .volume-line .exact {
   color: var(--color-primary);
 }
 
+.volume-line .note {
+  color: var(--color-text-muted);
+}
+
 .volume-line .error-estimate {
-  color: #666;
-  font-size: 10px;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-family: var(--font-family);
 }
 
 .sweep-controls {
@@ -303,11 +297,44 @@
   min-height: 32px;
 }
 
+@media (max-width: 768px) {
+  .method-guidance,
+  .field-error,
+  .issue-row {
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 480px) {
   .method-option {
     min-height: 44px;
   }
   .sweep-slider {
     height: 30px;
+  }
+}
+
+.ratio-row {
+  margin-top: 8px;
+}
+
+.sweep-output {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Touch targets >=44px on coarse pointers (select, checkbox row, slider, sweep buttons). */
+@media (pointer: coarse) {
+  .axis-select,
+  .multi-fn-toggle,
+  .sweep-btn {
+    min-height: 44px;
+  }
+  .multi-fn-toggle input[type='checkbox'] {
+    width: 24px;
+    height: 24px;
+  }
+  .sweep-slider {
+    height: 44px;
   }
 }
