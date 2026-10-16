@@ -69,6 +69,8 @@ const PATCHES = {
   'openstax1-1.3-161': (r) => (r.op.b = '2*pi - 0.001'),
   // Integrand transcribed in t; the integral is over x.
   'openstax2-1.2-95': (r) => (r.curves = r.curves.map((c) => c.replace(/\bt\b/g, 'x'))),
+  // "for x > 0": only the lobe on [0, 1/2], not the symmetric one on [-1/2, 0].
+  'openstax2-2.1-14': (r) => Object.assign(r.op, { a: '0', b: '0.5' }),
   // Test interval [1, 2] contains the pole of sec² at π/2.
   'thomas12-8.1-13': (r) => Object.assign(r.op, { a: '0', b: '1' }),
   // √(1−cos2x) = √2·|sin x| and ∫₀^π x|sin x| dx = π, so the answer is π√2 (transcribed √2).
