@@ -85,4 +85,12 @@ describe('integrator', () => {
     const result = integrate((x) => 1 / (1 + x * x), 0, 10);
     expect(result).toBeCloseTo(expected, 3);
   });
+
+  it('integrates x^-0.95 over [0, 1] to 20 (integrable, p close to 1)', () => {
+    expect(integrate((x) => Math.pow(x, -0.95), 0, 1)).toBeCloseTo(20, 6);
+  });
+
+  it('returns +Infinity across the even pole of x·sec(x)^2 on [1, 2]', () => {
+    expect(integrate((x) => x / Math.cos(x) ** 2, 1, 2)).toBe(Number.POSITIVE_INFINITY);
+  });
 });

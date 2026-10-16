@@ -27,6 +27,16 @@
  * neighbourhood of the trouble point; that leaf is then classified from its
  * finite samples as 'divergent' (values grow without bound / hit +-Infinity)
  * or 'undefined' (values are NaN - outside the function's real domain).
+ *
+ * Singularities are then settled by their local power law |f| ~ A|x - c|^-p rather than by how
+ * the quadrature behaves near them (x^-0.999 converges, 1/x does not, and both look alike to the
+ * panels). A suspect point - a stagnant lineage, a sign change that bisects onto a jump, or the
+ * worst panel of a pass that did not converge - is located (bisection / golden-section peak of
+ * |f|), and p is estimated per side from log|f| vs log|x - c| over three decades very close to c
+ * (classifySide). p >= 1 (minus P_MARGIN) is 'divergent'; an integrable p becomes a breakpoint
+ * whose innermost strip is integrated analytically (f(c + d) d / (1 - p)) and whose neighbourhood
+ * gets a geometric mesh, and the integral is recomputed. Points whose behaviour is not a clean
+ * power law (ln x, 1/(x ln x), oscillation) keep the verdict of the plain pass.
  */
 
 import { bisectSignChange } from './numeric-utils';
@@ -94,10 +104,24 @@ const MAX_STAGNANT = 12;
 const INACCURATE_REL = 1e-5;
 // Intervals wider than this get extra panel boundaries at 0 and +-10^k (see interestPoints).
 const WIDE_SPAN = 1e3;
-// Pole probing (see probePoles): how many of the strongest sign-change candidates are
-// bisected, and the minimum growth exponent p (|f| ~ |x - c|^-p) treated as non-integrable.
+// How many of the strongest sign-change candidates are bisected onto a possible pole (signJumps).
 const MAX_POLE_PROBES = 8;
-const POLE_EXPONENT = 0.95;
+// Singularity classification (classifySide): probe distances grow by SCALE_STEP; slopes of a
+// clean power law agree within CLEAN_TOL; exponents below P_MIN mean |f| stays bounded.
+const SCALE_STEP = 8;
+const CLEAN_TOL = 1e-4;
+const P_MIN = 0.01;
+// shortcut: a clean exponent p >= 1 - P_MARGIN is reported 'divergent', so x^-(1 - 1e-6)
+// (integral 1e6) counts as divergent; p is estimated to ~1e-8, so the margin could shrink to
+// ~1e-7 if such near-critical integrands ever matter.
+const P_MARGIN = 1e-5;
+// At most this many singular points are classified and re-integrated per call.
+const MAX_REPAIRS = 4;
+// A located point this close (relative to b - a) to an already handled one is the same point.
+const KNOWN_RADIUS = 1e-6;
+// A located peak this close (relative to the search window) to a or b is snapped onto it.
+const SNAP_REL = 1e-6;
+const GOLDEN_STEPS = 120;
 
 interface Panel {
   a: number;
@@ -245,75 +269,201 @@ function buildInitialBoundaries(a: number, b: number, breakpoints: number[]): nu
   return Array.from(all).sort((x, y) => x - y);
 }
 
-/**
- * Looks for non-integrable poles that sit *between* nodes. No Gauss-Kronrod node lands exactly on
- * a pole, so every sample stays finite; and for an odd pole (tan near pi/2, 1/(x-c)) the two
- * sides cancel so the stagnation heuristic never fires either. The strongest sign changes
- * between adjacent finite nodes are bisected onto the discontinuity c, and |f| is compared at
- * two distances from it: |f| ~ d^-p with p >= POLE_EXPONENT means the integral diverges, while a
- * plain zero crossing (|f| shrinks towards c), a jump (p = 0) or an integrable cusp such as
- * 1/cbrt(x) (p = 1/3) is left alone. Returns the pole location, if any.
- */
-function probePoles(f: (x: number) => number, panels: Panel[]): number | undefined {
-  const candidates = panels
+/** Sign changes between adjacent finite nodes - pole candidates - bisected onto the jump. */
+function signJumps(f: (x: number) => number, panels: Panel[]): number[] {
+  const safe = (x: number) => safeEval(f, x);
+  return panels
     .filter((p) => p.flipScore > 0)
     .sort((p, q) => q.flipScore - p.flipScore)
-    .slice(0, MAX_POLE_PROBES);
-
-  const safe = (x: number): number => {
-    try {
-      return f(x);
-    } catch {
-      return NaN;
-    }
-  };
-
-  for (const panel of candidates) {
-    const c = bisectSignChange(safe, panel.flipLo, panel.flipHi);
-    if (c === null) continue;
-    // Probe distances: relative to the panel but never closer to c than c's own resolution allows
-    // (panels around a pole are refined down to ~1e-9 of the interval).
-    const d2 = Math.max(
-      (panel.b - panel.a) * 1e-4,
-      1e5 * Number.EPSILON * Math.max(1, Math.abs(c)),
-    );
-    const d1 = 100 * d2;
-    for (const side of [1, -1]) {
-      const v1 = Math.abs(safe(c + side * d1));
-      const v2 = Math.abs(safe(c + side * d2));
-      if (!Number.isFinite(v1) || !Number.isFinite(v2) || v1 === 0) continue;
-      if (v2 <= v1 * 1.5) continue;
-      const p = Math.log(v2 / v1) / Math.log(d1 / d2);
-      if (p >= POLE_EXPONENT) return c;
-    }
-  }
-  return undefined;
+    .slice(0, MAX_POLE_PROBES)
+    .map((p) => bisectSignChange(safe, p.flipLo, p.flipHi))
+    .filter((c): c is number => c !== null);
 }
 
-export function integrateAdaptive(
+function safeEval(f: (x: number) => number, x: number): number {
+  try {
+    return f(x);
+  } catch {
+    return NaN;
+  }
+}
+
+/** Golden-section search for the point of [lo, hi] where |f| peaks (non-finite counts as +Inf). */
+function locatePeak(f: (x: number) => number, lo: number, hi: number): number {
+  const g = (x: number) => {
+    const v = Math.abs(safeEval(f, x));
+    return Number.isNaN(v) ? Infinity : v;
+  };
+  const r = (Math.sqrt(5) - 1) / 2;
+  let x1 = hi - r * (hi - lo);
+  let x2 = lo + r * (hi - lo);
+  let g1 = g(x1);
+  let g2 = g(x2);
+  for (let i = 0; i < GOLDEN_STEPS && x1 < x2; i++) {
+    if (g1 >= g2) {
+      hi = x2;
+      x2 = x1;
+      g2 = g1;
+      x1 = hi - r * (hi - lo);
+      g1 = g(x1);
+    } else {
+      lo = x1;
+      x1 = x2;
+      g1 = g2;
+      x2 = lo + r * (hi - lo);
+      g2 = g(x2);
+    }
+  }
+  return g1 >= g2 ? x1 : x2;
+}
+
+/** The analytic piece of the integral over [lo, hi], the width-d strip next to singular point c. */
+interface Tail {
+  c: number;
+  dir: 1 | -1;
+  /** Distance from c to the next fence on this side (bounds the geometric mesh). */
+  h: number;
+  lo: number;
+  hi: number;
+  value: number;
+  error: number;
+}
+
+interface Singularity {
+  c: number;
+  divergent: boolean;
+  tails: Tail[];
+}
+
+type Side = { kind: 'bounded' | 'unknown' } | { kind: 'power'; p: number; tail: Tail };
+
+/**
+ * Local power-law test on one side of c: |f(c + dir*d)| at d = d0 * 8^k (k = 0..3) gives three
+ * log-log slopes. A clean power law A*d^-p (times any smooth factor) has slopes that agree to
+ * O(d); log-type behaviour (ln d, 1/(d ln d), ...) drifts by ~ln(8)/ln(d)^2 ~ 5e-3 per scale and
+ * is reported 'unknown'. p is Richardson-extrapolated from the two finest slopes (removes the
+ * O(d) term of a smooth factor). p < P_MIN means |f| stays bounded (jump, zero, smooth point).
+ */
+function classifySide(f: (x: number) => number, c: number, dir: 1 | -1, h: number): Side {
+  // Relative to |c| too: the float c is only within an ulp of the true pole (e.g. pi/2).
+  const base = Math.min(Math.max(1e-9 * h, 1e-8 * Math.abs(c)), 1e-6 * h);
+  const d: number[] = [];
+  const v: number[] = [];
+  let f0 = NaN;
+  let x0 = NaN;
+  for (let k = 0; k < 4; k++) {
+    const x = c + dir * base * SCALE_STEP ** k;
+    const fx = safeEval(f, x);
+    const dx = Math.abs(x - c);
+    if (!Number.isFinite(fx) || fx === 0 || dx === 0) return { kind: 'unknown' };
+    if (k === 0) {
+      f0 = fx;
+      x0 = x;
+    }
+    d.push(dx);
+    v.push(Math.abs(fx));
+  }
+  const s = [0, 1, 2].map((k) => Math.log(v[k] / v[k + 1]) / Math.log(d[k + 1] / d[k]));
+  if (Math.abs(s[0] - s[1]) > CLEAN_TOL || Math.abs(s[1] - s[2]) > SCALE_STEP * CLEAN_TOL) {
+    return { kind: 'unknown' };
+  }
+  const p = s[0] + (s[0] - s[1]) / (SCALE_STEP - 1);
+  if (p < P_MIN) return { kind: 'bounded' };
+  // Integral of A t^-p over [0, d] = A d^(1-p) / (1-p) = f(c +- d) * d / (1-p); used only if p < 1.
+  const value = (f0 * d[0]) / (1 - p);
+  const error =
+    Math.abs(value) *
+    (Math.abs(s[0] - s[1]) + 1e-15) *
+    (1 / Math.abs(1 - p) + Math.abs(Math.log(d[0] / h)));
+  const [lo, hi] = dir > 0 ? [c, x0] : [x0, c];
+  return { kind: 'power', p, tail: { c, dir, h, lo, hi, value, error } };
+}
+
+/** Classifies c from both sides; null when neither side is a clean power-law blow-up. */
+function classifyPoint(
+  f: (x: number) => number,
+  c: number,
+  a: number,
+  b: number,
+  fences: number[],
+): Singularity | null {
+  let left = a;
+  let right = b;
+  for (const q of fences) {
+    if (q < c && q > left) left = q;
+    if (q > c && q < right) right = q;
+  }
+  let divergent = false;
+  const tails: Tail[] = [];
+  const sides: Array<[1 | -1, number]> = [
+    [-1, c - left],
+    [1, right - c],
+  ];
+  for (const [dir, h] of sides) {
+    if (!(h > 0)) continue;
+    const side = classifySide(f, c, dir, h);
+    if (side.kind !== 'power') continue;
+    if (side.p >= 1 - P_MARGIN) divergent = true;
+    else tails.push(side.tail);
+  }
+  return divergent || tails.length > 0 ? { c, divergent, tails } : null;
+}
+
+interface Pass {
+  total: number;
+  totalError: number;
+  tailError: number;
+  panels: Panel[];
+  divergentPoint?: number;
+  undefinedPoint?: number;
+  /** Divergence seen directly in the samples (force-split leaf), not inferred. */
+  forced: boolean;
+  /** First panel whose lineage stopped shrinking (see STAGNANT_RATIO). */
+  stagnant?: [number, number];
+}
+
+/**
+ * One adaptive Gauss-Kronrod run. Known singular points split the interval; next to each one
+ * the width-d strip is replaced by its analytic tail and the mesh is graded geometrically
+ * (c + d*2^k), so every remaining panel sits at least its own width away from the singularity.
+ */
+function runPass(
   f: (x: number) => number,
   a: number,
   b: number,
-  opts: QuadratureOptions = {},
-): QuadratureResult {
-  if (a === b) return { value: 0, error: 0, status: 'ok' };
-  if (a > b) {
-    const flipped = integrateAdaptive(f, b, a, opts);
-    return { ...flipped, value: -flipped.value };
-  }
-
-  const tol = opts.tol ?? DEFAULT_TOL;
-  const maxEvals = opts.maxEvals ?? DEFAULT_MAX_EVALS;
+  tol: number,
+  maxEvals: number,
+  breakpoints: number[],
+  singular: Singularity[],
+): Pass {
   const minWidth = Math.max(1e-12, (b - a) * 1e-9);
-
   let evals = 0;
   const panels: Panel[] = [];
   let total = 0;
   let totalError = 0;
+  let tailError = 0;
   let divergentPoint: number | undefined;
   let undefinedPoint: number | undefined;
+  let forced = false;
+  let stagnant: [number, number] | undefined;
 
-  const boundaries = buildInitialBoundaries(a, b, opts.breakpoints ?? []);
+  const tails = singular.flatMap((s) => s.tails);
+  const points = new Set(
+    buildInitialBoundaries(a, b, [...breakpoints, ...singular.map((s) => s.c)]),
+  );
+  for (const t of tails) {
+    const d = t.hi - t.lo;
+    for (let step = 2 * d; step < t.h * GRADING_RATIO ** GRADING_LEVELS; step *= 2) {
+      points.add(t.c + t.dir * step);
+    }
+  }
+  for (const t of tails) {
+    for (const x of points) if (x > t.lo && x < t.hi) points.delete(x);
+    points.add(t.lo);
+    points.add(t.hi);
+  }
+  const boundaries = [...points].sort((x, y) => x - y);
+  const tailAt = new Map(tails.map((t) => [t.lo, t]));
 
   interface Lineage {
     absKronrod: number;
@@ -321,12 +471,12 @@ export function integrateAdaptive(
   }
 
   // Evaluates one panel and routes it: a lineage stuck at (near-)constant
-  // magnitude for MAX_STAGNANT generations is a non-integrable singularity
-  // ('divergent'); a panel whose samples are mostly non-finite is bisected
-  // eagerly - bypassing the error-driven queue, since its estimate can't be
-  // trusted - down to a negligible neighbourhood of the trouble point, then
-  // classified as 'divergent' or 'undefined'; anything else is queued for
-  // normal error-driven refinement.
+  // magnitude for MAX_STAGNANT generations is a suspected non-integrable
+  // singularity (confirmed or overruled by classifyPoint); a panel whose samples
+  // are mostly non-finite is bisected eagerly - bypassing the error-driven queue,
+  // since its estimate can't be trusted - down to a negligible neighbourhood of
+  // the trouble point, then classified as 'divergent' or 'undefined'; anything
+  // else is queued for normal error-driven refinement.
   const processPanel = (lo: number, hi: number, parent?: Lineage): void => {
     if (evals >= maxEvals) return;
     const panel = evalPanel(f, lo, hi);
@@ -341,6 +491,7 @@ export function integrateAdaptive(
 
     if (panel.stagnant >= MAX_STAGNANT) {
       divergentPoint ??= 0.5 * (lo + hi);
+      stagnant ??= [lo, hi];
       return;
     }
 
@@ -349,6 +500,7 @@ export function integrateAdaptive(
         const center = 0.5 * (lo + hi);
         if (panel.sawInfinity || panel.maxFiniteAbs > BLOWUP_ABS) {
           divergentPoint ??= center;
+          forced = true;
         } else {
           undefinedPoint ??= center;
         }
@@ -368,6 +520,12 @@ export function integrateAdaptive(
   };
 
   for (let i = 0; i < boundaries.length - 1; i++) {
+    const tail = tailAt.get(boundaries[i]);
+    if (tail && tail.hi === boundaries[i + 1]) {
+      total += tail.value;
+      tailError += tail.error;
+      continue;
+    }
     processPanel(boundaries[i], boundaries[i + 1]);
   }
 
@@ -395,18 +553,98 @@ export function integrateAdaptive(
     processPanel(mid, panel.b, lineage);
   }
 
-  if (divergentPoint === undefined && undefinedPoint === undefined) {
-    divergentPoint = probePoles(f, panels);
+  return {
+    total,
+    totalError,
+    tailError,
+    panels,
+    divergentPoint,
+    undefinedPoint,
+    forced,
+    stagnant,
+  };
+}
+
+/**
+ * The next singular point worth classifying after a pass, in order of evidence: a stagnant
+ * lineage, a sign change that bisects onto a jump (odd poles cancel, so nothing else sees them),
+ * then - if the pass did not converge - the panel with the largest error estimate. Null when the
+ * verdict of the pass stands.
+ */
+function nextSingularity(
+  f: (x: number) => number,
+  a: number,
+  b: number,
+  tol: number,
+  pass: Pass,
+  breakpoints: number[],
+  singular: Singularity[],
+): Singularity | null {
+  if (pass.undefinedPoint !== undefined || pass.forced) return null;
+  const fences = [...breakpoints, ...singular.map((s) => s.c)];
+  const classify = (c: number) =>
+    singular.some((s) => Math.abs(s.c - c) <= KNOWN_RADIUS * (b - a))
+      ? null
+      : classifyPoint(f, c, a, b, fences);
+  const locate = (lo: number, hi: number) => {
+    const w = hi - lo;
+    const left = Math.max(a, lo - w);
+    const right = Math.min(b, hi + w);
+    const c = locatePeak(f, left, right);
+    if (c - a <= SNAP_REL * (right - left)) return a;
+    if (b - c <= SNAP_REL * (right - left)) return b;
+    return c;
+  };
+
+  if (pass.stagnant) return classify(locate(pass.stagnant[0], pass.stagnant[1]));
+  for (const c of signJumps(f, pass.panels)) {
+    const s = classify(c);
+    if (s) return s;
+  }
+  if (pass.totalError <= tol * Math.max(1, Math.abs(pass.total))) return null;
+  let worst: Panel | undefined;
+  for (const p of pass.panels) if (!worst || p.error > worst.error) worst = p;
+  return worst ? classify(locate(worst.a, worst.b)) : null;
+}
+
+export function integrateAdaptive(
+  f: (x: number) => number,
+  a: number,
+  b: number,
+  opts: QuadratureOptions = {},
+): QuadratureResult {
+  if (a === b) return { value: 0, error: 0, status: 'ok' };
+  if (a > b) {
+    const flipped = integrateAdaptive(f, b, a, opts);
+    return { ...flipped, value: -flipped.value };
   }
 
+  const tol = opts.tol ?? DEFAULT_TOL;
+  const maxEvals = opts.maxEvals ?? DEFAULT_MAX_EVALS;
+  const breakpoints = (opts.breakpoints ?? []).filter((p) => p > a && p < b);
+  const singular: Singularity[] = [];
+
+  let pass = runPass(f, a, b, tol, maxEvals, breakpoints, singular);
+  for (let repair = 0; repair < MAX_REPAIRS; repair++) {
+    const s = nextSingularity(f, a, b, tol, pass, breakpoints, singular);
+    if (!s) break;
+    if (s.divergent) {
+      return { value: pass.total, error: pass.totalError, status: 'divergent', badPoint: s.c };
+    }
+    singular.push(s);
+    pass = runPass(f, a, b, tol, maxEvals, breakpoints, singular);
+  }
+
+  const { total, divergentPoint, undefinedPoint } = pass;
+  const error = pass.totalError + pass.tailError;
   if (divergentPoint !== undefined) {
-    return { value: total, error: totalError, status: 'divergent', badPoint: divergentPoint };
+    return { value: total, error, status: 'divergent', badPoint: divergentPoint };
   }
   if (undefinedPoint !== undefined) {
-    return { value: total, error: totalError, status: 'undefined', badPoint: undefinedPoint };
+    return { value: total, error, status: 'undefined', badPoint: undefinedPoint };
   }
-  if (totalError > Math.max(tol, INACCURATE_REL) * Math.max(1, Math.abs(total))) {
-    return { value: total, error: totalError, status: 'inaccurate' };
+  if (error > Math.max(tol, INACCURATE_REL) * Math.max(1, Math.abs(total))) {
+    return { value: total, error, status: 'inaccurate' };
   }
-  return { value: total, error: totalError, status: 'ok' };
+  return { value: total, error, status: 'ok' };
 }
