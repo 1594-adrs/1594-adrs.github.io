@@ -45,7 +45,7 @@ const UNSUPPORTED_OPS = new Set<ExerciseOpKind>([
 ]);
 
 /** Planned syntax (see exercise.types.ts): reported as a gap, not as a typo. */
-const PLANNED_IDENTIFIERS = new Set(['if', 'asinh', 'acosh', 'atanh', 'cbrt']);
+const PLANNED_IDENTIFIERS = new Set(['if', 'asinh', 'acosh', 'atanh', 'cbrt', 'int']);
 const CONSTANT_NAMES = new Set(['e', 'pi', 'π']);
 const CURVE_VARIABLES = new Set(['x', 'y', 't']);
 const SPECIAL_VALUES: Record<string, number> = { inf: Infinity, '-inf': -Infinity, dne: NaN };
@@ -55,7 +55,8 @@ const SPECIAL_VALUES: Record<string, number> = { inf: Infinity, '-inf': -Infinit
 const SEARCH_W = 20;
 const SEARCH_STEPS = 4000;
 const DEFAULT_TOL = 1e-4;
-const ABS_FLOOR = 1e-9;
+// Engine root/extremum locators are accurate to ~1e-8; a zero answer needs an absolute floor.
+const ABS_FLOOR = 1e-6;
 
 class Unsupported extends Error {
   constructor(readonly feature: string) {
@@ -95,7 +96,7 @@ export function runExercise(ex: Exercise): ExerciseRun {
     const got = compute(op, curves);
     if (!expected) return { status: 'ran', got };
     const tol = ex.expected?.tol ?? DEFAULT_TOL;
-    const ok = sameValues(got, expected, tol);
+    const ok = sameValues(got, expected, tol, printedPrecision(ex.expected?.values));
     return ok
       ? { status: 'ok', got, expected }
       : { status: 'mismatch', got, expected, message: `got [${got}] expected [${expected}]` };
@@ -273,7 +274,10 @@ function compute(op: ExerciseOp, curves: Curve[]): number[] {
           : fns.flatMap((f) =>
               (op.kind === 'roots' ? findRoots : findExtrema)(f, a, b).map((p) => p.x),
             );
-      return xs;
+      if (op.kind !== 'extrema') return xs;
+      // findExtrema also reports f′ = 0 at the interval ends; textbooks list interior extrema only.
+      const edge = 1e-7 * (b - a);
+      return xs.filter((x) => x - a > edge && b - x > edge);
     }
     default:
       throw new Unsupported(op.kind);
@@ -346,6 +350,8 @@ function solid(op: Extract<ExerciseOp, { kind: 'volume' | 'surface' }>, curves: 
   if (op.kind === 'surface' && op.method === 'cross-section') {
     throw new Unsupported('surface:cross-section');
   }
+  if (op.kind === 'surface' && op.lateral) throw new Unsupported('surface:lateral');
+  if (op.shape === 'circle') throw new Unsupported(`${op.kind}:shape-circle`);
   let axis: AxisLine | undefined;
   if (op.axis) axis = { orientation: op.axis.orientation, value: constant(op.axis.value) };
   else if (op.method !== 'cross-section') {
@@ -390,7 +396,17 @@ function quadValue(r: QuadratureResult): number {
   return r.value;
 }
 
-function sameValues(got: number[], expected: number[], tol: number): boolean {
+/** A rounded decimal answer ('0.239') is only good to half a unit of its last printed digit. */
+function printedPrecision(values: string[] | undefined): number {
+  let floor = ABS_FLOOR;
+  for (const v of values ?? []) {
+    const decimals = /^-?\d*\.(\d+)$/.exec(v.trim())?.[1].length;
+    if (decimals) floor = Math.max(floor, 0.5 * 10 ** -decimals);
+  }
+  return floor;
+}
+
+function sameValues(got: number[], expected: number[], tol: number, absFloor: number): boolean {
   if (got.length !== expected.length) return false;
   const g = [...got].sort(ascending);
   const e = [...expected].sort(ascending);
@@ -399,7 +415,7 @@ function sameValues(got: number[], expected: number[], tol: number): boolean {
     // 'dne' accepts any non-finite engine answer ('divergent' of either sign or 'undefined').
     if (Number.isNaN(ev)) return !Number.isFinite(gv);
     if (!Number.isFinite(ev)) return gv === ev;
-    return Math.abs(gv - ev) <= Math.max(tol * Math.abs(ev), ABS_FLOOR);
+    return Math.abs(gv - ev) <= Math.max(tol * Math.abs(ev), absFloor);
   });
 }
 

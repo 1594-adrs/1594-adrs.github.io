@@ -85,8 +85,8 @@ const cases: Case[] = [
     status: 'ok',
   },
   {
-    name: 'rounded answer outside default tol',
-    exercise: ex(['x^2'], I('0', '1'), ['0.3333']),
+    name: 'rounded answer outside its printed digits',
+    exercise: ex(['x^2'], I('0', '1'), ['0.3330']),
     status: 'mismatch',
   },
   { name: 'no expected → ran', exercise: ex(['y = x'], I('0', '2')), status: 'ran' },
@@ -369,7 +369,44 @@ const plannedSyntax: Array<[string, string]> = [
   ['y = a*x^2', 'syntax:a'],
   ['y = sin(k*x)', 'syntax:k'],
   ['(cos(t), sin(t))', 'syntax:parametric-parens'],
+  ['y = int(sqrt(t), t, 0, x)', 'syntax:int'],
 ];
+
+const disk = { method: 'disk-washer', variable: 'x', a: '0', b: '1' } as const;
+cases.push(
+  {
+    name: 'lateral surface of revolution is a planned gap',
+    exercise: ex(['y = x'], { kind: 'surface', ...disk, lateral: true }),
+    status: 'unsupported',
+    feature: 'surface:lateral',
+  },
+  {
+    name: 'circular cross-sections are a planned gap',
+    exercise: ex(['y = x'], { kind: 'volume', ...disk, method: 'cross-section', shape: 'circle' }),
+    status: 'unsupported',
+    feature: 'volume:shape-circle',
+  },
+  {
+    name: 'a printed 3-decimal answer is good to ±0.0005',
+    exercise: ex(['y = x^2'], I('0', '1'), ['0.333']),
+    status: 'ok',
+  },
+  {
+    name: 'a printed decimal does not loosen past its digits',
+    exercise: ex(['y = x^2'], I('0', '1'), ['0.334']),
+    status: 'mismatch',
+  },
+  {
+    name: 'an extremum at 0 passes with the absolute floor',
+    exercise: ex(['y = x^2 - 2*x^3'], { kind: 'extrema', a: '-1', b: '1' }, ['0', '1/3']),
+    status: 'ok',
+  },
+  {
+    name: 'extrema exclude f′ = 0 at the interval ends',
+    exercise: ex(['y = sin(x)'], { kind: 'extrema', a: '-pi/2', b: '5*pi/6' }, ['pi/2']),
+    status: 'ok',
+  },
+);
 for (const [curve, feature] of plannedSyntax) {
   cases.push({
     name: `syntax ${curve}`,

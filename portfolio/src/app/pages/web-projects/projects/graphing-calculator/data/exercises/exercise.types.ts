@@ -39,8 +39,11 @@ export type ExerciseOp =
       method: SolidMethod;
       variable: IntegrationVariable;
       axis?: { orientation: 'horizontal' | 'vertical'; value: string };
-      shape?: CrossSectionShape;
+      /** 'circle' (diameter on the base, A = π·s²/4) is not a solids-engine shape yet. */
+      shape?: CrossSectionShape | 'circle';
       heightRatio?: number;
+      /** Surface only: the textbook surface of revolution of the curve (no caps or inner walls). */
+      lateral?: boolean;
     } & ExerciseInterval)
   /** Length of the curve; for parametric/polar curves a, b are parameter bounds. */
   | ({ kind: 'arc-length' } & ExerciseInterval)
@@ -48,12 +51,18 @@ export type ExerciseOp =
   | ({ kind: 'polar-area' } & ExerciseInterval)
   /** Centroid (x̄, ȳ) of the region bounded by the curves. */
   | ({ kind: 'centroid' } & ExerciseInterval)
-  /** Zeros, local extrema, or intersection x-coordinates inside [a, b]. */
+  /** x-coordinates of zeros or intersections in [a, b], or of local extrema in the open (a, b). */
   | ({ kind: 'roots' | 'extrema' | 'intersections' } & ExerciseInterval)
-  /** f′(x0) (x0 given) or the derivative as a function (x0 omitted, answer in `expected.fn`). */
-  | { kind: 'derivative'; x0?: string }
-  /** Tangent line at x0 (parameter value for parametric/polar); answer = slope, or line in `fn`. */
-  | { kind: 'tangent'; x0: string }
+  /**
+   * f⁽ⁿ⁾(x0) (x0 given; dy/dx at (x0, y0) for an implicit curve) or the derivative as a function
+   * (x0 omitted, answer in `expected.fn`).
+   */
+  | { kind: 'derivative'; x0?: string; y0?: string; /** Default 1. */ order?: number }
+  /**
+   * Tangent (or `normal`) line at x0 (parameter value for parametric/polar; point (x0, y0) on an
+   * implicit curve); answer = slope, or line in `fn`.
+   */
+  | { kind: 'tangent'; x0: string; y0?: string; normal?: boolean }
   /** lim_{x→x0} f(x); side '-' / '+' for one-sided limits. */
   | { kind: 'limit'; x0: string; side?: '-' | '+' }
   /** Newton's method from x0, `steps` iterations (omitted → until convergence). */
