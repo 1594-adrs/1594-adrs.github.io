@@ -3,6 +3,14 @@ import { areaSingle } from '../../engine/calculus';
 import { solveConicForY } from '../../engine/conic-solver';
 import { findExtrema, findRoots } from '../../engine/critical-points';
 import {
+  lineAt,
+  newton,
+  slopeAt,
+  slopeFormula,
+  tangentLine,
+  type DifferentialCurve,
+} from '../../engine/differential';
+import {
   compileExpression,
   evalConstantExpression,
   type CompiledExpr,
@@ -10,6 +18,8 @@ import {
 import { findIntersections } from '../../engine/intersection-finder';
 import { detectCurveMode, type DetectedCurveMode } from '../../engine/mode-detector';
 import { parse, type ExpressionNode } from '../../engine/parser';
+import { computeLimit } from '../../engine/limit';
+import { findAxisCrossings } from '../../engine/numeric-utils';
 import { integrateAdaptive, type QuadratureResult } from '../../engine/quadrature';
 import { computeSolid, type AxisLine, type SolidSpec } from '../../engine/solids';
 import { validateSolidSpec } from '../../engine/solids/solid-validation';
@@ -33,10 +43,6 @@ const UNSUPPORTED_OPS = new Set<ExerciseOpKind>([
   'arc-length',
   'polar-area',
   'centroid',
-  'derivative',
-  'tangent',
-  'limit',
-  'newton',
   'riemann',
   'taylor',
   'ode',
@@ -57,6 +63,14 @@ const SEARCH_STEPS = 4000;
 const DEFAULT_TOL = 1e-4;
 // Engine root/extremum locators are accurate to ~1e-8; a zero answer needs an absolute floor.
 const ABS_FLOOR = 1e-6;
+/** Function answers are compared on these x (or y, t) samples; irrational offsets dodge poles. */
+const FN_SAMPLES = [
+  ...Array.from({ length: 49 }, (_, i) => -6 + (12 * (i + 0.3183)) / 48),
+  ...Array.from({ length: 21 }, (_, i) => -1 + (2 * (i + 0.2718)) / 20),
+  ...Array.from({ length: 41 }, (_, i) => -12 + (24 * (i + 0.1414)) / 40),
+];
+/** A derivative given as a function must match on at least this many defined sample points. */
+const MIN_FN_POINTS = 4;
 
 class Unsupported extends Error {
   constructor(readonly feature: string) {
@@ -75,6 +89,8 @@ interface Curve {
   fns: CompiledExpr[];
   /** Explicit / explicit-y AST (for solid formulas) or the `lhs = rhs` AST of an implicit equation. */
   ast: ExpressionNode | null;
+  /** Parametric only: [x(t), y(t)]. */
+  parts?: [ExpressionNode, ExpressionNode];
 }
 
 /** Runs one exercise through the calculator engine. Never throws. */
@@ -85,8 +101,13 @@ export function runExercise(ex: Exercise): ExerciseRun {
     if (op.kind === 'area' && op.wrt === 'y') {
       return { status: 'unsupported', feature: 'area:wrt-y' };
     }
+    // Related rates: x and y each defined by an equation in t (Thomas 11.2).
+    if (op.kind === 'tangent' && ex.curves.length === 2) {
+      return { status: 'unsupported', feature: 'tangent:implicit-in-t' };
+    }
     const curves = ex.curves.map(prepareCurve);
     if (op.kind === 'graph') return runGraph(ex, curves);
+    if (op.kind === 'derivative' || op.kind === 'tangent') return runSlope(ex, op, curves);
 
     const expectedFn = op.kind === 'antiderivative' ? ex.expected?.fn : undefined;
     const expected = expectedFn
@@ -189,8 +210,13 @@ function prepareCurve(raw: string): Curve {
     return { raw, mode, fns: [compileExpression(ast)], ast };
   };
   switch (mode) {
-    case 'explicit':
-      return one(trimmed.replace(/^[yY]\s*=\s*/, ''), ['x']);
+    case 'explicit': {
+      const rhs = trimmed.replace(/^[yY]\s*=\s*/, '');
+      // `y = f(x, y)` is an implicit equation, but the function row reads every `y = …` as explicit.
+      if (/(?<![A-Za-z0-9_])y(?![A-Za-z0-9_])/.test(rhs))
+        throw new Unsupported('syntax:y-equals-implicit');
+      return one(rhs, ['x']);
+    }
     case 'explicit-y':
       return one(trimmed.replace(/^[xX]\s*=\s*/, ''), ['y']);
     case 'polar':
@@ -200,7 +226,8 @@ function prepareCurve(raw: string): Curve {
       if (parts.length !== 2) throw new ParseFail(`'${raw}': parametric needs exactly one comma`);
       const xs = parseChecked(parts[0].trim().replace(/^[xX]\s*=\s*/, ''), ['t', 'x']);
       const ys = parseChecked(parts[1].trim().replace(/^[yY]\s*=\s*/, ''), ['t', 'x']);
-      return { raw, mode, fns: [compileExpression(xs), compileExpression(ys)], ast: null };
+      const fns = [compileExpression(xs), compileExpression(ys)];
+      return { raw, mode, fns, ast: null, parts: [xs, ys] };
     }
     case 'implicit': {
       const ineq = /(.*?)(>=|<=|>|<)(.*)/.exec(raw);
@@ -279,9 +306,127 @@ function compute(op: ExerciseOp, curves: Curve[]): number[] {
       const edge = 1e-7 * (b - a);
       return xs.filter((x) => x - a > edge && b - x > edge);
     }
+    case 'newton': {
+      explicitFns(curves, op.kind, 1);
+      if (curves.length !== 1) throw new ParseFail('newton needs exactly one curve');
+      return [newton(curves[0].ast!, constant(op.x0), op.steps).value];
+    }
+    case 'limit': {
+      if (curves.length !== 1) throw new ParseFail('limit needs exactly one curve');
+      const [f] = explicitFns(curves, op.kind, 1);
+      const r = computeLimit(f, constant(op.x0), op.side);
+      if (r.status === 'unknown') throw new Fail('limit: the engine cannot decide (unknown)');
+      return [r.value];
+    }
     default:
       throw new Unsupported(op.kind);
   }
+}
+
+// ---------------------------------------------------------------- derivative / tangent
+
+/** The row as the differential tools read it. */
+function differentialCurve(c: Curve, kind: string): DifferentialCurve {
+  switch (c.mode) {
+    case 'explicit':
+      return { mode: 'explicit', f: c.ast! };
+    case 'explicit-y':
+      return { mode: 'explicit-y', g: c.ast! };
+    case 'polar':
+      return { mode: 'polar', r: c.ast! };
+    case 'parametric':
+      return { mode: 'parametric', x: c.parts![0], y: c.parts![1] };
+    case 'implicit':
+      if (c.ast?.type === 'BinaryOp' && c.ast.operator === '=') {
+        return { mode: 'implicit', lhs: c.ast.left, rhs: c.ast.right };
+      }
+      throw new Unsupported(`${kind}:inequality`);
+  }
+}
+
+/** Slope at a point (`values`) and/or the derivative or tangent line as a function (`fn`). */
+function runSlope(
+  ex: Exercise,
+  op: Extract<ExerciseOp, { kind: 'derivative' | 'tangent' }>,
+  curves: Curve[],
+): ExerciseRun {
+  if (curves.length !== 1) throw new ParseFail(`${op.kind} needs exactly one curve`);
+  const c = curves[0];
+  const curve = differentialCurve(c, op.kind);
+  const order = op.kind === 'derivative' ? (op.order ?? 1) : 1;
+  const want = ex.expected;
+  const tol = want?.tol ?? DEFAULT_TOL;
+
+  let got: number[] | undefined;
+  let fnError: string | null = null;
+  if (op.x0 !== undefined) {
+    const at = constant(op.x0);
+    const y0 = op.y0 === undefined ? undefined : constant(op.y0);
+    if (op.kind === 'tangent') {
+      const line = tangentLine(curve, at, { y0, normal: op.normal });
+      got = [line.slope];
+      if (want?.fn) {
+        const points = [-1.37, 0.5, 2.21].map((dx): [number, number] => [line.x0 + dx, NaN]);
+        fnError = compareFn(points, (x) => lineAt(line, x), expectedFn(want.fn, ['x']), tol, 3);
+      }
+    } else {
+      if (want?.fn) throw new ParseFail('derivative: an fn answer takes no x0');
+      got = [slopeAt(curve, at, { y0, order }).value];
+    }
+  } else {
+    if (want?.values) throw new ParseFail('derivative: values need x0');
+    const formula = compileExpression(slopeFormula(curve, order));
+    if (want?.fn) {
+      const vars =
+        c.mode === 'implicit' ? ['x', 'y'] : c.mode === 'explicit-y' ? ['y'] : ['x', 't'];
+      fnError = compareFn(samplePoints(c), formula, expectedFn(want.fn, vars), tol, MIN_FN_POINTS);
+    }
+  }
+
+  if (!want?.values && !want?.fn) return { status: 'ran', got };
+  const expected = want.values?.map(constant);
+  if (expected && got && !sameValues(got, expected, tol, printedPrecision(want.values))) {
+    return { status: 'mismatch', got, expected, message: `got [${got}] expected [${expected}]` };
+  }
+  if (fnError) return { status: 'mismatch', got, expected, message: fnError };
+  return { status: 'ok', got, expected };
+}
+
+/** An `fn` answer (a leading `y =` is allowed) in the given variables. */
+function expectedFn(fn: string, vars: string[]): CompiledExpr {
+  return compileExpression(parseChecked(fn.trim().replace(/^[yY]\s*=\s*/, ''), vars));
+}
+
+/** Evaluator arguments (a, b) where a derivative formula of the row is compared. */
+function samplePoints(c: Curve): Array<[number, number]> {
+  if (c.mode === 'explicit-y') return FN_SAMPLES.map((y) => [NaN, y]);
+  if (c.mode !== 'implicit') return FN_SAMPLES.map((v) => [v, NaN]);
+  // Points on the curve: every y in [-10, 10] with F(x, y) = 0, at every other sample x.
+  const F = c.fns[0];
+  return FN_SAMPLES.filter((_, i) => i % 2 === 0).flatMap((x) =>
+    findAxisCrossings((y) => F(x, y), -10, 10, 0, 400).map((y): [number, number] => [x, y]),
+  );
+}
+
+/** null when got ≈ expected wherever both are finite, on at least `min` points; else why not. */
+function compareFn(
+  points: Array<[number, number]>,
+  got: CompiledExpr,
+  expected: CompiledExpr,
+  tol: number,
+  min: number,
+): string | null {
+  let compared = 0;
+  for (const [a, b] of points) {
+    const g = safe(got, a, b);
+    const e = safe(expected, a, b);
+    if (!Number.isFinite(g) || !Number.isFinite(e)) continue;
+    if (Math.abs(g - e) > Math.max(tol * Math.abs(e), ABS_FLOOR)) {
+      return `fn differs at (${a}, ${b}): got ${g} expected ${e}`;
+    }
+    compared++;
+  }
+  return compared >= min ? null : `fn: only ${compared} comparable sample points`;
 }
 
 /** y = f(x) curves as functions of x (the input every x-tool of the calculator expects). */

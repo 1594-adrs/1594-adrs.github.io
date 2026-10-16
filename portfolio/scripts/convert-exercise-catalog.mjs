@@ -111,6 +111,51 @@ const PATCHES = {
       () => 'skip',
     ]),
   ),
+  // Implicit tangents: the prompt gives the point "(x0, y0)" but only x0 was transcribed, and
+  // F(x0, y) = 0 has several roots there.
+  ...Object.fromEntries(
+    [
+      ['3.8-311', '1'],
+      ['3.8-312', '1'],
+      ['3.8-313', '-3'],
+      ['3.8-314', '2'],
+      ['3.9-356', '1'],
+    ].map(([n, y0]) => [`openstax1-${n}`, (r) => (r.op.y0 = y0)]),
+  ),
+  // Inverse of sin at a = 0: the point is (0, 0), not another root of sin(y) = 0.
+  'openstax1-3.7-267': (r) => (r.op.y0 = '0'),
+  // Note "interval [2,5]": y0 = 27/10, the point the expected tangent passes through.
+  'thomas12-7.1-65d': (r) => (r.op.y0 = '27/10'),
+  // No x0 in the prompt; the transcribed −2 lands on the other critical point (N(−2) = 1 exactly).
+  'openstax1-4.9-441': (r) => (r.op.x0 = '-0.5'),
+  // q = ∛(2r − r²) (statement); the transcribed answer is the derivative of 3^(1/(2x − x²)).
+  'thomas12-3.6-20': (r) => (r.expected = { fn: '(2 - 2*x)/(3*root(3, (2*x - x^2)^2))', from: 'derived' }),
+  // The statement asks for dx/dy; the op computes dy/dx = 1/(dx/dy).
+  'thomas12-3.7-51b': (r) => (r.expected.fn = `1/(${r.expected.fn})`),
+  'thomas12-3.7-52b': (r) => (r.expected.fn = `1/(${r.expected.fn})`),
+  // f(0) = 0 by definition in the statement; the transcription dropped the piecewise value.
+  'thomas12-3A-16': (r) => (r.curves = ['y = if(abs(x) > 0, (1-cos(x))/x, 0)']),
+  // The answer holds on the domain the statement states (|x| < π/2, 0 < u < 1, x > 1…): outside
+  // it the expected fn is made undefined (+ 0·√(negative)) so it is not compared there.
+  ...Object.fromEntries(
+    [
+      ['5.4-39', 'pi/2 - abs(x)'],
+      ['7P-15', 'x*(1 - x)'],
+      ['7P-23', 'x*(pi/2 - x)'],
+      ['7.6-39', 'x - 1'],
+      ['7P-21', 'x - 1'],
+    ].map(([n, inside]) => [
+      `thomas12-${n}`,
+      (r) => (r.expected.fn = `${r.expected.fn} + 0*sqrt(${inside})`),
+    ]),
+  ),
+  // Differentials: expected is df = f′(x0)·dx (note), not the f′(x0) the op returns.
+  ...Object.fromEntries(
+    ['29b', '30b', '31b', '32b', '33b', '34b', '41a', '42a', '42b', '43'].map((n) => [
+      `thomas12-3.9-${n}`,
+      (r) => delete r.expected,
+    ]),
+  ),
   // Expected holds the max error VALUE (or absolute extrema at the ends / union of two curves'
   // roots / a non-root of an undefined point), not what the op returns: keep the case, drop the answer.
   ...Object.fromEntries(

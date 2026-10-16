@@ -324,9 +324,10 @@ const cases: Case[] = [
     status: 'parse-error',
   },
   {
-    name: 'y on the right of y = f(x)',
+    name: 'y on the right of y = f(x) is an implicit-curve gap',
     exercise: ex(['y = x*y'], I('0', '1'), ['1']),
-    status: 'parse-error',
+    status: 'unsupported',
+    feature: 'syntax:y-equals-implicit',
   },
   {
     name: 'unreadable answer',
@@ -340,10 +341,6 @@ const unsupportedOps: ExerciseOp[] = [
   { kind: 'arc-length', a: '0', b: '1' },
   { kind: 'polar-area', a: '0', b: '1' },
   { kind: 'centroid', a: '0', b: '1' },
-  { kind: 'derivative', x0: '1' },
-  { kind: 'tangent', x0: '1' },
-  { kind: 'limit', x0: '0' },
-  { kind: 'newton', x0: '1' },
   { kind: 'riemann', rule: 'left', n: 4, a: '0', b: '1' },
   { kind: 'taylor', center: '0', order: 3 },
   { kind: 'ode', f: 'x + y', x0: '0', y0: '1' },
@@ -371,6 +368,66 @@ const plannedSyntax: Array<[string, string]> = [
   ['(cos(t), sin(t))', 'syntax:parametric-parens'],
   ['y = int(sqrt(t), t, 0, x)', 'syntax:int'],
 ];
+
+// differential ops and limits
+const fnAnswer = (fn: string) => ({ expected: { fn, from: 'derived' as const } });
+cases.push(
+  {
+    name: "f'(-8) of root(3, x) = 1/12",
+    exercise: ex(['y = root(3, x)'], { kind: 'derivative', x0: '-8' }, ['1/12']),
+    status: 'ok',
+  },
+  {
+    name: "f' of |x|/x at 0 does not exist",
+    exercise: ex(['y = abs(x)/x'], { kind: 'derivative', x0: '0' }, ['dne']),
+    status: 'ok',
+  },
+  {
+    name: 'derivative formula compared on samples',
+    exercise: ex(['y = x^x'], { kind: 'derivative' }, undefined, fnAnswer('x^x*(ln(x) + 1)')),
+    status: 'ok',
+  },
+  {
+    name: 'a wrong derivative formula is a mismatch',
+    exercise: ex(['y = x^x'], { kind: 'derivative' }, undefined, fnAnswer('x^x*ln(x)')),
+    status: 'mismatch',
+  },
+  {
+    name: 'implicit tangent line at (3, -4)',
+    exercise: ex(
+      ['x^2 + y^2 = 25'],
+      { kind: 'tangent', x0: '3', y0: '-4' },
+      undefined,
+      fnAnswer('3/4*x - 25/4'),
+    ),
+    status: 'ok',
+  },
+  {
+    name: 'implicit normal line at (3, -4)',
+    exercise: ex(
+      ['x^2 + y^2 = 25'],
+      { kind: 'tangent', x0: '3', y0: '-4', normal: true },
+      undefined,
+      fnAnswer('-4/3*x'),
+    ),
+    status: 'ok',
+  },
+  {
+    name: 'newton x^2 - 2 from 1, 3 steps',
+    exercise: ex(['y = x^2 - 2'], { kind: 'newton', x0: '1', steps: 3 }, ['577/408']),
+    status: 'ok',
+  },
+  {
+    name: 'one-sided limit of 1/x at 0',
+    exercise: ex(['y = 1/x'], { kind: 'limit', x0: '0', side: '-' }, ['-inf']),
+    status: 'ok',
+  },
+  {
+    name: 'limit of sin(x)/x at 0',
+    exercise: ex(['y = sin(x)/x'], { kind: 'limit', x0: '0' }, ['1']),
+    status: 'ok',
+  },
+);
 
 const disk = { method: 'disk-washer', variable: 'x', a: '0', b: '1' } as const;
 cases.push(

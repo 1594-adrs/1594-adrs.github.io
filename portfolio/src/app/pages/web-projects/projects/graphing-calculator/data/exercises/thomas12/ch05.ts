@@ -206,7 +206,7 @@ export default [
   {"id":"thomas12-5.4-33","source":"thomas12","section":"5.4","number":"33","curves":["y = (x*sqrt(1 + x^2) + asinh(x))/2"],"op":{"kind":"derivative"},"expected":{"fn":"sqrt(1 + x^2)","from":"book"}},
   {"id":"thomas12-5.4-34","source":"thomas12","section":"5.4","number":"34","curves":["y = ln(x)"],"op":{"kind":"derivative"},"expected":{"fn":"1/x","from":"derived"}},
   {"id":"thomas12-5.4-37","source":"thomas12","section":"5.4","number":"37","curves":["y = 4 - 2*atan(3/2) - 2*atan(1/2)"],"op":{"kind":"derivative"},"expected":{"fn":"0","from":"book"}},
-  {"id":"thomas12-5.4-39","source":"thomas12","section":"5.4","number":"39","curves":["y = asin(sin(x))"],"op":{"kind":"derivative"},"expected":{"fn":"1","from":"book"}},
+  {"id":"thomas12-5.4-39","source":"thomas12","section":"5.4","number":"39","curves":["y = asin(sin(x))"],"op":{"kind":"derivative"},"expected":{"fn":"1 + 0*sqrt(pi/2 - abs(x))","from":"book"}},
   {"id":"thomas12-5.4-40","source":"thomas12","section":"5.4","number":"40","curves":["y = -atan(tan(x))"],"op":{"kind":"derivative"},"expected":{"fn":"-1","from":"derived"}},
   {"id":"thomas12-5.4-41","source":"thomas12","section":"5.4","number":"41","curves":["y = -x^2 - 2*x","y = 0"],"op":{"kind":"area","wrt":"x","a":"-3","b":"2"},"expected":{"values":["28/3"],"from":"book"}},
   {"id":"thomas12-5.4-42","source":"thomas12","section":"5.4","number":"42","curves":["y = 3*x^2 - 3","y = 0"],"op":{"kind":"area","wrt":"x","a":"-2","b":"2"},"expected":{"values":["12"],"from":"derived"}},
