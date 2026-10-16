@@ -156,4 +156,21 @@ describe('findIntersections wave-1 (H2, H26)', () => {
     const r = findIntersections([(x) => x, (x) => Math.max(0, x)], -2, 2);
     expect(r.length).toBeLessThanOrEqual(1);
   });
+
+  it('a high-multiplicity crossing is located precisely: 10(x-1)^9 vs 0', () => {
+    const r = findIntersections([(x) => 10 * (x - 1) ** 9, () => 0], 0.01, 1.99);
+    expect(r.length).toBe(1);
+    expect(r[0].x).toBeCloseTo(1, 9);
+  });
+
+  it('two crossings closer than the sample spacing stay apart', () => {
+    const r = findIntersections([(x) => (x - 1) * (x - 1.001), () => 0], 0, 2);
+    expect(r.map((p) => p.x)).toEqual([expect.closeTo(1, 9), expect.closeTo(1.001, 9)]);
+  });
+
+  it('three curves through one point share a single intersection', () => {
+    const r = findIntersections([(x) => x, (x) => 2 * x, (x) => -x], -1, 1.3);
+    expect(r.length).toBe(1);
+    expect(r[0].functionIndices.sort()).toEqual([0, 1, 2]);
+  });
 });

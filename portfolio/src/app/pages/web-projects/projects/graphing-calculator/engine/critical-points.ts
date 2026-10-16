@@ -1,4 +1,4 @@
-import { findAxisCrossings } from './numeric-utils';
+import { findAxisCrossings, goldenSectionMinimize, safeEval } from './numeric-utils';
 import { derivative } from './calculus';
 import { findIntersections } from './intersection-finder';
 
@@ -21,13 +21,16 @@ export interface PointOfInterest {
   label: string;
 }
 
-/** Half-width (in x units) used to classify a candidate extremum by comparing
- *  it against its immediate neighbors. */
-const CLASSIFY_DELTA = 1e-3;
+/** Samples used to bracket critical points (findAxisCrossings' default spacing). */
+const STEPS = 500;
 
 /** A candidate extremum must stand out from its neighbours by more than this (relative to
  *  max(1, |y|)); otherwise it is floating-point noise on a flat curve (e.g. 1e-14*sin(1000x)). */
 const NOISE_REL = 1e-12;
+
+/** Width of the "plateau" around a refined extremum, relative to |f| there (no floor): values
+ *  within it are rounding noise of the extreme value. */
+const PLATEAU_REL = 1e-13;
 
 /** Upper bound of critical points returned per curve; denser results are thinned evenly. */
 export const MAX_CRITICAL_POINTS = 100;
@@ -39,20 +42,63 @@ function thin<T>(items: T[], cap: number): T[] {
   return out;
 }
 
-function classifyExtremum(fn: (x: number) => number, x: number): CriticalPointKind | null {
-  let y: number, yLeft: number, yRight: number;
-  try {
-    y = fn(x);
-    yLeft = fn(x - CLASSIFY_DELTA);
-    yRight = fn(x + CLASSIFY_DELTA);
-  } catch {
-    return null;
+/**
+ * Kind of the candidate `c` from f at points `d` away on each side (within [loLim, hiLim]), with `d`
+ * doubling from `h` while a side is within noise of f(c): a flat extremum (x^10 at 0) does not stand
+ * out one sample away. Returns the bracket where it does, or null (inflection, noise, undefined).
+ */
+function classifyExtremum(
+  fn: (x: number) => number,
+  c: number,
+  loLim: number,
+  hiLim: number,
+  h: number,
+  span: number,
+): { kind: CriticalPointKind; lo: number; hi: number } | null {
+  const yc = safeEval(fn, c);
+  if (yc === null) return null;
+  const tol = NOISE_REL * Math.max(1, Math.abs(yc));
+  const side = (x: number): number => {
+    const y = safeEval(fn, x);
+    return y === null ? NaN : Math.abs(yc - y) > tol ? Math.sign(yc - y) : 0;
+  };
+  for (let d = h; d <= span; d *= 2) {
+    const lo = Math.max(c - d, loLim);
+    const hi = Math.min(c + d, hiLim);
+    const sl = side(lo);
+    const sr = side(hi);
+    if (Number.isNaN(sl) || Number.isNaN(sr) || sl * sr < 0) return null;
+    if (sl !== 0 && sl === sr) return { kind: sl > 0 ? 'max' : 'min', lo, hi };
+    if (lo === loLim && hi === hiLim) return null;
   }
-  if (!isFinite(y) || !isFinite(yLeft) || !isFinite(yRight)) return null;
-  const tol = NOISE_REL * Math.max(1, Math.abs(y));
-  if (y - yLeft > tol && y - yRight > tol) return 'max';
-  if (yLeft - y > tol && yRight - y > tol) return 'min';
   return null;
+}
+
+/**
+ * Locates the minimum of `s*f` on [lo, hi]: golden-section search, then the midpoint of the plateau
+ * where s*f stays within rounding noise of that minimum. Golden-section alone stops anywhere on the
+ * plateau of a flat extremum (x^5 - 5x^4 at 0 is flat to ~3e-4 in floating point); the plateau's
+ * midpoint is the extremum to second order, and a cusp's plateau is tiny.
+ */
+function refineExtremum(fn: (x: number) => number, lo: number, hi: number, s: 1 | -1): number {
+  const obj = (x: number): number => {
+    const y = safeEval(fn, x);
+    return y === null ? Infinity : s * y;
+  };
+  const xm = goldenSectionMinimize(obj, lo, hi);
+  const om = obj(xm);
+  const limit = om + PLATEAU_REL * Math.abs(om);
+  const edge = (out: number): number => {
+    let inside = xm;
+    for (let k = 0; k < 64; k++) {
+      const mid = inside + (out - inside) / 2;
+      if (mid === inside || mid === out) break;
+      if (obj(mid) <= limit) inside = mid;
+      else out = mid;
+    }
+    return inside;
+  };
+  return (edge(lo) + edge(hi)) / 2;
 }
 
 /** Roots of an explicit curve y = f(x) on [a, b]. */
@@ -60,24 +106,37 @@ export function findRoots(fn: (x: number) => number, a: number, b: number): Crit
   return findAxisCrossings(fn, a, b, 0).map((x) => ({ x, y: 0, kind: 'root' as const }));
 }
 
-/** Local extrema of an explicit curve y = f(x) on [a, b], found as sign changes
- *  of the numeric derivative and confirmed against neighboring values. */
+/** Local extrema of an explicit curve y = f(x) on [a, b]: zeros of the numeric derivative,
+ *  confirmed and located on f itself (flat extrema, cusps and close pairs included). */
 export function findExtrema(fn: (x: number) => number, a: number, b: number): CriticalPoint[] {
-  const df = (x: number) => derivative(fn, x);
-  const candidates = findAxisCrossings(df, a, b, 0);
+  const span = Math.abs(b - a);
+  const h = span / STEPS;
+  if (!(h > 0)) return [];
+  const [xMin, xMax] = a < b ? [a, b] : [b, a];
+  // f' divided by max(1, 1e-4|f|) (positive: same zeros and signs) so its rounding noise, ~1e-12|f|,
+  // stays under the root residual tolerance on large-valued curves.
+  const df = (x: number) => derivative(fn, x) / Math.max(1, 1e-4 * Math.abs(fn(x)));
+  const candidates = findAxisCrossings(df, xMin, xMax, 0, STEPS);
   const points: CriticalPoint[] = [];
-  for (const x of candidates) {
-    const kind = classifyExtremum(fn, x);
-    if (!kind) continue;
-    let y: number;
-    try {
-      y = fn(x);
-    } catch {
-      continue;
-    }
-    if (!isFinite(y)) continue;
-    points.push({ x, y, kind });
-  }
+  candidates.forEach((c, i) => {
+    // Brackets stop halfway to the neighbouring candidates, so critical points closer than h
+    // (1.2585 and 1.2599) are refined separately.
+    const loLim = i > 0 ? (candidates[i - 1] + c) / 2 : xMin - h;
+    const hiLim = i + 1 < candidates.length ? (c + candidates[i + 1]) / 2 : xMax + h;
+    const cls = classifyExtremum(fn, c, loLim, hiLim, h, span);
+    if (!cls) return;
+    const xr = refineExtremum(fn, cls.lo, cls.hi, cls.kind === 'max' ? -1 : 1);
+    const x = Math.min(xMax, Math.max(xMin, xr));
+    const y = safeEval(fn, x);
+    if (y === null) return;
+    // A pole is no extremum: f collapses within a hair of the refined point ((x - 6/x)^8 near 0,
+    // where the central difference is symmetric and vanishes), while a peak or cusp is continuous.
+    const delta = 1e-9 * Math.max(1, Math.abs(x));
+    const jumps = (t: number) =>
+      !(Math.abs((safeEval(fn, t) ?? Infinity) - y) <= 0.5 * Math.max(1, Math.abs(y)));
+    if (jumps(x - delta) || jumps(x + delta)) return;
+    points.push({ x, y, kind: cls.kind });
+  });
   return points;
 }
 
