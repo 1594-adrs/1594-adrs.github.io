@@ -610,18 +610,8 @@ export function drawInequality(
   ctx.globalAlpha = 0.15;
   ctx.fillStyle = color;
 
-  const check = (yMouse: number, yFn: number): boolean => {
-    switch (comparison) {
-      case '>':
-        return yMouse > yFn;
-      case '<':
-        return yMouse < yFn;
-      case '>=':
-        return yMouse >= yFn;
-      case '<=':
-        return yMouse <= yFn;
-    }
-  };
+  // y > f(x) is the world region above the curve: screen rows from the top down to the curve.
+  const above = comparison === '>' || comparison === '>=';
 
   for (let px = 0; px <= width; px += 2) {
     const [wx] = viewport.screenToWorld(px, 0, width, height);
@@ -635,11 +625,11 @@ export function drawInequality(
     const top = Math.max(syTop, 0);
     const bot = Math.min(syBot, height);
 
-    if (check(top, syFn)) {
-      ctx.fillRect(px, top, 2, Math.max(0, syFn - top));
-    }
-    if (check(bot, syFn)) {
-      ctx.fillRect(px, syFn, 2, Math.max(0, bot - syFn));
+    if (above) {
+      ctx.fillRect(px, top, 2, Math.max(0, Math.min(syFn, bot) - top));
+    } else {
+      const from = Math.max(syFn, top);
+      ctx.fillRect(px, from, 2, Math.max(0, bot - from));
     }
   }
 

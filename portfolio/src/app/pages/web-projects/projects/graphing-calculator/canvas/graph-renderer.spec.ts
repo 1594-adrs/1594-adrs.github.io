@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Viewport } from './viewport';
-import { drawIntegralArea, drawAreaBetween } from './graph-renderer';
+import { drawIntegralArea, drawAreaBetween, drawInequality } from './graph-renderer';
 
 interface MockContext {
   calls: Array<{ method: string; args: unknown[] }>;
@@ -277,19 +277,33 @@ describe('drawPolar simulation', () => {
   });
 });
 
-describe('drawInequality simulation', () => {
-  it('should shade regions satisfying inequality', () => {
+describe('drawInequality', () => {
+  // y op 1 on a 200×100 canvas over [-10, 10] × [-5, 5]: the line y = 1 sits at screen y = 40.
+  const shaded = (op: '>' | '<' | '>=' | '<=') => {
     const ctx = createMockContext();
-    const viewport = new Viewport();
-    ctx.save();
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = '#ff0000';
-    // Fill rectangles for inequality
-    ctx.fillRect(0, 100, 2, 50);
-    ctx.restore();
+    drawInequality(ctx, new Viewport(-10, 10, -5, 5), () => 1, op, '#ff0000', 200, 100);
+    return ctx.calls
+      .filter((c) => c.method === 'fillRect')
+      .map((c) => c.args as number[])
+      .filter(([, , , h]) => h > 0);
+  };
 
-    expect(ctx.calls).toContainEqual({ method: 'save', args: [] });
-    expect(ctx.calls).toContainEqual({ method: 'restore', args: [] });
+  it.each(['>', '>='] as const)('y %s f(x) fills above the curve (screen y < curve)', (op) => {
+    const rects = shaded(op);
+    expect(rects.length).toBeGreaterThan(0);
+    for (const [, y, , h] of rects) {
+      expect(y).toBe(0);
+      expect(y + h).toBeCloseTo(40, 9);
+    }
+  });
+
+  it.each(['<', '<='] as const)('y %s f(x) fills below the curve (screen y > curve)', (op) => {
+    const rects = shaded(op);
+    expect(rects.length).toBeGreaterThan(0);
+    for (const [, y, , h] of rects) {
+      expect(y).toBeCloseTo(40, 9);
+      expect(y + h).toBe(100);
+    }
   });
 });
 
