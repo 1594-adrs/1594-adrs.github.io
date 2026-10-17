@@ -618,6 +618,7 @@ export function integrateAdaptive(
     const flipped = integrateAdaptive(f, b, a, opts);
     return { ...flipped, value: -flipped.value };
   }
+  if (a === -Infinity || b === Infinity) return integrateImproper(f, a, b, opts);
 
   const tol = opts.tol ?? DEFAULT_TOL;
   const maxEvals = opts.maxEvals ?? DEFAULT_MAX_EVALS;
@@ -647,4 +648,183 @@ export function integrateAdaptive(
     return { value: total, error, status: 'inaccurate' };
   }
   return { value: total, error, status: 'ok' };
+}
+
+// ------------------------------------------------------------------------- infinite bounds
+
+// Oscillation test (see oscillation): windows [w0 + 8^j, w0 + 2*8^j] for j < OSC_WINDOWS (out to
+// x ~ 5e5), OSC_SAMPLES + 1 samples each; OSC_MIN_FLIPS sign changes count as oscillating.
+const OSC_GROWTH = 8;
+const OSC_WINDOWS = 7;
+const OSC_SAMPLES = 512;
+const OSC_MIN_FLIPS = 4;
+// lobeSum: half-waves summed, rounds of neighbour averaging, scan budget.
+const LOBES = 32;
+const AVG_DEPTH = 12;
+const MAX_SCAN_STEPS = 64 * LOBES;
+// Divergent first: a result with both a pole and an undefined part reports the pole.
+const STATUS_RANK: Record<QuadratureStatus, number> = {
+  ok: 0,
+  inaccurate: 1,
+  undefined: 2,
+  divergent: 3,
+};
+
+/**
+ * Integral over an infinite interval. (-inf, b] is mirrored onto [-b, inf) and (-inf, inf) is
+ * split at 0 (both halves must converge), so everything reduces to upperTail. badPoint is mapped
+ * back to x; +-Infinity means the tail itself does not converge.
+ */
+function integrateImproper(
+  f: (x: number) => number,
+  a: number,
+  b: number,
+  opts: QuadratureOptions,
+): QuadratureResult {
+  const mirrored = (x: number) => f(-x);
+  const mirrorOpts = { ...opts, breakpoints: opts.breakpoints?.map((p) => -p) };
+  const flip = (r: QuadratureResult): QuadratureResult =>
+    r.badPoint === undefined ? r : { ...r, badPoint: -r.badPoint };
+  if (a > -Infinity) return upperTail(f, a, opts);
+  if (b < Infinity) return flip(upperTail(mirrored, -b, mirrorOpts));
+  const left = flip(upperTail(mirrored, 0, mirrorOpts));
+  const right = upperTail(f, 0, opts);
+  const worst = STATUS_RANK[left.status] >= STATUS_RANK[right.status] ? left : right;
+  return { ...worst, value: left.value + right.value, error: left.error + right.error };
+}
+
+/**
+ * Integral from a to inf. A tail that keeps changing sign goes to lobeSum. Otherwise
+ * x = a + t/(1 - t) maps it onto t in [0, 1): f ~ A x^-p at infinity becomes the endpoint power
+ * law g ~ A (1 - t)^(p - 2) at t = 1, so the finite pass settles convergence there with exactly
+ * the endpoint rule (classifySide, P_MARGIN): divergent iff p <= 1 + P_MARGIN, and an integrable
+ * tail beyond x ~ 1e8 is added analytically. Log-type tails (1/(x ln x)) keep the verdict of the
+ * plain pass, as at finite endpoints.
+ */
+function upperTail(f: (x: number) => number, a: number, opts: QuadratureOptions): QuadratureResult {
+  const wave = oscillation(f, a);
+  if (wave?.spacing) return lobeSum(f, a, wave.start, wave.spacing, opts);
+  const g = (t: number) => f(a + t / (1 - t)) / ((1 - t) * (1 - t));
+  const breakpoints = opts.breakpoints?.filter((p) => p > a).map((p) => (p - a) / (1 + p - a));
+  const r = integrateAdaptive(g, 0, 1, { ...opts, breakpoints });
+  if (wave && r.status !== 'undefined') {
+    // shortcut: oscillation too fast for the test windows to resolve (sin(1000x)/x) is only
+    // flagged, never summed; add finer windows if such integrands matter.
+    return { value: r.value, error: Math.max(r.error, Math.abs(r.value)), status: 'inaccurate' };
+  }
+  if (r.badPoint === undefined) return r;
+  // A stagnant lineage reports its panel midpoint: next to t = 1 that is the tail, not an x.
+  const far = r.badPoint >= 1 - SNAP_REL;
+  return { ...r, badPoint: far ? Infinity : a + r.badPoint / (1 - r.badPoint) };
+}
+
+/**
+ * Does f keep changing sign out to x ~ 5e5? Sign changes between equally spaced samples of the
+ * windows [w0 + 8^j, w0 + 2*8^j]: oscillating = the two farthest windows both flip at least
+ * OSC_MIN_FLIPS times (an e^-x cos x tail has underflowed to 0 there and does not). The nearest
+ * window that flips that often with >= 8 samples per flip gives the zero spacing (null: too fast).
+ */
+function oscillation(
+  f: (x: number) => number,
+  a: number,
+): { start: number; spacing: number | null } | null {
+  const w0 = Math.max(a, 0);
+  const flips: number[] = [];
+  let found: { start: number; spacing: number } | null = null;
+  for (let j = 0; j < OSC_WINDOWS; j++) {
+    const width = OSC_GROWTH ** j;
+    const lo = w0 + width;
+    let n = 0;
+    let prev = NaN;
+    for (let i = 0; i <= OSC_SAMPLES; i++) {
+      const v = safeEval(f, lo + (width * i) / OSC_SAMPLES);
+      if (!Number.isFinite(v) || v === 0) continue;
+      if (prev * v < 0) n++;
+      prev = v;
+    }
+    flips.push(n);
+    if (!found && n >= OSC_MIN_FLIPS && n <= OSC_SAMPLES / 8)
+      found = { start: lo, spacing: width / n };
+  }
+  if (flips.slice(-2).some((n) => n < OSC_MIN_FLIPS)) return null;
+  return found ?? { start: w0, spacing: null };
+}
+
+/**
+ * Integral from a to inf of a tail that keeps changing sign: the head [a, z0] plus LOBES
+ * half-waves between consecutive zeros (scanned at an eighth of the last zero spacing, then
+ * bisected). The partial sums alternate around the limit, so AVG_DEPTH rounds of averaging
+ * neighbours extrapolate them (each round cancels the next order of a smoothly decaying
+ * amplitude); the change between the last estimates is the error. The lobes must shrink: an
+ * amplitude decay exponent (amplitude ~ x^-r, first vs last quarter) below P_MIN is 'divergent'
+ * (sin x: the sums never settle, and averaging would invent a Grandi-style value).
+ */
+function lobeSum(
+  f: (x: number) => number,
+  a: number,
+  start: number,
+  spacing: number,
+  opts: QuadratureOptions,
+): QuadratureResult {
+  const g = (x: number) => safeEval(f, x);
+  const zeros: number[] = [];
+  let h = spacing / 8;
+  let px = start;
+  let pv = g(px);
+  for (let step = 0, x = start; zeros.length <= LOBES && step < MAX_SCAN_STEPS; step++) {
+    x += h;
+    const v = g(x);
+    if (!Number.isFinite(v) || v === 0) continue;
+    if (pv * v < 0) {
+      const z = bisectSignChange(g, px, x);
+      if (z !== null) {
+        if (zeros.length) h = Math.min(h, (z - zeros[zeros.length - 1]) / 8);
+        zeros.push(z);
+      }
+    }
+    px = x;
+    pv = v;
+  }
+  const tol = opts.tol ?? DEFAULT_TOL;
+  const head = integrateAdaptive(f, a, zeros[0] ?? start, opts);
+  if (head.status === 'divergent' || head.status === 'undefined' || zeros.length < 3) {
+    return head.status === 'ok' ? { ...head, error: Infinity, status: 'inaccurate' } : head;
+  }
+  let error = head.error;
+  let inaccurate = head.status === 'inaccurate' || zeros.length <= LOBES;
+  const sums = [head.value];
+  const sizes: number[] = [];
+  for (let k = 0; k + 1 < zeros.length; k++) {
+    const r = integrateAdaptive(f, zeros[k], zeros[k + 1], opts);
+    if (r.status === 'divergent' || r.status === 'undefined') {
+      return { ...r, value: sums[k] + r.value };
+    }
+    inaccurate ||= r.status === 'inaccurate';
+    error += r.error;
+    sizes.push(Math.abs(r.value));
+    sums.push(sums[k] + r.value);
+  }
+
+  const q = Math.max(1, Math.floor(sizes.length / 4));
+  const mean = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length;
+  const early = mean(sizes.slice(0, q));
+  const late = mean(sizes.slice(-q));
+  const reach = mean(zeros.slice(-q - 1, -1)) / mean(zeros.slice(0, q));
+  const decay = late === 0 ? Infinity : Math.log(early / late) / Math.log(reach);
+  if (!(decay >= P_MIN)) {
+    return { value: sums[sums.length - 1], error, status: 'divergent', badPoint: Infinity };
+  }
+
+  let avg = sums;
+  let previous = avg[avg.length - 1];
+  for (let d = 0; d < AVG_DEPTH && avg.length > 2; d++) {
+    previous = avg[avg.length - 1];
+    avg = avg.slice(1).map((s, i) => 0.5 * (s + avg[i]));
+  }
+  const value = avg[avg.length - 1];
+  error += Math.abs(value - avg[avg.length - 2]) + Math.abs(value - previous);
+  if (inaccurate || error > Math.max(tol, INACCURATE_REL) * Math.max(1, Math.abs(value))) {
+    return { value, error, status: 'inaccurate' };
+  }
+  return { value, error, status: 'ok' };
 }

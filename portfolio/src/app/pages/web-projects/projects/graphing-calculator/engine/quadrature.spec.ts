@@ -253,3 +253,62 @@ describe('integrateAdaptive power-law singularities (local exponent test)', () =
     expect(relErr(ln.value, -1)).toBeLessThanOrEqual(1e-6);
   });
 });
+
+describe('integrateAdaptive with infinite bounds', () => {
+  const I = Infinity;
+  const sinc = (x: number) => (x === 0 ? 1 : Math.sin(x) / x);
+
+  it.each<[string, (x: number) => number, number, number, number]>([
+    ['1/x^2 on [1, inf)', (x) => 1 / x ** 2, 1, I, 1],
+    ['e^-x on [0, inf)', (x) => Math.exp(-x), 0, I, 1],
+    ['1/(1+x^2) on (-inf, inf)', (x) => 1 / (1 + x * x), -I, I, Math.PI],
+    ['x e^-x^2 on [0, inf)', (x) => x * Math.exp(-x * x), 0, I, 0.5],
+    ['x e^-x^2 on (-inf, inf)', (x) => x * Math.exp(-x * x), -I, I, 0],
+    ['x e^x on (-inf, 0]', (x) => x * Math.exp(x), -I, 0, -1],
+    ['x^-1.001 on [1, inf) (tail added analytically)', (x) => x ** -1.001, 1, I, 1000],
+    [
+      '1/((1+x) sqrt x) on [0, inf) (singular endpoint too)',
+      (x) => 1 / ((1 + x) * Math.sqrt(x)),
+      0,
+      I,
+      Math.PI,
+    ],
+    ['e^-x cos x on [0, inf)', (x) => Math.exp(-x) * Math.cos(x), 0, I, 0.5],
+    ['sin(x)/x on [0, inf) (conditionally convergent)', sinc, 0, I, Math.PI / 2],
+    ['sin(x)/x on (-inf, inf)', sinc, -I, I, Math.PI],
+    ['sin(x)/sqrt(x) on [0, inf)', (x) => Math.sin(x) / Math.sqrt(x), 0, I, Math.sqrt(Math.PI / 2)],
+  ])('%s converges', (_, f, a, b, want) => {
+    const r = integrateAdaptive(f, a, b);
+    expect(r.status).toBe('ok');
+    expect(relErr(r.value, want)).toBeLessThanOrEqual(1e-7);
+  });
+
+  it.each<[string, (x: number) => number, number, number]>([
+    ['1/x on [1, inf)', (x) => 1 / x, 1, I],
+    ['1/(x ln x) on [2, inf)', (x) => 1 / (x * Math.log(x)), 2, I],
+    ['x^-0.9 on [1, inf)', (x) => x ** -0.9, 1, I],
+    ['x/(1+x^2) on (-inf, inf) (no principal value)', (x) => x / (1 + x * x), -I, I],
+    ['sin x on [0, inf) (oscillates without settling)', Math.sin, 0, I],
+    ['sin(x)(1 + 1/x) on [1, inf)', (x) => Math.sin(x) * (1 + 1 / x), 1, I],
+  ])('%s diverges at infinity', (_, f, a, b) => {
+    const r = integrateAdaptive(f, a, b);
+    expect(r.status).toBe('divergent');
+    expect(Math.abs(r.badPoint!)).toBe(Infinity);
+  });
+
+  it('reports a pole inside an infinite interval at the pole', () => {
+    const r = integrateAdaptive(Math.tan, 0, I);
+    expect(r.status).toBe('divergent');
+    expect(r.badPoint).toBeCloseTo(Math.PI / 2, 8);
+  });
+
+  it('negates reversed infinite bounds', () => {
+    const r = integrateAdaptive((x) => Math.exp(-x), I, 0);
+    expect(r.status).toBe('ok');
+    expect(relErr(r.value, -1)).toBeLessThanOrEqual(1e-9);
+  });
+
+  it('never calls an unresolvably fast oscillation ok: sin(1000x)/x', () => {
+    expect(integrateAdaptive((x) => Math.sin(1000 * x) / x, 1, I).status).toBe('inaccurate');
+  });
+});
