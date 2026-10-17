@@ -31,7 +31,7 @@ const LOOSE = 1e-6;
 /** A finite estimate below this × the magnitude of the samples it came from is 0. */
 const ZERO_SNAP = 1e-6;
 /** Fewer defined samples than this on a side → the function is not defined there. */
-const MIN_RUN = 8;
+export const MIN_RUN = 8;
 /** Steps of a converging window shrink at least this fast (t^p with p ≳ 0.07). */
 const MAX_RATIO = 0.95;
 
@@ -39,13 +39,18 @@ const UNKNOWN: LimitResult = { value: NaN, status: 'unknown' };
 const DNE: LimitResult = { value: NaN, status: 'dne' };
 
 type SideResult = LimitResult | 'undefined';
+/** A side's verdict and the largest |f| among the samples it came from. */
+interface Side {
+  r: SideResult;
+  mag: number;
+}
 
 export function computeLimit(f: (x: number) => number, x0: number, side?: '-' | '+'): LimitResult {
   if (Number.isNaN(x0)) return UNKNOWN;
-  if (!Number.isFinite(x0)) return publish(limitSide(f, x0, x0 > 0 ? 1 : -1));
+  if (!Number.isFinite(x0)) return publish(limitSide(f, x0, x0 > 0 ? 1 : -1).r);
   const right = side === '-' ? null : limitSide(f, x0, 1);
   const left = side === '+' ? null : limitSide(f, x0, -1);
-  if (!left || !right) return publish((left ?? right)!);
+  if (!left || !right) return publish((left ?? right)!.r);
   return combine(left, right);
 }
 
@@ -54,7 +59,7 @@ function publish(r: SideResult): LimitResult {
   return r === 'undefined' ? DNE : r;
 }
 
-function combine(l: SideResult, r: SideResult): LimitResult {
+function combine({ r: l, mag: ml }: Side, { r, mag: mr }: Side): LimitResult {
   // shortcut: a two-sided limit where f is defined on one side only is the one-sided limit
   // (domain-endpoint convention the dataset uses); make it 'dne' if a strict mode is needed.
   if (l === 'undefined' || r === 'undefined') return publish(l === 'undefined' ? r : l);
@@ -66,6 +71,9 @@ function combine(l: SideResult, r: SideResult): LimitResult {
   const scale = Math.max(Math.abs(l.value), Math.abs(r.value));
   // Each side is good to ~LOOSE; a smaller jump is not resolvable.
   if (gap <= 10 * LOOSE * scale) return { value: (l.value + r.value) / 2, status: 'finite' };
+  // 0 next to 4e-35 (cos n/n³ by parity) is no jump: both are 0 next to the samples they came from.
+  const tiny = ZERO_SNAP * Math.max(ml, mr);
+  if (Math.abs(l.value) <= tiny && Math.abs(r.value) <= tiny) return { value: 0, status: 'finite' };
   return gap > 1e-3 * scale ? DNE : UNKNOWN;
 }
 
@@ -75,7 +83,7 @@ interface Samples {
   s: number[];
 }
 
-function limitSide(f: (x: number) => number, x0: number, dir: 1 | -1): SideResult {
+function limitSide(f: (x: number) => number, x0: number, dir: 1 | -1): Side {
   const out: Samples = { g: [], s: [] };
   const finite = Number.isFinite(x0);
   let t = finite ? T0 * Math.max(1, Math.abs(x0)) : X_INF0;
@@ -86,13 +94,15 @@ function limitSide(f: (x: number) => number, x0: number, dir: 1 | -1): SideResul
     try {
       out.g.push(f(x));
     } catch {
-      return UNKNOWN; // e.g. unknown identifier: nothing to conclude
+      return { r: UNKNOWN, mag: 0 }; // e.g. unknown identifier: nothing to conclude
     }
     const lnInv = finite ? -Math.log(t) : Math.log(t);
     out.s.push(lnInv > 0 ? 1 / lnInv : NaN);
     t = finite ? t / 2 : t * 2;
   }
-  return classify(longestDefinedRun(out));
+  const run = longestDefinedRun(out);
+  const mag = Math.max(0, ...run.g.filter(Number.isFinite).map(Math.abs));
+  return { r: classify(run), mag };
 }
 
 function longestDefinedRun({ g, s }: Samples): Samples {
