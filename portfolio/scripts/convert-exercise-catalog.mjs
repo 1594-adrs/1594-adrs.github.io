@@ -91,6 +91,18 @@ const PATCHES = {
   'thomas12-5.6-67': (r) => Object.assign(r.op, { a: '-pi/4', b: 'pi/4' }),
   'thomas12-5.6-70': (r) => Object.assign(r.op, { a: '-1', b: '1' }),
   'thomas12-5.6-74': (r) => Object.assign(r.op, { a: '0', b: 'pi/4' }),
+  // Same for areas in y: the statement's y-bounds (or the line y = c / "x ≥ 0" that sets them).
+  'thomas12-5.6-51': (r) => Object.assign(r.op, { a: '0', b: '3' }),
+  'thomas12-5.6-61': (r) => Object.assign(r.op, { a: '-1', b: '1' }),
+  'thomas12-5.6-68': (r) => Object.assign(r.op, { a: '-pi/4', b: 'pi/4' }),
+  'thomas12-5.6-69': (r) => Object.assign(r.op, { a: '0', b: 'pi/2' }),
+  'thomas12-5.6-76b': (r) => Object.assign(r.op, { a: '-1', b: '3' }),
+  // Derived answers that contradict the statement: the triangle (0,0), (2,0), (1,1) has its
+  // centroid at the vertex mean (1, 1/3); 2π∫₀² x²√(1+4x²) dx = 53.226 (82.82 is not it).
+  'openstax2-2.6-286': (r) => (r.expected = { values: ['1', '1/3'], from: 'derived' }),
+  'thomas12-6.4-2': (r) => (r.expected = { values: ['53.23'], tol: 0.005, from: 'derived' }),
+  // The book truncates Simpson's (π/12)(2 + 4√2) = 2.004560 to 2.0045: one printed unit of tol.
+  'thomas12-8.6-9IIa': (r) => (r.expected.tol = 5e-5),
   // Antiderivative test intervals that contain a pole of the integrand.
   'thomas12-7P-33': (r) => Object.assign(r.op, { a: '0', b: '0.5' }),
   'thomas12-7P-34': (r) => Object.assign(r.op, { a: '0', b: '0.1' }),

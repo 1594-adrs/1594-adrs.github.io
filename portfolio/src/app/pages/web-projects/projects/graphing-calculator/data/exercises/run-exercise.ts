@@ -1,5 +1,7 @@
 import { computeAreaRegions } from '../../engine/area-splitter';
+import { arcLength, lateralSurface, type ArcCurve } from '../../engine/arc-length';
 import { areaSingle } from '../../engine/calculus';
+import { computeCentroid } from '../../engine/centroid';
 import { solveConicForY } from '../../engine/conic-solver';
 import { findExtrema, findRoots } from '../../engine/critical-points';
 import {
@@ -26,10 +28,12 @@ import { integrateAdaptive, type QuadratureResult } from '../../engine/quadratur
 import { partialSum, recurrence, sequenceLimit, seriesSum, type Term } from '../../engine/series';
 import { computeSolid, type AxisLine, type SolidSpec } from '../../engine/solids';
 import { validateSolidSpec } from '../../engine/solids/solid-validation';
-import { substitute } from '../../engine/symbolic-diff';
+import { polarArea } from '../../engine/polar-area';
+import { riemannSum } from '../../engine/riemann';
+import { DifferentiationError, substitute } from '../../engine/symbolic-diff';
 import { taylorCoefficients, TaylorError } from '../../engine/taylor';
 import { sumRegions } from '../../utils/result-format';
-import type { Exercise, ExerciseOp, ExerciseOpKind } from './exercise.types';
+import type { Exercise, ExerciseOp } from './exercise.types';
 
 export type ExerciseRunStatus = 'ok' | 'ran' | 'mismatch' | 'unsupported' | 'parse-error';
 
@@ -42,14 +46,6 @@ export interface ExerciseRun {
   expected?: number[];
   message?: string;
 }
-
-/** Ops the calculator has no tool for yet. */
-const UNSUPPORTED_OPS = new Set<ExerciseOpKind>([
-  'arc-length',
-  'polar-area',
-  'centroid',
-  'riemann',
-]);
 
 /** Planned syntax (see exercise.types.ts): reported as a gap, not as a typo. */
 const PLANNED_IDENTIFIERS = new Set(['if', 'asinh', 'acosh', 'atanh', 'cbrt', 'int']);
@@ -98,10 +94,6 @@ interface Curve {
 export function runExercise(ex: Exercise): ExerciseRun {
   try {
     const op = ex.op;
-    if (UNSUPPORTED_OPS.has(op.kind)) return { status: 'unsupported', feature: op.kind };
-    if (op.kind === 'area' && op.wrt === 'y') {
-      return { status: 'unsupported', feature: 'area:wrt-y' };
-    }
     // Related rates: x and y each defined by an equation in t (Thomas 11.2).
     if (op.kind === 'tangent' && ex.curves.length === 2) {
       return { status: 'unsupported', feature: 'tangent:implicit-in-t' };
@@ -118,10 +110,13 @@ export function runExercise(ex: Exercise): ExerciseRun {
       ? antiderivativeExpected(expectedFn, op as ExerciseOp & { a: string; b: string })
       : ex.expected?.values?.map(constant);
 
-    const got = compute(op, curves);
+    let got = compute(op, curves);
+    // Some books ask for x̄ only (thomas12-8.4-57/58): compare the coordinates given.
+    if (op.kind === 'centroid' && expected?.length === 1) got = got.slice(0, 1);
     if (!expected) return { status: 'ran', got };
     const tol = ex.expected?.tol ?? DEFAULT_TOL;
-    const ok = sameValues(got, expected, tol, printedPrecision(ex.expected?.values));
+    const ordered = op.kind === 'centroid'; // (x̄, ȳ) is a point, not a set of roots
+    const ok = sameValues(got, expected, tol, printedPrecision(ex.expected?.values), ordered);
     return ok
       ? { status: 'ok', got, expected }
       : { status: 'mismatch', got, expected, message: `got [${got}] expected [${expected}]` };
@@ -290,7 +285,43 @@ function compute(op: ExerciseOp, curves: Curve[]): number[] {
       return [quadValue(integrateAdaptive(f, a, b))];
     }
     case 'area':
-      return [areaWrtX(curves, op.a, op.b)];
+      return [areaBetween(curves, op.wrt, op.a, op.b)];
+    case 'arc-length': {
+      if (curves.length !== 1) throw new ParseFail('arc-length needs exactly one curve');
+      const [a, b] = finiteBounds(op.kind, op.a, op.b);
+      const curve = arcCurve(curves[0], op.kind);
+      return [quadValue(differentiable(op.kind, () => arcLength(curve, a, b)))];
+    }
+    case 'riemann': {
+      const [f] = explicitFns(curves, op.kind, 1);
+      if (curves.length !== 1) throw new ParseFail('riemann needs exactly one curve');
+      const [a, b] = finiteBounds(op.kind, op.a, op.b);
+      try {
+        return [riemannSum(f, a, b, op.n, op.rule).value];
+      } catch (err) {
+        if (err instanceof RangeError) throw new ParseFail(`riemann: ${err.message}`);
+        throw err;
+      }
+    }
+    case 'centroid': {
+      const [a, b] = finiteBounds(op.kind, op.a, op.b);
+      // shortcut: curve (wire) centroids and parametric regions are not read; add when a UI asks.
+      const variable = curves.some((c) => c.mode === 'explicit-y') ? 'y' : 'x';
+      const c = computeCentroid(regionFns(curves, variable, op.kind), a, b, variable);
+      return [c.x, c.y];
+    }
+    case 'polar-area': {
+      if (!curves.length) throw new ParseFail('polar-area needs a curve');
+      const [a, b] = finiteBounds(op.kind, op.a, op.b);
+      const rs = curves.map((c) => {
+        if (c.mode !== 'polar') throw new Unsupported(`polar-area:${c.mode}`);
+        const r = c.fns[0];
+        return (t: number) => r(t, NaN);
+      });
+      const res = polarArea(rs, a, b);
+      if (res.status === 'unsupported') throw new Unsupported('polar-area:not-star-shaped');
+      return [quadValue({ value: res.value, error: 0, status: res.status })];
+    }
     case 'volume':
     case 'surface':
       return [solid(op, curves)];
@@ -455,23 +486,58 @@ function finiteBounds(kind: string, aRaw: string, bRaw: string): [number, number
   return [a, b];
 }
 
-/** Area between curves w.r.t. x as the "area between curves" tool computes it. */
-function areaWrtX(curves: Curve[], aRaw?: string, bRaw?: string): number {
+/**
+ * The rows as functions of the integration variable. In x: the component's buildAreaEvalFn
+ * closures (y = f(x), or a conic's first branch). In y, the mirror: x = g(y), a vertical line
+ * x = c, or the first branch of the conic solved for x.
+ */
+function regionFns(
+  curves: Curve[],
+  variable: 'x' | 'y',
+  kind: string,
+): Array<(s: number) => number> {
+  const own = variable === 'x' ? 'explicit' : 'explicit-y';
+  return curves.map((c): ((s: number) => number) => {
+    if (c.mode === own) {
+      const f = c.fns[0];
+      return variable === 'x' ? (x) => f(x, NaN) : (y) => f(NaN, y);
+    }
+    let ast = c.mode === 'implicit' ? c.ast : null;
+    if (ast && variable === 'y') {
+      if (ast.type !== 'BinaryOp' || ast.operator !== '=') {
+        throw new Unsupported(`${kind}:${c.mode}`);
+      }
+      const { left, right } = ast;
+      if (
+        left.type === 'Variable' &&
+        left.name === 'x' &&
+        !collectVariables(right, new Set()).size
+      ) {
+        const value = compileExpression(right)(NaN, NaN);
+        return () => value;
+      }
+      const swap = {
+        x: { type: 'Variable', name: 'y' },
+        y: { type: 'Variable', name: 'x' },
+      } as const;
+      ast = substitute(ast, swap);
+    }
+    const branches = ast ? solveConicForY(ast) : null;
+    // In y there is no app behaviour to mirror: only a conic that is a function of y is read.
+    const usable = variable === 'x' ? !!branches?.length : branches?.length === 1;
+    if (!usable || !branches) throw new Unsupported(`${kind}:${c.mode}`);
+    const branch = branches[0].fn;
+    return (s) => branch(s) ?? NaN;
+  });
+}
+
+/** Area between curves w.r.t. x or y as the "area between curves" tool computes it. */
+function areaBetween(curves: Curve[], variable: 'x' | 'y', aRaw?: string, bRaw?: string): number {
   if (curves.length === 0) throw new ParseFail('area needs at least one curve');
   if ((aRaw === undefined) !== (bRaw === undefined)) {
     throw new ParseFail('area needs both bounds or none');
   }
-  // Same evaluator closures as the component's buildAreaEvalFn: explicit, or a conic's first branch.
-  const fns = curves.map((c): ((x: number) => number) => {
-    if (c.mode === 'explicit') {
-      const f = c.fns[0];
-      return (x) => f(x, NaN);
-    }
-    const branches = c.mode === 'implicit' && c.ast ? solveConicForY(c.ast) : null;
-    if (!branches?.length) throw new Unsupported(`area:${c.mode}`);
-    const branch = branches[0].fn;
-    return (x) => branch(x) ?? NaN;
-  });
+  const fns = regionFns(curves, variable, 'area');
 
   let a: number;
   let b: number;
@@ -493,13 +559,38 @@ function areaWrtX(curves: Curve[], aRaw?: string, bRaw?: string): number {
   return total.status === 'undefined' ? NaN : total.value;
 }
 
+/** The row as the length tools read it. */
+function arcCurve(c: Curve, kind: string): ArcCurve {
+  switch (c.mode) {
+    case 'explicit':
+      return { mode: 'explicit', f: c.ast! };
+    case 'explicit-y':
+      return { mode: 'explicit-y', g: c.ast! };
+    case 'parametric':
+      return { mode: 'parametric', x: c.parts![0], y: c.parts![1] };
+    case 'polar':
+      return { mode: 'polar', r: c.ast! };
+    case 'implicit':
+      throw new Unsupported(`${kind}:implicit`);
+  }
+}
+
+/** Runs a computation that differentiates the row: no symbolic derivative is a gap. */
+function differentiable<T>(kind: string, run: () => T): T {
+  try {
+    return run();
+  } catch (err) {
+    if (err instanceof DifferentiationError) throw new Unsupported(`${kind}:derivative`);
+    throw err;
+  }
+}
+
 function solid(op: Extract<ExerciseOp, { kind: 'volume' | 'surface' }>, curves: Curve[]): number {
   const want = op.variable === 'x' ? 'explicit' : 'explicit-y';
   const [a, b] = finiteBounds(op.kind, op.a, op.b);
   if (op.kind === 'surface' && op.method === 'cross-section') {
     throw new Unsupported('surface:cross-section');
   }
-  if (op.kind === 'surface' && op.lateral) throw new Unsupported('surface:lateral');
   if (op.shape === 'circle') throw new Unsupported(`${op.kind}:shape-circle`);
   let axis: AxisLine | undefined;
   if (op.axis) axis = { orientation: op.axis.orientation, value: constant(op.axis.value) };
@@ -507,6 +598,16 @@ function solid(op: Extract<ExerciseOp, { kind: 'volume' | 'surface' }>, curves: 
     // Axis omitted = the coordinate axis that fits method + variable (x-axis for disks in x).
     const horizontal = (op.method === 'disk-washer') === (op.variable === 'x');
     axis = { orientation: horizontal ? 'horizontal' : 'vertical', value: 0 };
+  }
+  if (op.kind === 'surface' && op.lateral && axis) {
+    // The surface swept by each row (any mode, bounds in its own variable), summed: several rows
+    // are pieces of one boundary (thomas12-6.6-33b: a square's two halves).
+    const about = axis;
+    const pieces = curves.map((c) => {
+      const curve = arcCurve(c, op.kind);
+      return quadValue(differentiable(op.kind, () => lateralSurface(curve, a, b, about)));
+    });
+    return pieces.reduce((p, q) => p + q, 0);
   }
   const spec: SolidSpec = {
     method: op.method,
@@ -553,11 +654,7 @@ function verdict(
   if (expected && !got) throw new ParseFail(`${ex.op.kind}: a values answer needs a point`);
   if (!expected && !want.fn) throw new ParseFail(`${ex.op.kind}: nothing to compare`);
   const tol = want.tol ?? DEFAULT_TOL;
-  if (
-    expected &&
-    got &&
-    !sameValues(got, expected, tol, printedPrecision(want.values), ordered)
-  ) {
+  if (expected && got && !sameValues(got, expected, tol, printedPrecision(want.values), ordered)) {
     return { status: 'mismatch', got, expected, message: `got [${got}] expected [${expected}]` };
   }
   if (fnError) return { status: 'mismatch', got, expected, message: fnError };

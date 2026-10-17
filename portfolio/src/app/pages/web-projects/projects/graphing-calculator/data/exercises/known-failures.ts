@@ -41,4 +41,11 @@ export const KNOWN_FAILURES: Record<string, 'mismatch' | 'parse-error'> = {
   // Inherent: catastrophic cancellation in the term (10.6-33); a flat staircase sequence (10.1-120).
   'thomas12-10.6-33': 'mismatch',
   'thomas12-10.1-120': 'mismatch',
+  // Riemann: the record's R100 of e^(2x) on [-1,1] is 3.670; the exact geometric sum is 3.6998.
+  'openstax2-1.1-33R': 'mismatch',
+  // Centroid of a half-ring: a region with a hole that the max/min envelope cannot express (NaN).
+  'openstax2-2.6-289': 'mismatch',
+  // Polar area: the book excludes the inner loop; ½∫r² over the range counts it (no "outside loop" op).
+  'openstax2-7.4-197': 'mismatch',
+  'openstax2-7.4-208': 'mismatch',
 };

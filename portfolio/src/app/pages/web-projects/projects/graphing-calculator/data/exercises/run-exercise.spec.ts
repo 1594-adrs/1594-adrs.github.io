@@ -128,12 +128,6 @@ const cases: Case[] = [
     status: 'ok',
   },
   {
-    name: 'area w.r.t. y',
-    exercise: ex(['x = y^2', 'x = 1'], { kind: 'area', wrt: 'y' }, ['4/3']),
-    status: 'unsupported',
-    feature: 'area:wrt-y',
-  },
-  {
     name: 'area with an infinite bound',
     exercise: ex(['y = 1/x^2'], { kind: 'area', wrt: 'x', a: '1', b: 'inf' }, ['1']),
     status: 'unsupported',
@@ -442,20 +436,125 @@ const cases: Case[] = [
   { name: 'integral without curves', exercise: ex([], I('0', '1'), ['1']), status: 'parse-error' },
 ];
 
-const unsupportedOps: ExerciseOp[] = [
-  { kind: 'arc-length', a: '0', b: '1' },
-  { kind: 'polar-area', a: '0', b: '1' },
-  { kind: 'centroid', a: '0', b: '1' },
-  { kind: 'riemann', rule: 'left', n: 4, a: '0', b: '1' },
-];
-for (const op of unsupportedOps) {
-  cases.push({
-    name: `op ${op.kind}`,
-    exercise: ex(['y = x'], op, ['1']),
+// Extended integration (F7): one ok and one mismatch per op, plus the honest gaps.
+const lateral = {
+  kind: 'surface',
+  method: 'disk-washer',
+  variable: 'x',
+  axis: { orientation: 'horizontal', value: '0' },
+  lateral: true,
+} as const;
+cases.push(
+  {
+    name: 'arc length of y = x on [0, 1] = sqrt(2)',
+    exercise: ex(['y = x'], { kind: 'arc-length', a: '0', b: '1' }, ['sqrt(2)']),
+    status: 'ok',
+  },
+  {
+    name: 'arc length of y = x is not 1',
+    exercise: ex(['y = x'], { kind: 'arc-length', a: '0', b: '1' }, ['1']),
+    status: 'mismatch',
+  },
+  {
+    name: 'arc length of a polar cardioid = 8',
+    exercise: ex(['r = 1 + cos(t)'], { kind: 'arc-length', a: '0', b: '2*pi' }, ['8']),
+    status: 'ok',
+  },
+  {
+    name: 'arc length of a function with no symbolic derivative is a gap',
+    exercise: ex(['y = gamma(x)'], { kind: 'arc-length', a: '1', b: '2' }, ['1']),
     status: 'unsupported',
-    feature: op.kind,
-  });
-}
+    feature: 'arc-length:derivative',
+  },
+  {
+    name: 'riemann left sum of x on [0, 1], n = 4 = 3/8',
+    exercise: ex(['y = x'], { kind: 'riemann', rule: 'left', n: 4, a: '0', b: '1' }, ['3/8']),
+    status: 'ok',
+  },
+  {
+    name: 'riemann right sum is not the left sum',
+    exercise: ex(['y = x'], { kind: 'riemann', rule: 'right', n: 4, a: '0', b: '1' }, ['3/8']),
+    status: 'mismatch',
+  },
+  {
+    name: 'simpson with an odd n is malformed',
+    exercise: ex(['y = x'], { kind: 'riemann', rule: 'simpson', n: 3, a: '0', b: '1' }, ['1']),
+    status: 'parse-error',
+  },
+  {
+    name: 'centroid of the triangle under y = x on [0, 1]',
+    exercise: ex(['y = x', 'y = 0'], { kind: 'centroid', a: '0', b: '1' }, ['2/3', '1/3']),
+    status: 'ok',
+  },
+  {
+    name: 'centroid coordinates are an ordered pair (swapped is wrong)',
+    exercise: ex(['y = x', 'y = 0'], { kind: 'centroid', a: '0', b: '1' }, ['1/3', '2/3']),
+    status: 'mismatch',
+  },
+  {
+    name: 'centroid in y between x = y and x = y^2',
+    exercise: ex(['x = y', 'x = y^2'], { kind: 'centroid', a: '0', b: '1' }, ['2/5', '1/2']),
+    status: 'ok',
+  },
+  {
+    name: 'centroid with only x̄ printed compares x̄',
+    exercise: ex(['y = x'], { kind: 'centroid', a: '0', b: '1' }, ['2/3']),
+    status: 'ok',
+  },
+  {
+    name: 'polar area of r = 2 over [0, 2pi] = 4pi',
+    exercise: ex(['r = 2'], { kind: 'polar-area', a: '0', b: '2*pi' }, ['4*pi']),
+    status: 'ok',
+  },
+  {
+    name: 'polar area between r = 2 and r = 1 is not 4pi',
+    exercise: ex(['r = 2', 'r = 1'], { kind: 'polar-area', a: '0', b: '2*pi' }, ['4*pi']),
+    status: 'mismatch',
+  },
+  {
+    name: 'polar area of a non-polar row',
+    exercise: ex(['y = x'], { kind: 'polar-area', a: '0', b: '1' }, ['1']),
+    status: 'unsupported',
+    feature: 'polar-area:explicit',
+  },
+  {
+    name: 'polar area with an inner loop and another curve is a gap',
+    exercise: ex(['r = 1 + 2*sin(t)', 'r = 4'], { kind: 'polar-area', a: '0', b: '2*pi' }, ['1']),
+    status: 'unsupported',
+    feature: 'polar-area:not-star-shaped',
+  },
+  {
+    name: 'lateral surface of y = x about the x-axis = pi*sqrt(2) (no cap)',
+    exercise: ex(['y = x'], { ...lateral, a: '0', b: '1' }, ['pi*sqrt(2)']),
+    status: 'ok',
+  },
+  {
+    name: 'lateral surface does not add the cap',
+    exercise: ex(['y = x'], { ...lateral, a: '0', b: '1' }, ['pi*sqrt(2) + pi']),
+    status: 'mismatch',
+  },
+  {
+    name: 'lateral surface of a parametric circle (sphere 4pi)',
+    exercise: ex(['cos(t), sin(t)'], { ...lateral, a: '0', b: 'pi' }, ['4*pi']),
+    status: 'ok',
+  },
+  {
+    name: 'area w.r.t. y between x = y^2 and x = 1 = 4/3',
+    exercise: ex(['x = y^2', 'x = 1'], { kind: 'area', wrt: 'y' }, ['4/3']),
+    status: 'ok',
+  },
+  {
+    name: 'area w.r.t. y is not the area w.r.t. x',
+    exercise: ex(['x = y^2', 'x = 1'], { kind: 'area', wrt: 'y' }, ['2/3']),
+    status: 'mismatch',
+  },
+  {
+    name: 'area w.r.t. y of a two-branch conic is a gap',
+    exercise: ex(['x = 2', 'y^2 = 1 + x^2'], { kind: 'area', wrt: 'y' }, ['1']),
+    status: 'unsupported',
+    feature: 'area:implicit',
+  },
+);
 
 const plannedSyntax: Array<[string, string]> = [
   ['y = if(x < 0, -x, x)', 'syntax:if'],
@@ -532,12 +631,6 @@ cases.push(
 
 const disk = { method: 'disk-washer', variable: 'x', a: '0', b: '1' } as const;
 cases.push(
-  {
-    name: 'lateral surface of revolution is a planned gap',
-    exercise: ex(['y = x'], { kind: 'surface', ...disk, lateral: true }),
-    status: 'unsupported',
-    feature: 'surface:lateral',
-  },
   {
     name: 'circular cross-sections are a planned gap',
     exercise: ex(['y = x'], { kind: 'volume', ...disk, method: 'cross-section', shape: 'circle' }),
