@@ -88,6 +88,9 @@ import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
 import { UiLayoutState } from './state/ui-layout.state';
 import { CalculusToolState } from './state/calculus-tool.state';
+import { IntegralExtrasState, centroidFor } from './state/integral-extras.state';
+import { IntegralExtras } from './components/integral-extras/integral-extras';
+import { drawCentroid, drawRiemannPanels } from './canvas/integral-extras-renderer';
 import { derivativeOf, differentialCurveOf, tangentAt } from './state/derivative-view';
 import type { ToolTab, SheetSnap } from './state/ui-layout.state';
 import { IconComponent } from '../../../../shared/icons/icon.component';
@@ -165,6 +168,7 @@ function roundLimit(v: number): number {
     ConicAssistantComponent,
     SolidPanelComponent,
     CalculusPanel,
+    IntegralExtras,
     MathRendererComponent,
     ValueTable,
     ColorPicker,
@@ -172,7 +176,13 @@ function roundLimit(v: number): number {
     ShortcutsPopover,
   ],
   host: { '[style.--kb-h.px]': 'kbHeight()' },
-  providers: [SolidToolState, GraphInteractionState, UiLayoutState, CalculusToolState],
+  providers: [
+    SolidToolState,
+    GraphInteractionState,
+    UiLayoutState,
+    CalculusToolState,
+    IntegralExtrasState,
+  ],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
     './graphing-calculator.component.css',
@@ -195,6 +205,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   interactionState = inject(GraphInteractionState);
   uiLayout = inject(UiLayoutState);
   calculusState = inject(CalculusToolState);
+  integralExtras = inject(IntegralExtrasState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
@@ -614,6 +625,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return null;
   });
 
+  /** Centroid of the area tool's region (null without a usable selection). */
+  private centroid = computed(() => centroidFor(this.multiAreaGeometry()));
+
   results = computed<ResultRow[]>(() => {
     const res: ResultRow[] = [];
     const au = this.angleUnit();
@@ -658,6 +672,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         label: areaLabel(geom.a, geom.b, [name]),
         value: formatValue(value),
         notes: areaLimitNotes(geom.a, geom.b),
+      });
+    }
+
+    const c = this.centroid();
+    if (c) {
+      const ok = c.status === 'ok' || c.status === 'inaccurate';
+      res.push({
+        label: 'Centroid',
+        value: ok
+          ? `(${formatValue(c.x)}, ${formatValue(c.y)})`
+          : statusValueText(c.status, NaN, c.badPoint),
+        approx: ok && c.status === 'inaccurate',
       });
     }
 
@@ -746,6 +772,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.calculusState.open,
     );
     this.calculusState.connect(this.functions, this.angleUnit);
+    this.integralExtras.connect(this.functions, this.angleUnit, this.activeIntegral);
 
     // No traceable curve left: drop the stale tangent text so screen readers don't keep it.
     effect(() => {
@@ -765,6 +792,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.calculusState.taylor();
       this.calculusState.ode();
       this.calculusState.series();
+      this.integralExtras.riemann();
+      this.centroid();
       if (!this.isBrowser) return;
       this.requestRender();
     });
@@ -2395,6 +2424,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const compiled = compileExpression(expr.ast, au);
         const fn = (x: number) => compiled(x, 0);
         drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, expr.color, w, h);
+        const riemann = this.integralExtras.riemann();
+        if (riemann?.panels.length) {
+          drawRiemannPanels(ctx, this.viewport, riemann.panels, riemann.rule, w, h);
+        }
       }
     }
 
@@ -2432,6 +2465,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else if (geom?.mode === 'single') {
       drawIntegralArea(ctx, this.viewport, geom.fn, geom.a, geom.b, geom.expr.color, w, h);
     }
+    const centroid = this.centroid();
+    if (centroid) drawCentroid(ctx, this.viewport, centroid.x, centroid.y, w, h);
 
     if (this.showSolidTool()) {
       const spec = this.solidToolState.spec();

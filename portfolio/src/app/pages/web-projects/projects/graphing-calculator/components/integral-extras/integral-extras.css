@@ -1,0 +1,194 @@
+/* Own view encapsulation: repeats the calculus panel's controls (dark tokens, 1px borders, green active state). */
+:host {
+  display: block;
+  font-family: var(--font-family);
+}
+
+.extras {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0.75rem 12px;
+}
+
+.group {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.label {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.seg {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 2px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
+}
+
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.seg-btn:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.seg-btn.active {
+  color: var(--color-primary);
+  background: var(--color-glow-10);
+}
+
+.seg-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* n takes the a-field column of the range row above; Δx reads off the b column. */
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-name {
+  flex-shrink: 0;
+}
+
+.dx {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.text-input {
+  box-sizing: border-box;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 1.9rem;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.text-input:focus {
+  border-color: var(--color-primary);
+}
+
+.text-input[aria-invalid='true'] {
+  border-color: var(--color-corruption);
+}
+
+.hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.hint:empty {
+  margin: 0;
+}
+
+.hint.error {
+  color: var(--color-warning);
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.note strong {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-left: 2px solid var(--color-primary);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+}
+
+.result div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.result dt {
+  color: var(--color-text-muted);
+}
+
+.result dd {
+  margin: 0;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.result .sum {
+  color: var(--color-primary);
+}
+
+.result .rel {
+  color: var(--color-text-muted);
+}
+
+@media (pointer: coarse) {
+  .seg-btn,
+  .text-input {
+    min-height: 44px;
+  }
+}
