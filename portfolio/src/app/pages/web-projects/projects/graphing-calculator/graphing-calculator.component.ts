@@ -67,7 +67,7 @@ import { computePointsOfInterest } from './engine/critical-points';
 import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
-import { detectCurveMode } from './engine/mode-detector';
+import { detectCurveMode, unwrapParametricPair } from './engine/mode-detector';
 import { FUNCTION_COLORS } from './utils/color';
 import { MathInput } from './components/math-input/math-input';
 import {
@@ -1048,7 +1048,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           };
         }
         if (mode === 'parametric') {
-          const parts = raw.split(',');
+          const parts = unwrapParametricPair(raw).split(',');
           if (parts.length === 2) {
             const xExpr = parts[0].trim().replace(/^[xX]\s*=\s*/, '');
             const yExpr = parts[1].trim().replace(/^[yY]\s*=\s*/, '');

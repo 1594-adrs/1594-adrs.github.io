@@ -348,6 +348,31 @@ function expand(ast: ExpressionNode, center: number, n: number): Series {
         const [s, c] = sinCos(u, true);
         return div(s, c, n);
       }
+      case 'sech':
+        return div(constant(1, n), sinCos(u, true)[1], n);
+      case 'csch':
+        return div(constant(1, n), sinCos(u, true)[0], n);
+      case 'coth': {
+        const [s, c] = sinCos(u, true);
+        return div(c, s, n);
+      }
+      case 'cbrt':
+        return powConst(u, 1 / 3, n);
+      case 'asinh':
+        return integrate(
+          Math.asinh(u[0]),
+          div(deriv(u), powConst(add(constant(1, n), mul(u, u)), 0.5, n), n),
+        );
+      case 'acosh':
+        // NaN below 1 (the evaluator's domain); the guard in walk() turns a NaN center into nans.
+        return integrate(
+          Math.acosh(u[0]),
+          div(deriv(u), powConst(add(mul(u, u), constant(1, n), -1), 0.5, n), n),
+        );
+      case 'atanh':
+        return Math.abs(u[0]) >= 1
+          ? nans(n)
+          : integrate(Math.atanh(u[0]), div(deriv(u), add(constant(1, n), mul(u, u), -1), n));
       case 'asin':
       case 'acos': {
         // (asin u)′ = u′/√(1 − u²), acos = π/2 − asin.

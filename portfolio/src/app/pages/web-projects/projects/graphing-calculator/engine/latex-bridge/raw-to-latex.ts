@@ -6,6 +6,7 @@
  * precedence-aware parentheses. Parts that do not parse (incomplete typing such
  * as `sin(`) are kept as escaped text so nothing is lost. Never throws.
  */
+import { unwrapParametricPair } from '../mode-detector';
 import { parse } from '../parser';
 import type { ExpressionNode } from '../parser';
 
@@ -39,6 +40,7 @@ const COMMAND_FUNCTIONS: Record<string, string> = {
   sinh: 'sinh',
   cosh: 'cosh',
   tanh: 'tanh',
+  coth: 'coth',
   asin: 'arcsin',
   acos: 'arccos',
   atan: 'arctan',
@@ -262,6 +264,8 @@ function partToLatex(part: string): string {
 /** Parser syntax -> LaTeX for `mathfield.setValue`. Never throws; unparseable input is kept as escaped text. */
 export function rawToLatex(raw: string): string {
   if (typeof raw !== 'string' || raw.trim() === '') return '';
+  const pair = unwrapParametricPair(raw);
+  if (pair !== raw) return `${left}${rawToLatex(pair)}${right}`; // `(f(t), g(t))` keeps its parentheses
   try {
     const { parts, seps } = splitTopLevel(raw);
     let out = '';

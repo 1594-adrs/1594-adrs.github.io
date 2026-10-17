@@ -32,6 +32,22 @@ describe('symbolic-diff', () => {
     }
   });
 
+  it('new functions: exact derivatives match central differences', () => {
+    const cases: [string, number[]][] = [
+      ['cbrt(x)', [0.7, 8, -3]],
+      ['asinh(x)', [-1.2, 0.4]],
+      ['acosh(x)', [1.5, 3]],
+      ['atanh(x)', [-0.6, 0.3]],
+      ['sech(x)', [-0.8, 1.4]],
+      ['csch(x)', [0.5, -1.3]],
+      ['coth(x)', [0.5, -1.3]],
+      ['cbrt(x^2+1)*atanh(x/3)', [0.5, -1]],
+    ];
+    for (const [s, xs] of cases) {
+      for (const x of xs) expect(at(d(s), x)).toBeCloseTo(numeric(s, x), 5);
+    }
+  });
+
   it('partial derivatives treat the other variable as a constant', () => {
     expect(at(d('x^2*y + sin(y)', 'y'), 2, 0)).toBeCloseTo(4 + 1, 12);
     expect(at(d('x^2*y + sin(y)', 'x'), 2, 3)).toBeCloseTo(12, 12);

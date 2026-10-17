@@ -386,6 +386,27 @@ export function differentiate(ast: Node, variable: string): Node {
       case 'tanh':
         outer = div(ONE, sq(call('cosh', u)));
         break;
+      case 'cbrt':
+        outer = div(ONE, mul(num(3), sq(call('cbrt', u))));
+        break;
+      case 'asinh':
+        outer = div(ONE, call('sqrt', add(sq(u), ONE)));
+        break;
+      case 'acosh':
+        outer = div(ONE, call('sqrt', sub(sq(u), ONE)));
+        break;
+      case 'atanh':
+        outer = div(ONE, sub(ONE, sq(u)));
+        break;
+      case 'sech':
+        outer = neg(mul(call('sech', u), call('tanh', u)));
+        break;
+      case 'csch':
+        outer = neg(mul(call('csch', u), call('coth', u)));
+        break;
+      case 'coth':
+        outer = neg(sq(call('csch', u)));
+        break;
       case 'ln':
         return div(du, u);
       case 'log':

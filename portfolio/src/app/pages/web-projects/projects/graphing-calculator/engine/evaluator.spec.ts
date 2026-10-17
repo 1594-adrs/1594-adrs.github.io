@@ -109,6 +109,26 @@ describe('evalConstantExpression', () => {
       expect(evalExpression('tanh(0)', 0)).toBeCloseTo(0, 10);
     });
 
+    it('cbrt is the real cube root', () => {
+      expect(evalExpression('cbrt(27)', 0)).toBeCloseTo(3, 12);
+      expect(evalExpression('cbrt(-8)', 0)).toBeCloseTo(-2, 12);
+    });
+
+    it('inverse hyperbolics, with NaN outside the domain', () => {
+      expect(evalExpression('asinh(1)', 0)).toBeCloseTo(Math.asinh(1), 12);
+      expect(evalExpression('acosh(2)', 0)).toBeCloseTo(Math.acosh(2), 12);
+      expect(evalExpression('atanh(0.5)', 0)).toBeCloseTo(Math.atanh(0.5), 12);
+      expect(evalExpression('acosh(0.5)', 0)).toBeNaN();
+      expect(evalExpression('atanh(1)', 0)).toBeNaN();
+      expect(evalExpression('atanh(-2)', 0)).toBeNaN();
+    });
+
+    it('sech, csch, coth are reciprocals of cosh, sinh, tanh', () => {
+      expect(evalExpression('sech(1)', 0)).toBeCloseTo(1 / Math.cosh(1), 12);
+      expect(evalExpression('csch(1)', 0)).toBeCloseTo(1 / Math.sinh(1), 12);
+      expect(evalExpression('coth(1)', 0)).toBeCloseTo(1 / Math.tanh(1), 12);
+    });
+
     it('floor(1.5) = 1', () => {
       expect(evalExpression('floor(1.5)', 0)).toBe(1);
     });

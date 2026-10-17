@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectCurveMode } from './mode-detector';
+import { detectCurveMode, unwrapParametricPair } from './mode-detector';
 
 describe('detectCurveMode', () => {
   it('detects r=cos(theta) as polar', () => {
@@ -12,6 +12,24 @@ describe('detectCurveMode', () => {
 
   it('detects cos(t),sin(t) as parametric', () => {
     expect(detectCurveMode('cos(t),sin(t)')).toBe('parametric');
+  });
+
+  it('detects the parenthesized pair (cos(t),sin(t)) as parametric', () => {
+    expect(detectCurveMode('(cos(t), sin(t))')).toBe('parametric');
+    expect(detectCurveMode(' (t, t^2) ')).toBe('parametric');
+  });
+
+  it('treats a constant pair (1, 2) like 1, 2 (a point)', () => {
+    expect(detectCurveMode('1, 2')).toBe('parametric');
+    expect(detectCurveMode('(1, 2)')).toBe('parametric');
+  });
+
+  it('does not unwrap other parenthesized forms', () => {
+    expect(unwrapParametricPair('(a),(b)')).toBe('(a),(b)');
+    expect(unwrapParametricPair('(x+1)')).toBe('(x+1)');
+    expect(unwrapParametricPair('(sin(t), cos(t))')).toBe('sin(t), cos(t)');
+    expect(detectCurveMode('(x+1)')).toBe('explicit');
+    expect(detectCurveMode('(x,y)^2')).toBe('explicit');
   });
 
   it('detects x=cos(t),y=sin(t) as parametric (comma wins over x=)', () => {

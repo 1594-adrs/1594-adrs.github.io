@@ -133,6 +133,12 @@ function categorizeFunction(ast?: ExpressionNode): FunctionCategory {
     'sinh',
     'cosh',
     'tanh',
+    'asinh',
+    'acosh',
+    'atanh',
+    'sech',
+    'csch',
+    'coth',
   ]);
 
   const logExpFunctions = new Set(['log', 'ln', 'exp', 'logb']);
@@ -172,6 +178,12 @@ function categorizeFunction(ast?: ExpressionNode): FunctionCategory {
       'sinh',
       'cosh',
       'tanh',
+      'asinh',
+      'acosh',
+      'atanh',
+      'sech',
+      'csch',
+      'coth',
     ];
     const logExpNames = ['log', 'ln', 'exp', 'logb'];
     const names = collectFunctionNames(ast);

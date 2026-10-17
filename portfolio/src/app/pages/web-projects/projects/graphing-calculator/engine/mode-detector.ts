@@ -18,6 +18,22 @@ function hasTopLevelComma(raw: string): boolean {
   return commaCount === 1;
 }
 
+/**
+ * `(f(t), g(t))` -> `f(t), g(t)`: the Desmos-style pair, when one `(…)` spans the whole text and
+ * holds exactly one top-level comma. Anything else is returned unchanged (`(a),(b)` is not a pair).
+ */
+export function unwrapParametricPair(raw: string): string {
+  const t = raw.trim();
+  if (t[0] !== '(' || t[t.length - 1] !== ')') return raw;
+  let depth = 0;
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] === '(') depth++;
+    else if (t[i] === ')' && --depth === 0 && i < t.length - 1) return raw;
+  }
+  const inner = t.slice(1, -1);
+  return hasTopLevelComma(inner) ? inner : raw;
+}
+
 /** Whether `name` appears in `expr` as a standalone identifier (not e.g. the 'x' inside 'exp'). */
 function containsVariable(expr: string, name: string): boolean {
   const re = new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`);
@@ -33,7 +49,7 @@ function containsVariable(expr: string, name: string): boolean {
  * of being treated as an implicit vertical line.
  */
 export function detectCurveMode(raw: string): DetectedCurveMode {
-  const trimmed = raw.trim();
+  const trimmed = unwrapParametricPair(raw).trim();
 
   if (/^r\s*=/i.test(trimmed)) return 'polar';
   if (/[<>]=?/.test(trimmed)) return 'implicit';

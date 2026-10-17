@@ -51,6 +51,7 @@ const NUMBERS: Key[][] = [
 const FUNCTIONS: Key[][] = [
   [fn('sin'), fn('cos'), fn('tan'), fn('sec'), fn('csc'), fn('cot')],
   [fn('arcsin'), fn('arccos'), fn('arctan'), fn('sinh'), fn('cosh'), fn('tanh')],
+  [op('cbrt'), op('asinh'), op('acosh'), op('atanh'), op('sech'), op('csch')],
   [
     fn('ln'),
     fn('log'),
@@ -133,6 +134,13 @@ export const SAFE_INLINE_SHORTCUTS: Record<string, string> = {
   sinh: '\\sinh',
   cosh: '\\cosh',
   tanh: '\\tanh',
+  coth: '\\coth',
+  cbrt: '\\operatorname{cbrt}',
+  asinh: '\\operatorname{asinh}',
+  acosh: '\\operatorname{acosh}',
+  atanh: '\\operatorname{atanh}',
+  sech: '\\operatorname{sech}',
+  csch: '\\operatorname{csch}',
   ln: '\\ln',
   log: '\\log',
   exp: '\\exp',

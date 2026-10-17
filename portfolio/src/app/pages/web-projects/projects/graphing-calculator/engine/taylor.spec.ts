@@ -40,12 +40,29 @@ describe('taylorCoefficients', () => {
       ['asin(x)', 7, (k) => [0, 1, 0, 1 / 6, 0, 3 / 40, 0, 5 / 112][k]],
       ['acos(x)', 5, (k) => [Math.PI / 2, -1, 0, -1 / 6, 0, -3 / 40][k]],
       ['tanh(x)', 7, (k) => [0, 1, 0, -1 / 3, 0, 2 / 15, 0, -17 / 315][k]],
+      ['asinh(x)', 5, (k) => [0, 1, 0, -1 / 6, 0, 3 / 40][k]],
+      ['atanh(x)', 5, odd((k) => 1 / k)],
+      ['sech(x)', 4, (k) => [1, 0, -1 / 2, 0, 5 / 24][k]],
       ['log(1 + x)', 3, (k) => [0, 1, -1 / 2, 1 / 3][k] / Math.LN10],
       ['logb(2, 1 + x)', 2, (k) => [0, 1, -1 / 2][k] / Math.LN2],
       ['atan2(x, 1)', 5, odd((k) => (-1) ** ((k - 1) / 2) / k)],
       ['x^3 - 2*x + 4', 5, (k) => [4, -2, 0, 1, 0, 0][k]],
     ])('%s', (expr, order, c) => {
       expectSeries(taylor(expr, 0, order), series(order, c));
+    });
+
+    it('cbrt, acosh, csch and coth at a regular center', () => {
+      expectSeries(taylor('cbrt(x)', 8, 2), [2, 1 / 12, -1 / 288]);
+      expectSeries(taylor('cbrt(x)', -8, 1), [-2, 1 / 12]);
+      expectSeries(taylor('acosh(x)', 2, 1), [Math.acosh(2), 1 / Math.sqrt(3)]);
+      const sh = Math.sinh(1);
+      expectSeries(taylor('csch(x)', 1, 1), [1 / sh, -Math.cosh(1) / sh ** 2]);
+      expectSeries(taylor('coth(x)', 1, 1), [Math.cosh(1) / sh, -1 / sh ** 2]);
+    });
+
+    it('new functions outside their domain give NaN', () => {
+      expect(taylor('acosh(x)', 0.5, 2).every(Number.isNaN)).toBe(true);
+      expect(taylor('atanh(x)', 1, 2).every(Number.isNaN)).toBe(true);
     });
 
     it('tan(x) to order 11', () => {

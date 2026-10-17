@@ -98,7 +98,10 @@ import {
             ><span>Trigonometric functions</span> <span class="key-hint">asin/acos/atan</span
             ><span>Inverse trig</span> <span class="key-hint">sec/csc/cot</span
             ><span>Reciprocal trig</span> <span class="key-hint">sinh/cosh/tanh</span
-            ><span>Hyperbolic</span> <span class="key-hint">log</span><span>Logarithm base 10</span>
+            ><span>Hyperbolic</span> <span class="key-hint">asinh/acosh/atanh</span
+            ><span>Inverse hyperbolic</span> <span class="key-hint">sech/csch/coth</span
+            ><span>Reciprocal hyperbolic</span> <span class="key-hint">cbrt</span
+            ><span>Cube root</span> <span class="key-hint">log</span><span>Logarithm base 10</span>
             <span class="key-hint">ln</span><span>Natural logarithm</span>
             <span class="key-hint">sqrt</span><span>Square root</span>
             <span class="key-hint">abs</span><span>Absolute value</span>
