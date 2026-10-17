@@ -1,9 +1,27 @@
+import type { VirtualKeyboardLayer, VirtualKeyboardLayout } from 'mathlive';
 import {
   EXPRESSION_LAYOUTS,
   LIMIT_LAYOUTS,
   MATH_KEYBOARD_THEME_CSS,
   type MathKeyboardKind,
 } from '../../keyboard/math-keyboard-layout';
+
+/** Field kinds the loader knows: the shared keyboard kinds plus `sequence` (terms aₙ in n). */
+export type MathFieldKind = MathKeyboardKind | 'sequence';
+
+/** The expression keyboard with `n` in place of `y` on the variables layer, for sequence terms. */
+export const SEQUENCE_LAYOUTS: VirtualKeyboardLayout[] = EXPRESSION_LAYOUTS.map((l) => {
+  if (l.id !== 'calc-variables' || !('layers' in l)) return l;
+  const layers = l.layers.map((layer) =>
+    typeof layer === 'string'
+      ? layer
+      : ({
+          ...layer,
+          rows: layer.rows?.map((row) => row.map((k) => (k === 'y' ? 'n' : k))),
+        } satisfies VirtualKeyboardLayer),
+  );
+  return { ...l, label: 'n x', tooltip: 'Index n, variables and constants', layers };
+});
 
 let loading: Promise<boolean> | null = null;
 let ready = false;
@@ -54,9 +72,14 @@ export function hideMathKeyboard(): void {
 }
 
 /** Switches the global keyboard layout for the focused field's kind. */
-export function setMathKeyboardKind(kind: MathKeyboardKind): void {
+export function setMathKeyboardKind(kind: MathFieldKind): void {
   if (ready) {
-    window.mathVirtualKeyboard.layouts = kind === 'limit' ? LIMIT_LAYOUTS : EXPRESSION_LAYOUTS;
+    window.mathVirtualKeyboard.layouts =
+      kind === 'limit'
+        ? LIMIT_LAYOUTS
+        : kind === 'sequence'
+          ? SEQUENCE_LAYOUTS
+          : EXPRESSION_LAYOUTS;
   }
 }
 

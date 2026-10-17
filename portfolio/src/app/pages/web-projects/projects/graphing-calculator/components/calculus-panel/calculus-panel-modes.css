@@ -1,0 +1,90 @@
+/* Taylor / ODE / Series additions, split from calculus-panel.css to stay under the per-stylesheet
+   budget. Legend marks take their colour from `--c`, bound to the renderers' canvas constants. */
+
+.fields.one {
+  grid-template-columns: 1fr;
+}
+
+/* aₙ gets the room; the first index only needs a few digits. */
+.fields.term {
+  grid-template-columns: 1fr auto;
+}
+
+.text-input.start {
+  width: 7ch;
+}
+
+.poly {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px 0;
+  color: var(--color-text);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mark {
+  position: relative;
+  flex-shrink: 0;
+  width: 18px;
+  height: 10px;
+}
+
+.mark::before {
+  content: '';
+  position: absolute;
+}
+
+.mark.line::before,
+.mark.dash::before {
+  left: 0;
+  right: 0;
+  top: 4px;
+  border-top: 2px solid var(--c);
+}
+
+.mark.dash::before {
+  border-top-style: dashed;
+}
+
+.mark.tick::before {
+  left: 3px;
+  right: 3px;
+  top: 4px;
+  border-top: 1px solid var(--c);
+  transform: rotate(-30deg);
+}
+
+.mark.dot::before,
+.mark.ring::before {
+  left: 5px;
+  top: 1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.mark.dot::before {
+  background: var(--c);
+}
+
+.mark.ring::before {
+  border: 2px solid var(--c);
+}

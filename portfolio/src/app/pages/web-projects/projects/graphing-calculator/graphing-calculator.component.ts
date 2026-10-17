@@ -55,7 +55,14 @@ import { findAxisCrossings } from './canvas/utils';
 import { findNearestCurvePoint } from './canvas/curve-locator';
 import type { TraceCurve } from './canvas/curve-locator';
 import { drawTracePoint, drawPointOfInterest } from './canvas/trace-renderer';
-import { drawLimitMarker, drawNewtonSteps, drawTangentOverlay } from './canvas/calculus-renderer';
+import {
+  drawLimitMarker,
+  drawNewtonSteps,
+  drawSequence,
+  drawTangentOverlay,
+  drawTaylorPolynomial,
+} from './canvas/calculus-renderer';
+import { drawSlopeField } from './canvas/slope-field-renderer';
 import { computePointsOfInterest } from './engine/critical-points';
 import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
@@ -755,6 +762,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.interactionState.showNormal();
       this.calculusState.limit();
       this.calculusState.newton();
+      this.calculusState.taylor();
+      this.calculusState.ode();
+      this.calculusState.series();
       if (!this.isBrowser) return;
       this.requestRender();
     });
@@ -2451,6 +2461,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     }
     const newtonRun = this.calculusState.newton();
     if (newtonRun) drawNewtonSteps(ctx, this.viewport, newtonRun.rows, newtonRun.color, w, h);
+    const taylorRun = this.calculusState.taylor();
+    if (taylorRun) drawTaylorPolynomial(ctx, this.viewport, taylorRun, w, h);
+    const odeRun = this.calculusState.ode();
+    if (odeRun) drawSlopeField(ctx, this.viewport, odeRun, w, h);
+    const seriesRun = this.calculusState.series();
+    if (seriesRun) drawSequence(ctx, this.viewport, seriesRun, w, h);
 
     if (this.interactionState.showPointsOfInterest()) {
       this.schedulePoiRecompute();

@@ -16,15 +16,15 @@ import {
 import type { MathfieldElement } from 'mathlive';
 import { latexToRaw, rawToLatex } from '../../engine/latex-bridge/latex-bridge';
 import { SAFE_INLINE_SHORTCUTS } from '../../keyboard/math-keyboard-layout';
-import { loadMathlive, setMathKeyboardKind } from './mathlive-loader';
+import { loadMathlive, setMathKeyboardKind, type MathFieldKind } from './mathlive-loader';
 
 /** Keys that end a typed exponent (`x^10+1`): with smartSuperscript off, MathLive keeps them inside. */
 const EXPONENT_TERMINATORS = new Set(['+', '-', '*', '/', '=', '<', '>', ',']);
 
 /** Caret sits directly in a non-empty superscript. Uses MathLive's model (no public API for it). */
 function inNonEmptySuperscript(mf: MathfieldElement): boolean {
-  const model = (mf as unknown as { _mathfield?: { model?: { at(i: number): unknown } } })._mathfield
-    ?.model;
+  const model = (mf as unknown as { _mathfield?: { model?: { at(i: number): unknown } } })
+    ._mathfield?.model;
   const atom = model?.at(mf.position) as { parentBranch?: unknown; type?: string } | undefined;
   return mf.selectionIsCollapsed && atom?.parentBranch === 'superscript' && atom.type !== 'first';
 }
@@ -43,7 +43,8 @@ function placeholderLatex(text: string): string {
 })
 export class MathInput {
   readonly value = input.required<string>();
-  readonly kind = input<'expression' | 'limit'>('expression');
+  /** Keyboard layout shown while focused; `sequence` swaps `y` for `n` (the text is not validated). */
+  readonly kind = input<MathFieldKind>('expression');
   readonly label = input.required<string>();
   readonly placeholder = input('');
   readonly invalid = input(false);

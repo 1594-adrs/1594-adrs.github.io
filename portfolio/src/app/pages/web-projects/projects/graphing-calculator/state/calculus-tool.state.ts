@@ -6,10 +6,27 @@ import { parseLimitText } from '../engine/parse-limit';
 import type { MathExpression } from '../models/calculator.models';
 import { formatValue } from '../utils/format-value';
 import { dependsOn } from '../engine/symbolic-diff';
+import {
+  buildOdeView,
+  buildSeriesView,
+  buildTaylorView,
+  limitText,
+  type OdeSolver,
+  type OdeView,
+  type SeriesView,
+  type TaylorView,
+} from './calculus-f8-view';
 import { RADIANS_REASON, UNDEFINED_EVERYWHERE_REASON, usesAngleUnit } from './derivative-view';
 
-export type CalculusMode = 'limit' | 'newton';
+export type CalculusMode = 'limit' | 'newton' | 'taylor' | 'ode' | 'series';
 export type LimitSide = 'both' | '-' | '+';
+
+export { limitText };
+export type { OdeView, SeriesView, TaylorView, OdeSolver };
+export { MAX_ODE_ROWS } from './calculus-f8-view';
+
+/** Highest Taylor order accepted in the "order" field. */
+export const MAX_TAYLOR_ORDER = 12;
 
 /** Newton steps accepted in the "steps" field; empty runs until convergence. */
 export const MAX_NEWTON_STEPS = 50;
@@ -27,13 +44,6 @@ export function parseLimitPoint(raw: string): { value: number | null; invalid: b
   const inf = /^([+-]?)(inf|infinity|infty|oo|∞)$/.exec(compact);
   if (inf) return { value: inf[1] === '-' ? -Infinity : Infinity, invalid: false };
   return parseLimitText(raw);
-}
-
-/** "1", "∞", "-∞", "does not exist", "could not determine". */
-export function limitText(r: LimitResult): string {
-  if (r.status === 'dne') return 'does not exist';
-  if (r.status === 'unknown') return 'could not determine';
-  return formatValue(r.value);
 }
 
 export interface FunctionChoice {
@@ -125,6 +135,17 @@ export class CalculusToolState {
   side = signal<LimitSide>('both');
   newtonX0Text = signal('1');
   stepsText = signal('');
+  taylorCenterText = signal('0');
+  taylorOrderText = signal('3');
+  odeSlopeText = signal('x - y');
+  odeX0Text = signal('0');
+  odeY0Text = signal('1');
+  odeMethod = signal<OdeSolver>('rk45');
+  odeStepText = signal('0.5');
+  /** Empty means no target x. */
+  odeXEndText = signal('');
+  seriesTermText = signal('1/n^2');
+  seriesStartText = signal('1');
 
   private functions: Signal<MathExpression[]> = signal([]);
   private angleUnit: Signal<'rad' | 'deg'> = signal('rad');
@@ -192,6 +213,18 @@ export class CalculusToolState {
     return Number.isInteger(n) && n >= 1 && n <= MAX_NEWTON_STEPS
       ? { value: n, invalid: false }
       : { value: undefined, invalid: true };
+  });
+
+  taylorCenter = computed(() => {
+    const r = parseLimitText(this.taylorCenterText());
+    return r.value !== null && !Number.isFinite(r.value) ? { value: null, invalid: true } : r;
+  });
+  taylorOrder = computed<{ value: number | null; invalid: boolean }>(() => {
+    const t = this.taylorOrderText().trim();
+    const n = Number(t);
+    return t && Number.isInteger(n) && n >= 0 && n <= MAX_TAYLOR_ORDER
+      ? { value: n, invalid: false }
+      : { value: null, invalid: true };
   });
 
   private selectedAst = computed(() => {
@@ -292,5 +325,38 @@ export class CalculusToolState {
     };
     view.message = NEWTON_MESSAGES[r.status](view);
     return view;
+  });
+
+  /** taylor.ts is radians-only, like Newton. */
+  taylorBlocked = computed(() => {
+    const ast = this.selectedAst();
+    return !!ast && this.angleUnit() === 'deg' && usesAngleUnit(ast) ? RADIANS_REASON : null;
+  });
+
+  taylor = computed<TaylorView | null>(() => {
+    if (!this.open() || this.mode() !== 'taylor' || this.taylorBlocked()) return null;
+    const c = this.selected();
+    const ast = this.selectedAst();
+    const center = this.taylorCenter().value;
+    const order = this.taylorOrder().value;
+    if (!c || !ast || center === null || order === null) return null;
+    return buildTaylorView(ast, c.index, c.color, center, order);
+  });
+
+  ode = computed<OdeView | null>(() => {
+    if (!this.open() || this.mode() !== 'ode') return null;
+    return buildOdeView({
+      slopeText: this.odeSlopeText(),
+      x0: parseLimitText(this.odeX0Text()).value,
+      y0: parseLimitText(this.odeY0Text()).value,
+      method: this.odeMethod(),
+      h: parseLimitText(this.odeStepText()),
+      xEnd: parseLimitText(this.odeXEndText()),
+    });
+  });
+
+  series = computed<SeriesView | null>(() => {
+    if (!this.open() || this.mode() !== 'series') return null;
+    return buildSeriesView(this.seriesTermText(), parseLimitText(this.seriesStartText()).value);
   });
 }

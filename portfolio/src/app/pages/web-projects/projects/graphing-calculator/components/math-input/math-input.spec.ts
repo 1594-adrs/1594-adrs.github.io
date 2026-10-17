@@ -6,6 +6,7 @@ import {
   SAFE_INLINE_SHORTCUTS,
 } from '../../keyboard/math-keyboard-layout';
 import { MathInput } from './math-input';
+import { SEQUENCE_LAYOUTS } from './mathlive-loader';
 
 /*
  * The loader is NOT mocked: `vi.mock('./mathlive-loader')` is rejected by the Angular unit-test
@@ -156,6 +157,18 @@ describe('math keyboard and inline shortcuts', () => {
       const keys = keyLatex(layouts);
       for (const c of 'abcdefghijklmnopqrstuvwxyz') expect(keys).toContain(c);
     }
+  });
+
+  it('sequence keyboard swaps y for n on the variables layer only', () => {
+    const vars = (layouts: typeof LIMIT_LAYOUTS) =>
+      keyLatex(layouts.filter((l) => l.id === 'calc-variables'));
+    expect(vars(SEQUENCE_LAYOUTS)).toContain('n');
+    expect(vars(SEQUENCE_LAYOUTS)).not.toContain('y');
+    expect(vars(EXPRESSION_LAYOUTS)).toContain('y');
+    SEQUENCE_LAYOUTS.forEach((l, i) => {
+      if (l.id !== 'calc-variables') expect(l).toBe(EXPRESSION_LAYOUTS[i]);
+    });
+    expect(latexToRaw('\\frac{1}{n^2}').raw).toBe('((1)/(n^2))');
   });
 
   it('every typed function name becomes that function call', () => {

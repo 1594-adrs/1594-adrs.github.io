@@ -1,3 +1,5 @@
+import type { SeriesView, TaylorView } from '../state/calculus-f8-view';
+import { tryEval } from './utils';
 import { Viewport } from './viewport';
 
 // Canvas 2D context does not support CSS variables; colors mirror the design tokens
@@ -6,6 +8,14 @@ const COLOR_LABEL_BG = '#0a0a0f';
 const COLOR_LABEL_BORDER = '#333355';
 const COLOR_INK = '#e0e0e0';
 const COLOR_GUIDE = '#80809a';
+/** Sequence terms aₙ (filled), partial sums Sₙ (rings) and the series sum line. */
+export const COLOR_SEQ_TERM = '#00e5ff';
+export const COLOR_SEQ_PARTIAL = '#ffb300';
+export const COLOR_SEQ_SUM = '#ff6bd6';
+/** Most sequence points drawn per series. */
+export const SEQ_MAX_POINTS = 500;
+/** Screen px between samples of the Taylor polynomial. */
+const TAYLOR_STEP_PX = 2;
 const FONT = '11px "JetBrains Mono", monospace';
 const LINE_H = 15;
 const PAD = 4;
@@ -272,6 +282,91 @@ export function drawNewtonSteps(
       ctx.fillStyle = COLOR_INK;
       ctx.fillText(subscriptX(r.n), sx, ly);
       lastLabelX = sx;
+    }
+  }
+  ctx.restore();
+}
+
+/** Dashed P_n(x) in the function colour, with a ring at (a, f(a)). */
+export function drawTaylorPolynomial(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  view: TaylorView,
+  width: number,
+  height: number,
+): void {
+  if (view.coefficients.length === 0 || !view.coefficients.every(Number.isFinite)) return;
+  ctx.save();
+  ctx.strokeStyle = view.color;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 5]);
+  ctx.beginPath();
+  let pen = false;
+  for (let sx = 0; sx <= width; sx += TAYLOR_STEP_PX) {
+    const [wx] = viewport.screenToWorld(sx, 0, width, height);
+    const wy = tryEval(view.evaluate, wx);
+    if (Number.isNaN(wy)) {
+      pen = false;
+      continue;
+    }
+    const [, sy] = viewport.worldToScreen(wx, wy, width, height);
+    if (pen) ctx.lineTo(sx, sy);
+    else ctx.moveTo(sx, sy);
+    pen = true;
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const [px, py] = viewport.worldToScreen(view.center, view.coefficients[0], width, height);
+  ctx.fillStyle = COLOR_LABEL_BG;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Dots (n, aₙ) and rings (n, Sₙ) for the visible integers n, and a dashed line at the sum. */
+export function drawSequence(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  view: SeriesView,
+  width: number,
+  height: number,
+): void {
+  if (view.error) return;
+  ctx.save();
+  if (view.sum.status === 'finite') {
+    const [, sy] = viewport.worldToScreen(0, view.sum.value, width, height);
+    strokeSegment(ctx, [0, sy, width, sy], COLOR_SEQ_SUM, 1.5, [6, 4]);
+  }
+  ctx.setLineDash([]);
+  const lo = Math.max(view.n0, Math.ceil(viewport.xMin));
+  const hi = Math.min(Math.floor(viewport.xMax), lo + SEQ_MAX_POINTS - 1);
+  // shortcut: Sₙ dots are skipped when the window starts over 1e5 terms past n₀ (the prefix sum
+  // would stall a redraw); accumulate incrementally or use a closed form if that matters.
+  let s = 0;
+  let showSums = lo - view.n0 <= 1e5;
+  for (let n = view.n0; showSums && n < lo; n++) s += view.term(n);
+  for (let n = lo; n <= hi; n++) {
+    const a = tryEval(view.term, n);
+    const raw = view.term(n);
+    s += raw;
+    if (!Number.isFinite(s)) showSums = false;
+    if (!Number.isNaN(a)) {
+      const [sx, sy] = viewport.worldToScreen(n, a, width, height);
+      ctx.fillStyle = COLOR_SEQ_TERM;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (showSums) {
+      const [sx, sy] = viewport.worldToScreen(n, s, width, height);
+      ctx.strokeStyle = COLOR_SEQ_PARTIAL;
+      ctx.lineWidth = 1.75;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
   ctx.restore();

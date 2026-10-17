@@ -15,14 +15,16 @@
 
 .seg {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border: 1px solid var(--color-border);
   border-radius: 6px;
   overflow: hidden;
 }
 
 .seg-btn {
+  min-width: 0;
   min-height: 32px;
+  padding: 0 2px;
   background: none;
   border: none;
   color: var(--color-text-muted);
