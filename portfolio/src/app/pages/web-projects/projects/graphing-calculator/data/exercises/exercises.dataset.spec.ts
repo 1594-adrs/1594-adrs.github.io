@@ -30,6 +30,10 @@ function summary(): string {
     const own = rows.filter((r) => r.ex.source === source);
     lines.push(`  ${source} (${own.length}): ${fmt(count(own.map((r) => r.run.status)))}`);
   }
+  for (const [kind] of count(rows.map((r) => r.ex.op.kind))) {
+    const own = rows.filter((r) => r.ex.op.kind === kind);
+    lines.push(`  op ${kind} (${own.length}): ${fmt(count(own.map((r) => r.run.status)))}`);
+  }
   const features = count(rows.flatMap((r) => (r.run.feature ? [r.run.feature] : [])));
   lines.push(
     'Unsupported features:',

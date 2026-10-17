@@ -13,16 +13,21 @@ import {
 import {
   compileExpression,
   evalConstantExpression,
+  evaluate,
   type CompiledExpr,
 } from '../../engine/evaluator';
 import { findIntersections } from '../../engine/intersection-finder';
 import { detectCurveMode, type DetectedCurveMode } from '../../engine/mode-detector';
 import { parse, type ExpressionNode } from '../../engine/parser';
-import { computeLimit } from '../../engine/limit';
+import { computeLimit, type LimitResult } from '../../engine/limit';
 import { findAxisCrossings } from '../../engine/numeric-utils';
+import { solveIvp, stepIvp, type OdeResult } from '../../engine/ode';
 import { integrateAdaptive, type QuadratureResult } from '../../engine/quadrature';
+import { partialSum, recurrence, sequenceLimit, seriesSum, type Term } from '../../engine/series';
 import { computeSolid, type AxisLine, type SolidSpec } from '../../engine/solids';
 import { validateSolidSpec } from '../../engine/solids/solid-validation';
+import { substitute } from '../../engine/symbolic-diff';
+import { taylorCoefficients, TaylorError } from '../../engine/taylor';
 import { sumRegions } from '../../utils/result-format';
 import type { Exercise, ExerciseOp, ExerciseOpKind } from './exercise.types';
 
@@ -44,10 +49,6 @@ const UNSUPPORTED_OPS = new Set<ExerciseOpKind>([
   'polar-area',
   'centroid',
   'riemann',
-  'taylor',
-  'ode',
-  'sequence',
-  'series',
 ]);
 
 /** Planned syntax (see exercise.types.ts): reported as a gap, not as a typo. */
@@ -105,7 +106,10 @@ export function runExercise(ex: Exercise): ExerciseRun {
     if (op.kind === 'tangent' && ex.curves.length === 2) {
       return { status: 'unsupported', feature: 'tangent:implicit-in-t' };
     }
+    if (op.kind === 'ode') return runOde(ex, op);
+    if (op.kind === 'sequence' || op.kind === 'series') return runSequence(ex, op);
     const curves = ex.curves.map(prepareCurve);
+    if (op.kind === 'taylor') return runTaylor(ex, op, curves);
     if (op.kind === 'graph') return runGraph(ex, curves);
     if (op.kind === 'derivative' || op.kind === 'tangent') return runSlope(ex, op, curves);
 
@@ -532,6 +536,211 @@ function solid(op: Extract<ExerciseOp, { kind: 'volume' | 'surface' }>, curves: 
   );
 }
 
+// ---------------------------------------------------------------- taylor / ode / sequences
+
+/** Value and/or function answers checked together, as `runSlope` does. */
+function verdict(
+  ex: Exercise,
+  got: number[] | undefined,
+  fnError: string | null | undefined,
+  ordered = false,
+): ExerciseRun {
+  const want = ex.expected;
+  if (!want?.values && !want?.fn) return { status: 'ran', got };
+  // undefined = an fn answer the caller did not compare: never report ok for it.
+  if (want.fn && fnError === undefined) throw new Unsupported(`${ex.op.kind}:fn-answer`);
+  const expected = want.values?.map(constant);
+  if (expected && !got) throw new ParseFail(`${ex.op.kind}: a values answer needs a point`);
+  if (!expected && !want.fn) throw new ParseFail(`${ex.op.kind}: nothing to compare`);
+  const tol = want.tol ?? DEFAULT_TOL;
+  if (
+    expected &&
+    got &&
+    !sameValues(got, expected, tol, printedPrecision(want.values), ordered)
+  ) {
+    return { status: 'mismatch', got, expected, message: `got [${got}] expected [${expected}]` };
+  }
+  if (fnError) return { status: 'mismatch', got, expected, message: fnError };
+  return { status: 'ok', got, expected };
+}
+
+function runTaylor(
+  ex: Exercise,
+  op: Extract<ExerciseOp, { kind: 'taylor' }>,
+  curves: Curve[],
+): ExerciseRun {
+  if (curves.length !== 1 || curves[0].mode !== 'explicit') {
+    throw new ParseFail('taylor needs one y = f(x) curve');
+  }
+  if (!ex.expected?.fn) throw new ParseFail('taylor: the answer is a polynomial in fn');
+  const center = constant(op.center);
+  let coeffs: number[];
+  try {
+    coeffs = taylorCoefficients(curves[0].ast!, center, op.order);
+  } catch (err) {
+    if (err instanceof TaylorError) throw new Unsupported('taylor:function');
+    throw err;
+  }
+  const tol = ex.expected.tol ?? DEFAULT_TOL;
+  const expectedAst = parseChecked(ex.expected.fn.trim().replace(/^[yY]\s*=\s*/, ''), ['x']);
+  // Compare coefficients (a sampled comparison misses a dropped or extra high-order term); the
+  // two extra orders of the expected polynomial must vanish.
+  let want: number[] = [];
+  try {
+    want = taylorCoefficients(expectedAst, center, op.order + 2);
+  } catch (err) {
+    if (!(err instanceof TaylorError)) throw err;
+  }
+  if (want.length && want.every(Number.isFinite)) {
+    const got = [...coeffs, 0, 0];
+    for (let k = 0; k < want.length; k++) {
+      if (Math.abs(got[k] - want[k]) > Math.max(tol * Math.abs(want[k]), ABS_FLOOR)) {
+        const message = `coefficient of (x - c)^${k}: got ${got[k]} expected ${want[k]}`;
+        return { status: 'mismatch', got: coeffs, expected: want, message };
+      }
+    }
+    return { status: 'ok', got: coeffs, expected: want };
+  }
+  // shortcut: an expected fn that is not a polynomial series falls back to sampling near the center.
+  const poly: CompiledExpr = (x) => coeffs.reduceRight((acc, c) => acc * (x - center) + c, 0);
+  const points = FN_SAMPLES.slice(49, 70).map((s): [number, number] => [center + 1.5 * s, NaN]);
+  return verdict(ex, undefined, compareFn(points, poly, expectedFn(ex.expected.fn, ['x']), tol, 5));
+}
+
+function runOde(ex: Exercise, op: Extract<ExerciseOp, { kind: 'ode' }>): ExerciseRun {
+  if (ex.curves.length) throw new ParseFail('ode: the equation goes in op.f, not in curves');
+  const f = compileExpression(parseChecked(op.f, ['x', 'y']));
+  const x0 = constant(op.x0);
+  const y0 = constant(op.y0);
+  const tol = ex.expected?.tol ?? DEFAULT_TOL;
+
+  let got: number[] | undefined;
+  if (op.xEnd !== undefined) {
+    const xEnd = constant(op.xEnd);
+    let r: OdeResult;
+    if (op.method) {
+      if (op.h === undefined) throw new ParseFail(`ode: ${op.method} needs h`);
+      r = stepIvp(f, x0, y0, xEnd, op.method, constant(op.h));
+    } else {
+      [r] = solveIvp(f, x0, y0, [xEnd]);
+    }
+    got = [r.value];
+  }
+  let fnError: string | null = null;
+  if (ex.expected?.fn) {
+    if (op.method) throw new ParseFail('ode: an fn answer is the exact solution (no method)');
+    const xs = FN_SAMPLES.slice(0, 70).map((s) => x0 + s);
+    const sol = new Map(solveIvp(f, x0, y0, xs).map((r, i) => [xs[i], r]));
+    const solution: CompiledExpr = (x) => {
+      const r = sol.get(x);
+      return r?.status === 'ok' ? r.value : NaN;
+    };
+    const points = xs.map((x): [number, number] => [x, NaN]);
+    fnError = compareFn(points, solution, expectedFn(ex.expected.fn, ['x']), tol, MIN_FN_POINTS);
+  }
+  return verdict(ex, got, fnError);
+}
+
+/** `a(3) = 1` (seed) or `a(n+2) = …` (rule); also `a(n) = …`, rejected below. */
+const RECURRENCE_ROW = /^\s*([a-z])\(\s*(?:n\s*(?:\+\s*(\d+)\s*)?|(\d+)\s*)\)\s*=(.*)$/;
+
+/** aₙ from one explicit row in n (and x when `withX`), or from seed rows + one recurrence row. */
+function sequenceTerm(rows: string[], withX: boolean): (x: number) => Term {
+  const matches = rows.map((r) => RECURRENCE_ROW.exec(r));
+  if (rows.length === 1 && !matches[0]) {
+    // n → y, so the compiled closure reads (x, n).
+    const ast = substitute(parseChecked(rows[0], withX ? ['n', 'x'] : ['n']), {
+      n: { type: 'Variable', name: 'y' },
+    });
+    const F = compileExpression(ast);
+    return (x) => (n) => F(x, n);
+  }
+  if (withX || matches.some((m) => !m)) throw new ParseFail('sequence: mixed row forms');
+  const name = matches[0]![1];
+  const seeds = new Map<number, number>();
+  let rule: { order: number; text: string } | undefined;
+  for (const [, id, shift, index, rhs] of matches as RegExpExecArray[]) {
+    if (id !== name) throw new ParseFail(`sequence: rows name both '${name}' and '${id}'`);
+    if (index !== undefined) seeds.set(Number(index), constant(rhs));
+    else if (rule) throw new ParseFail('sequence: two recurrence rules');
+    else rule = { order: Number(shift ?? 0), text: rhs };
+  }
+  if (!rule || rule.order < 1) throw new ParseFail('sequence: needs a(n+k) = … with k ≥ 1');
+  const indices = [...seeds.keys()].sort((p, q) => p - q);
+  const nStart = indices[0];
+  if (indices.length > rule.order) {
+    throw new ParseFail('sequence: more seeds than the recurrence order (they would override it)');
+  }
+  if (indices.length < rule.order || indices.some((k, i) => k !== nStart + i)) {
+    throw new ParseFail('sequence: seeds must be consecutive and cover the order');
+  }
+  // a(n+j) → w<j>, so the rule is an ordinary expression in n, w0…w<order−1>.
+  const slots = Array.from({ length: rule.order }, (_, j) => `w${j}`);
+  const call = new RegExp(`\\b${name}\\(\\s*n\\s*(?:\\+\\s*(\\d+)\\s*)?\\)`, 'g');
+  const text = rule.text.replace(call, (_, j?: string) => ` ${slots[Number(j ?? 0)] ?? '?'} `);
+  const ast = parseChecked(text, ['n', ...slots]);
+  const term = recurrence(
+    indices.map((k) => seeds.get(k)!),
+    nStart,
+    rule.order,
+    (m, w) => evaluate(ast, { n: m, ...Object.fromEntries(w.map((v, j) => [slots[j], v])) }),
+  );
+  return () => term;
+}
+
+function runSequence(
+  ex: Exercise,
+  op: Extract<ExerciseOp, { kind: 'sequence' | 'series' }>,
+): ExerciseRun {
+  if (!ex.curves.length) throw new ParseFail(`${op.kind} needs aₙ in curves`);
+  const nStart = op.nStart ?? 1;
+  const limitValue = (r: LimitResult): number => {
+    if (r.status === 'unknown') throw new Fail(`${op.kind}: the engine cannot decide (unknown)`);
+    return r.value;
+  };
+
+  if (ex.expected?.fn && !(op.kind === 'series' && op.nMax === undefined)) {
+    if (op.kind === 'series') throw new ParseFail('series: an fn answer is the infinite sum');
+    throw new Unsupported('sequence:fn-answer');
+  }
+  if (op.kind === 'series' && ex.expected?.fn) {
+    const termAt = sequenceTerm(ex.curves, true);
+    // Outside the interval of convergence the sum is not 'finite' and the point is skipped.
+    const sum: CompiledExpr = (x) => {
+      const r = seriesSum(termAt(x), nStart);
+      return r.status === 'finite' ? r.value : NaN;
+    };
+    const xs = [...FN_SAMPLES];
+    const converged = xs.filter((x) => Number.isFinite(sum(x, NaN)));
+    if (converged.length >= 1 && converged.length < MIN_FN_POINTS) {
+      // Narrow interval of convergence: densify between the nearest non-converged samples.
+      const sorted = [...FN_SAMPLES].sort(ascending);
+      const lo = Math.min(...converged);
+      const hi = Math.max(...converged);
+      const a = sorted[Math.max(0, sorted.findIndex((x) => x === lo) - 1)];
+      const b = sorted[Math.min(sorted.length - 1, sorted.findIndex((x) => x === hi) + 1)];
+      xs.push(...linspace(a, b, 18).slice(1, -1));
+    }
+    const points = xs.map((x): [number, number] => [x, NaN]);
+    const tol = ex.expected.tol ?? DEFAULT_TOL;
+    const fnError = compareFn(points, sum, expectedFn(ex.expected.fn, ['x']), tol, MIN_FN_POINTS);
+    return verdict(ex, undefined, fnError);
+  }
+
+  const a = sequenceTerm(ex.curves, false)(NaN);
+  let got: number[];
+  if (op.kind === 'series') {
+    got = [
+      op.nMax === undefined ? limitValue(seriesSum(a, nStart)) : partialSum(a, nStart, op.nMax),
+    ];
+  } else if (op.nMax === undefined) {
+    got = [limitValue(sequenceLimit(a, nStart))];
+  } else {
+    got = Array.from({ length: op.nMax - nStart + 1 }, (_, i) => a(nStart + i));
+  }
+  return verdict(ex, got, null, true);
+}
+
 // ---------------------------------------------------------------- numerics
 
 /** 'divergent' → ±Infinity ('inf'), 'undefined' → NaN ('dne'). */
@@ -551,10 +760,16 @@ function printedPrecision(values: string[] | undefined): number {
   return floor;
 }
 
-function sameValues(got: number[], expected: number[], tol: number, absFloor: number): boolean {
+function sameValues(
+  got: number[],
+  expected: number[],
+  tol: number,
+  absFloor: number,
+  ordered = false,
+): boolean {
   if (got.length !== expected.length) return false;
-  const g = [...got].sort(ascending);
-  const e = [...expected].sort(ascending);
+  const g = ordered ? got : [...got].sort(ascending);
+  const e = ordered ? expected : [...expected].sort(ascending);
   return e.every((ev, i) => {
     const gv = g[i];
     // 'dne' accepts any non-finite engine answer ('divergent' of either sign or 'undefined').

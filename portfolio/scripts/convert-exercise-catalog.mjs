@@ -122,6 +122,15 @@ const PATCHES = {
       ['3.9-356', '1'],
     ].map(([n, y0]) => [`openstax1-${n}`, (r) => (r.op.y0 = y0)]),
   ),
+  // sin(1−x+x·ln x) solves the ODE only up to x ≈ 3.24 (1−y² must stay ≥ 0): check a value at 3.
+  'openstax2-4.3-139': (r) => {
+    r.op.xEnd = '3';
+    r.expected = { values: ['sin(3*ln(3)-2)'], from: 'derived' };
+  },
+  // Extra seed a(2) overrides the recurrence order; a(1) = 1 alone gives the golden-ratio limit.
+  'thomas12-10A-7': (r) => (r.curves = r.curves.filter((c) => c !== 'a(2) = 1')),
+  // Degenerate a^n with a free parameter a.
+  'thomas12-10.6-52': () => 'skip',
   // Inverse of sin at a = 0: the point is (0, 0), not another root of sin(y) = 0.
   'openstax1-3.7-267': (r) => (r.op.y0 = '0'),
   // Note "interval [2,5]": y0 = 27/10, the point the expected tangent passes through.

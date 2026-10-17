@@ -282,16 +282,121 @@ const cases: Case[] = [
     status: 'ok',
   },
   {
-    name: 'ode with no curves',
-    exercise: ex([], { kind: 'ode', f: 'x + y', x0: '0', y0: '1', xEnd: '1' }, ['1']),
-    status: 'unsupported',
-    feature: 'ode',
+    name: 'ode y′ = x + y, y(0) = 1 at x = 1 (y = 2eˣ − x − 1)',
+    exercise: ex([], { kind: 'ode', f: 'x + y', x0: '0', y0: '1', xEnd: '1' }, ['2*e - 2']),
+    status: 'ok',
+  },
+  {
+    name: 'ode solution compared as a function',
+    exercise: ex([], { kind: 'ode', f: 'x + y', x0: '0', y0: '1' }, undefined, {
+      expected: { fn: '2*e^x - x - 1', from: 'derived' },
+    }),
+    status: 'ok',
+  },
+  {
+    name: 'euler y′ = y, h = 0.5 from y(0) = 1 to x = 1 (1.5²)',
+    exercise: ex(
+      [],
+      { kind: 'ode', f: 'y', x0: '0', y0: '1', xEnd: '1', method: 'euler', h: '0.5' },
+      ['2.25'],
+    ),
+    status: 'ok',
   },
   {
     name: 'series of a bare expression in n',
     exercise: ex(['1/n^2'], { kind: 'series', nStart: 1 }, ['pi^2/6']),
+    status: 'ok',
+  },
+  {
+    name: 'partial sum S_4 of n^2',
+    exercise: ex(['n^2'], { kind: 'series', nStart: 1, nMax: 4 }, ['30']),
+    status: 'ok',
+  },
+  {
+    name: 'power series in x compared as a function',
+    exercise: ex(['x^n'], { kind: 'series', nStart: 0 }, undefined, {
+      expected: { fn: '1/(1 - x)', from: 'derived' },
+    }),
+    status: 'ok',
+  },
+  {
+    name: 'fibonacci terms from a second-order recurrence',
+    exercise: ex(
+      ['a(1) = 1', 'a(2) = 1', 'a(n+2) = a(n+1) + a(n)'],
+      { kind: 'sequence', nStart: 1, nMax: 6 },
+      ['1', '1', '2', '3', '5', '8'],
+    ),
+    status: 'ok',
+  },
+  {
+    name: 'sequence limit (1 + 1/n)^n',
+    exercise: ex(['(1 + 1/n)^n'], { kind: 'sequence', nStart: 1 }, ['e']),
+    status: 'ok',
+  },
+  {
+    name: 'recurrence with a(n) on the left is malformed',
+    exercise: ex(['a(1) = 1', 'a(n) = a(n) + 1'], { kind: 'sequence' }, ['1']),
+    status: 'parse-error',
+  },
+  {
+    name: 'taylor of sin at 0, order 3',
+    exercise: ex(['y = sin(x)'], { kind: 'taylor', center: '0', order: 3 }, undefined, {
+      expected: { fn: 'x - x^3/6', from: 'derived' },
+    }),
+    status: 'ok',
+  },
+  {
+    name: 'ode wrong value is a mismatch',
+    exercise: ex([], { kind: 'ode', f: 'x + y', x0: '0', y0: '1', xEnd: '1' }, ['2*e - 1']),
+    status: 'mismatch',
+  },
+  {
+    name: 'series wrong sum is a mismatch',
+    exercise: ex(['1/n^2'], { kind: 'series', nStart: 1 }, ['pi^2/5']),
+    status: 'mismatch',
+  },
+  {
+    name: 'taylor wrong coefficient is a mismatch',
+    exercise: ex(['y = sin(x)'], { kind: 'taylor', center: '0', order: 3 }, undefined, {
+      expected: { fn: 'x - x^3/5', from: 'derived' },
+    }),
+    status: 'mismatch',
+  },
+  {
+    name: 'taylor extra high-order term is a mismatch',
+    exercise: ex(['y = sin(x)'], { kind: 'taylor', center: '0', order: 3 }, undefined, {
+      expected: { fn: 'x - x^3/6 + x^5/120', from: 'derived' },
+    }),
+    status: 'mismatch',
+  },
+  {
+    name: 'sequence terms in reversed order are a mismatch',
+    exercise: ex(
+      ['a(1) = 1', 'a(2) = 1', 'a(n+2) = a(n+1) + a(n)'],
+      { kind: 'sequence', nStart: 1, nMax: 6 },
+      ['8', '5', '3', '2', '1', '1'],
+    ),
+    status: 'mismatch',
+  },
+  {
+    name: 'fn answer on a sequence is not compared',
+    exercise: ex(['1/n'], { kind: 'sequence', nStart: 1 }, undefined, {
+      expected: { fn: '1/n', from: 'derived' },
+    }),
     status: 'unsupported',
-    feature: 'series',
+    feature: 'sequence:fn-answer',
+  },
+  {
+    name: 'more seeds than the recurrence order is malformed',
+    exercise: ex(['a(1) = 1', 'a(2) = 1', 'a(n+1) = a(n)'], { kind: 'sequence' }, ['1']),
+    status: 'parse-error',
+  },
+  {
+    name: 'series with a narrow interval of convergence (ln 3, ln 5)',
+    exercise: ex(['(e^x - 4)^n'], { kind: 'series', nStart: 0 }, undefined, {
+      expected: { fn: '1/(5 - e^x)', from: 'derived' },
+    }),
+    status: 'ok',
   },
   {
     name: 'extrema of x^3 - 3x',
@@ -342,10 +447,6 @@ const unsupportedOps: ExerciseOp[] = [
   { kind: 'polar-area', a: '0', b: '1' },
   { kind: 'centroid', a: '0', b: '1' },
   { kind: 'riemann', rule: 'left', n: 4, a: '0', b: '1' },
-  { kind: 'taylor', center: '0', order: 3 },
-  { kind: 'ode', f: 'x + y', x0: '0', y0: '1' },
-  { kind: 'sequence' },
-  { kind: 'series' },
 ];
 for (const op of unsupportedOps) {
   cases.push({
