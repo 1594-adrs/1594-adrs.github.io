@@ -8,19 +8,117 @@ import type { ExpressionNode } from '../engine/parser';
 const COLOR_LABEL_BG = '#0a0a0f';
 const COLOR_LABEL_BORDER = '#333355';
 
-const MAX_Y_CLAMP = 1e6;
-const ASYMPTOTE_EPSILON = 1e-10;
+/** A sample interval is halved at most this many times while refining (~ the double mantissa). */
+const MAX_REFINE_DEPTH = 64;
+/** A parametric step whose midpoint is farther than this from the chord is refined, in px. */
+const SMOOTH_TOLERANCE_PX = 1;
+
+type Pt = [number, number];
+
+/**
+ * Strokes t -> point(t) (screen px) for t in [t0, t1] from `samples` uniform steps.
+ * - Points are clamped to one canvas size beyond each edge: path coordinates stay bounded at any
+ *   zoom and an off-screen run stays off-screen.
+ * - A step that moves more than half the canvas is bisected: a steep but continuous piece
+ *   converges and is drawn, a pole or a jump never does and the path breaks there.
+ * - A step next to an undefined sample is extended to the edge of the domain (sqrt at 0, r = 1/θ).
+ * - `smooth` also bisects steps whose midpoint is off the chord (parametric curves, few samples).
+ * Refinement draws on a budget of extra evaluations (`samples`, 4x with `smooth`) to bound a frame.
+ */
+function traceCurve(
+  ctx: CanvasRenderingContext2D,
+  point: (t: number) => Pt,
+  t0: number,
+  t1: number,
+  samples: number,
+  width: number,
+  height: number,
+  smooth = false,
+): void {
+  let budget = smooth ? 4 * samples : samples;
+  const at = (t: number): Pt | null => {
+    const [x, y] = point(t);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return [Math.min(2 * width, Math.max(-width, x)), Math.min(2 * height, Math.max(-height, y))];
+  };
+  const far = (a: Pt, b: Pt): boolean =>
+    Math.abs(b[0] - a[0]) > width / 2 || Math.abs(b[1] - a[1]) > height / 2;
+  const bent = (a: Pt, m: Pt, b: Pt): boolean =>
+    Math.hypot(m[0] - (a[0] + b[0]) / 2, m[1] - (a[1] + b[1]) / 2) > SMOOTH_TOLERANCE_PX;
+
+  const join = (ta: number, a: Pt, tb: number, b: Pt, depth: number): void => {
+    const isFar = far(a, b);
+    if (!isFar && !smooth) return void ctx.lineTo(b[0], b[1]);
+    const tm = (ta + tb) / 2;
+    const m = depth > 0 && tm !== ta && tm !== tb && budget-- > 0 ? at(tm) : null;
+    if (!m || (!isFar && !bent(a, m, b))) {
+      if (isFar) ctx.moveTo(b[0], b[1]);
+      else ctx.lineTo(b[0], b[1]);
+      return;
+    }
+    join(ta, a, tm, m, depth - 1);
+    join(tm, m, tb, b, depth - 1);
+  };
+  /** Last defined point between a defined `tIn` and an undefined `tOut`. */
+  const edge = (tIn: number, pIn: Pt, tOut: number): [number, Pt] => {
+    for (let d = 0; d < MAX_REFINE_DEPTH && budget-- > 0; d++) {
+      const tm = (tIn + tOut) / 2;
+      if (tm === tIn || tm === tOut) break;
+      const m = at(tm);
+      if (m) [tIn, pIn] = [tm, m];
+      else tOut = tm;
+    }
+    return [tIn, pIn];
+  };
+
+  ctx.beginPath();
+  let prevT = t0;
+  let prev: Pt | null = null;
+  for (let i = 0; i <= samples; i++) {
+    const t = t0 + (i / samples) * (t1 - t0);
+    const p = at(t);
+    if (p && prev) join(prevT, prev, t, p, MAX_REFINE_DEPTH);
+    else if (p && i > 0) {
+      const [te, pe] = edge(t, p, prevT);
+      ctx.moveTo(pe[0], pe[1]);
+      join(te, pe, t, p, MAX_REFINE_DEPTH);
+    } else if (p) ctx.moveTo(p[0], p[1]);
+    else if (prev) {
+      const [te, pe] = edge(prevT, prev, t);
+      join(prevT, prev, te, pe, MAX_REFINE_DEPTH);
+    }
+    prevT = t;
+    prev = p;
+  }
+  ctx.stroke();
+}
+
+function evalOrNaN(fn: (t: number) => number, t: number): number {
+  try {
+    return fn(t);
+  } catch {
+    return NaN;
+  }
+}
+
+function setStroke(ctx: CanvasRenderingContext2D, color: string): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+}
 
 function getVerticalAsymptotes(
   fn: (x: number) => number,
   viewport: Viewport,
+  eps: number,
   ast?: ExpressionNode,
 ): number[] {
   const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax, ast);
   return asymptotes
     .filter((a) => a.type === 'vertical')
     .map((a) => a.value)
-    .filter((v) => v > viewport.xMin + ASYMPTOTE_EPSILON && v < viewport.xMax - ASYMPTOTE_EPSILON)
+    .filter((v) => v > viewport.xMin + eps && v < viewport.xMax - eps)
     .sort((a, b) => a - b);
 }
 
@@ -32,91 +130,15 @@ function drawFunctionSegment(
   xEnd: number,
   width: number,
   height: number,
-  color: string,
-  isNearAsymptoteStart: boolean,
-  isNearAsymptoteEnd: boolean,
 ): void {
   const [startPx] = viewport.worldToScreen(xStart, 0, width, height);
   const [endPx] = viewport.worldToScreen(xEnd, 0, width, height);
-
-  const pixelStart = Math.max(0, Math.floor(startPx));
-  const pixelEnd = Math.min(width, Math.ceil(endPx));
-  const pixelWidth = pixelEnd - pixelStart;
-
+  const pixelWidth = Math.min(width, Math.ceil(endPx)) - Math.max(0, Math.floor(startPx));
   if (pixelWidth < 1) return;
 
   const samples = Math.max(200, pixelWidth * 4);
-  const dx = (xEnd - xStart) / samples;
-
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
-  ctx.beginPath();
-  let drawing = false;
-  let prevSy: number | null = null;
-  let prevPx: number | null = null;
-
-  for (let i = 0; i <= samples; i++) {
-    const t = i / samples;
-    let wx: number;
-
-    if (isNearAsymptoteStart && isNearAsymptoteEnd) {
-      wx = xStart + t * (xEnd - xStart);
-    } else if (isNearAsymptoteStart) {
-      wx = xStart + Math.pow(t, 0.3) * (xEnd - xStart);
-    } else if (isNearAsymptoteEnd) {
-      wx = xStart + Math.pow(t, 3) * (xEnd - xStart);
-    } else {
-      wx = xStart + t * (xEnd - xStart);
-    }
-
-    const [px] = viewport.worldToScreen(wx, 0, width, height);
-
-    if (px < 0 || px > width) continue;
-
-    let wy: number;
-    try {
-      wy = fn(wx);
-    } catch {
-      drawing = false;
-      prevSy = null;
-      prevPx = null;
-      continue;
-    }
-
-    if (!isFinite(wy) || Math.abs(wy) > MAX_Y_CLAMP) {
-      drawing = false;
-      prevSy = null;
-      prevPx = null;
-      continue;
-    }
-
-    const [, sy] = viewport.worldToScreen(wx, wy, width, height);
-
-    if (!drawing) {
-      ctx.moveTo(px, sy);
-      drawing = true;
-    } else {
-      if (prevSy !== null && prevPx !== null) {
-        const dy = Math.abs(sy - prevSy);
-        const dpx = Math.abs(px - prevPx);
-        if (dpx > 0 && dy / dpx > height * 0.5) {
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(px, sy);
-        } else {
-          ctx.lineTo(px, sy);
-        }
-      } else {
-        ctx.lineTo(px, sy);
-      }
-    }
-    prevSy = sy;
-    prevPx = px;
-  }
-  ctx.stroke();
+  const point = (x: number): Pt => viewport.worldToScreen(x, evalOrNaN(fn, x), width, height);
+  traceCurve(ctx, point, xStart, xEnd, samples, width, height);
 }
 
 export function drawFunction(
@@ -128,49 +150,16 @@ export function drawFunction(
   height: number,
   ast?: ExpressionNode,
 ): void {
-  const asymptotes = getVerticalAsymptotes(fn, viewport, ast);
-
-  const segments: Array<{
-    start: number;
-    end: number;
-    nearStart: boolean;
-    nearEnd: boolean;
-  }> = [];
-  let prevX = viewport.xMin;
-
-  for (const ax of asymptotes) {
-    if (ax > prevX + ASYMPTOTE_EPSILON) {
-      segments.push({
-        start: prevX,
-        end: ax - ASYMPTOTE_EPSILON,
-        nearStart: false,
-        nearEnd: true,
-      });
-    }
-    prevX = ax + ASYMPTOTE_EPSILON;
+  // Gap left at each side of a vertical asymptote, relative to the view so it works at any zoom.
+  const eps = (viewport.xMax - viewport.xMin) * 1e-9;
+  setStroke(ctx, color);
+  let start = viewport.xMin;
+  for (const ax of getVerticalAsymptotes(fn, viewport, eps, ast)) {
+    if (ax > start + eps) drawFunctionSegment(ctx, viewport, fn, start, ax - eps, width, height);
+    start = ax + eps;
   }
-  if (prevX < viewport.xMax - ASYMPTOTE_EPSILON) {
-    segments.push({
-      start: prevX,
-      end: viewport.xMax,
-      nearStart: false,
-      nearEnd: false,
-    });
-  }
-
-  for (const seg of segments) {
-    drawFunctionSegment(
-      ctx,
-      viewport,
-      fn,
-      seg.start,
-      seg.end,
-      width,
-      height,
-      color,
-      seg.nearStart,
-      seg.nearEnd,
-    );
+  if (start < viewport.xMax - eps) {
+    drawFunctionSegment(ctx, viewport, fn, start, viewport.xMax, width, height);
   }
 }
 
@@ -183,54 +172,9 @@ export function drawExplicitY(
   width: number,
   height: number,
 ): void {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
-  const yMin = viewport.yMin;
-  const yMax = viewport.yMax;
-  const samples = Math.max(200, height * 2);
-  const dy = (yMax - yMin) / samples;
-
-  ctx.beginPath();
-  let drawing = false;
-  let prevSx: number | null = null;
-  let prevSy: number | null = null;
-
-  for (let i = 0; i <= samples; i++) {
-    const y = yMin + i * dy;
-    const x = tryEval(fn, y);
-
-    if (isNaN(x)) {
-      drawing = false;
-      prevSx = null;
-      prevSy = null;
-      continue;
-    }
-
-    const [sx, sy] = viewport.worldToScreen(x, y, width, height);
-
-    if (!drawing) {
-      ctx.moveTo(sx, sy);
-      drawing = true;
-    } else if (prevSx !== null && prevSy !== null) {
-      const dxPix = Math.abs(sx - prevSx);
-      const dyPix = Math.abs(sy - prevSy);
-      if (dyPix > 0 && dxPix / dyPix > width * 0.5) {
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-      } else {
-        ctx.lineTo(sx, sy);
-      }
-    } else {
-      ctx.lineTo(sx, sy);
-    }
-    prevSx = sx;
-    prevSy = sy;
-  }
-  ctx.stroke();
+  setStroke(ctx, color);
+  const point = (y: number): Pt => viewport.worldToScreen(evalOrNaN(fn, y), y, width, height);
+  traceCurve(ctx, point, viewport.yMin, viewport.yMax, Math.max(200, height * 2), width, height);
 }
 
 /** Upper bound of samples when shading a region; keeps a frame bounded for any a/b. */
@@ -513,35 +457,11 @@ export function drawParametric(
   width: number,
   height: number,
 ): void {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
+  setStroke(ctx, color);
   const steps = Math.min(10000, Math.max(500, Math.abs(tMax - tMin) * 50));
-  const dt = (tMax - tMin) / steps;
-
-  const maxY = viewport.yMax + (viewport.yMax - viewport.yMin) * 0.1;
-  const minY = viewport.yMin - (viewport.yMax - viewport.yMin) * 0.1;
-
-  ctx.beginPath();
-  let drawing = false;
-
-  for (let i = 0; i <= steps; i++) {
-    const t = tMin + i * dt;
-    const wx = tryEval(fnX, t);
-    const wy = tryEval(fnY, t);
-    if (isNaN(wx) || isNaN(wy) || !isFinite(wx) || !isFinite(wy) || wy > maxY || wy < minY) {
-      drawing = false;
-      continue;
-    }
-    const [sx, sy] = viewport.worldToScreen(wx, wy, width, height);
-    if (!drawing) {
-      ctx.moveTo(sx, sy);
-      drawing = true;
-    } else ctx.lineTo(sx, sy);
-  }
-  ctx.stroke();
+  const point = (t: number): Pt =>
+    viewport.worldToScreen(evalOrNaN(fnX, t), evalOrNaN(fnY, t), width, height);
+  traceCurve(ctx, point, tMin, tMax, steps, width, height, true);
 }
 
 export function drawPolar(
@@ -554,42 +474,13 @@ export function drawPolar(
   width: number,
   height: number,
 ): void {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
+  setStroke(ctx, color);
   const steps = Math.min(10000, Math.max(500, Math.abs(thetaMax - thetaMin) * 50));
-  const dtheta = (thetaMax - thetaMin) / steps;
-
-  const maxY = viewport.yMax + (viewport.yMax - viewport.yMin) * 0.1;
-  const minY = viewport.yMin - (viewport.yMax - viewport.yMin) * 0.1;
-  const maxX = viewport.xMax + (viewport.xMax - viewport.xMin) * 0.1;
-  const minX = viewport.xMin - (viewport.xMax - viewport.xMin) * 0.1;
-
-  ctx.beginPath();
-  let drawing = false;
-
-  for (let i = 0; i <= steps; i++) {
-    const theta = thetaMin + i * dtheta;
-    const r = tryEval(fn, theta);
-    if (isNaN(r) || !isFinite(r)) {
-      drawing = false;
-      continue;
-    }
-    const wx = r * Math.cos(theta);
-    const wy = r * Math.sin(theta);
-    if (wx < minX || wx > maxX || wy < minY || wy > maxY) {
-      drawing = false;
-      continue;
-    }
-    const [sx, sy] = viewport.worldToScreen(wx, wy, width, height);
-    if (!drawing) {
-      ctx.moveTo(sx, sy);
-      drawing = true;
-    } else ctx.lineTo(sx, sy);
-  }
-  ctx.stroke();
+  const point = (theta: number): Pt => {
+    const r = evalOrNaN(fn, theta);
+    return viewport.worldToScreen(r * Math.cos(theta), r * Math.sin(theta), width, height);
+  };
+  traceCurve(ctx, point, thetaMin, thetaMax, steps, width, height, true);
 }
 
 export function drawInequality(
@@ -684,7 +575,8 @@ export function drawImplicitInequality(
   const cellPx = coarse ? INEQUALITY_CELL_PX_COARSE : INEQUALITY_CELL_PX;
   const cols = Math.max(1, Math.round(width / cellPx));
   const rows = Math.max(1, Math.round(height / cellPx));
-  const key = `${viewport.xMin.toFixed(6)}:${viewport.xMax.toFixed(6)}:${viewport.yMin.toFixed(6)}:${viewport.yMax.toFixed(6)}:${cols}:${rows}:${comparison}:${color}`;
+  // Exact bounds: a rounded key would reuse a stale fill after a sub-rounding pan at deep zoom.
+  const key = `${viewport.xMin}:${viewport.xMax}:${viewport.yMin}:${viewport.yMax}:${cols}:${rows}:${comparison}:${color}`;
 
   let entry = inequalityCache.get(fn);
   if (!entry || entry.key !== key) {

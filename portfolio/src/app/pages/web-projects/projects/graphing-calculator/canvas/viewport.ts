@@ -27,8 +27,10 @@ export class Viewport {
     const [wx, wy] = this.screenToWorld(centerX, centerY, width, height);
     let newW = (this.xMax - this.xMin) / factor;
     let newH = (this.yMax - this.yMin) / factor;
-    newW = Math.max(1e-10, Math.min(1e15, newW));
-    newH = Math.max(1e-10, Math.min(1e15, newH));
+    // The minimum keeps ~1000 representable doubles across the view, wherever it is centred.
+    const span = (v: number) => Math.max(1e-10, Math.abs(v) * Number.EPSILON * 1000);
+    newW = Math.max(span(wx), Math.min(1e15, newW));
+    newH = Math.max(span(wy), Math.min(1e15, newH));
     this.xMin = wx - (centerX / width) * newW;
     this.xMax = this.xMin + newW;
     this.yMin = wy - ((height - centerY) / height) * newH;
