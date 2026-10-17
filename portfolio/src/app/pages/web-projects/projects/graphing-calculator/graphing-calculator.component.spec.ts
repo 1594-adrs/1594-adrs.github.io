@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { GraphingCalculatorComponent } from './graphing-calculator.component';
-import { buildShareHash } from './state/share-state';
+import { evalExpression } from './engine/evaluator';
+import { buildShareHash, extractShareFragment, parseShareState } from './state/share-state';
 
 describe('GraphingCalculatorComponent', () => {
   beforeEach(async () => {
@@ -583,6 +584,101 @@ describe('GraphingCalculatorComponent', () => {
       expect(fn.mode).toBe(mode);
       expect(fn.inequalityOp).toBe(op);
       expect(mode === 'parametric' ? fn.paramX && fn.paramY : fn.ast).toBeTruthy();
+    });
+  });
+  describe('free parameters (sliders)', () => {
+    function setup(...rows: string[]) {
+      const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+      rows.forEach((raw, i) => {
+        if (i > 0) comp.addFunction();
+        comp.updateExpression(i, raw);
+      });
+      return comp;
+    }
+
+    it('y = a*x^2 with a = 2 evaluates to 2x², and moving a updates it', () => {
+      const comp = setup('y = a*x^2', 'a = 2');
+      const fn = () => comp.functions()[0];
+      expect(fn().error).toBeNull();
+      expect(evalExpression(fn().ast!, 3)).toBe(18);
+      comp.paramSliders.setSliderValue(1, -0.5);
+      comp.paramSliders.flush();
+      expect(comp.functions()[1].raw).toBe('a = -0.5');
+      expect(evalExpression(fn().ast!, 2)).toBe(-2);
+      expect(comp.paramSliders.sliders()[1]).toEqual({
+        name: 'a',
+        value: -0.5,
+        min: -10,
+        max: 10,
+        step: 0.1,
+      });
+    });
+
+    it('a row without its slider gets missingParams and an add-slider error', () => {
+      const comp = setup('y = a*x + b');
+      expect(comp.functions()[0].missingParams).toEqual(['a', 'b']);
+      expect(comp.functions()[0].error).toBe('Add sliders for a, b');
+      expect(comp.functions()[0].ast).toBeNull();
+      expect(comp.paramSliders.addSlider('a')).toBe(true);
+      expect(comp.functions()[1].raw).toBe('a = 1');
+      expect(comp.paramSliders.missing()[0]).toEqual(['b']);
+      expect(comp.paramSliders.addSlider('a')).toBe(false);
+    });
+
+    it('a slider row is never drawn nor offered by the tools', () => {
+      const comp = setup('a = 1', 'y = a*x');
+      const slider = comp.functions()[0];
+      expect(slider.mode).toBe('slider');
+      expect(slider.ast).toBeNull();
+      expect(comp.canUseWithTools(slider)).toBe(false);
+      expect(comp.derivatives()[0].applicable).toBe(false);
+      expect(comp.solidToolState.curveOptions().map((o) => o.index)).toEqual([1]);
+      expect(comp.canvasDescription()).not.toContain('a = 1');
+      comp.activateIntegral();
+      expect(comp.activeIntegral()?.fnIndex).toBe(1);
+      comp.activateIntegral();
+      comp.activateMultiArea();
+      expect(comp.activeMultiArea()?.functionIndices).toEqual([1]);
+      comp.toggleMultiAreaFunction(0);
+      expect(comp.activeMultiArea()?.functionIndices).toEqual([1]);
+    });
+
+    it('a second definition is an error and the first one wins', () => {
+      const comp = setup('a = 2', 'a = 3', 'y = a');
+      expect(comp.functions()[1].error).toBe('a is already defined');
+      expect(evalExpression(comp.functions()[2].ast!, 0)).toBe(2);
+      comp.removeFunction(0);
+      expect(comp.functions()[0].error).toBeNull();
+      expect(evalExpression(comp.functions()[1].ast!, 0)).toBe(3);
+    });
+
+    it('a typed value outside the range widens it; bounds edits clamp the value', () => {
+      const comp = setup('k = 25');
+      expect(comp.functions()[0].slider).toEqual({ min: -10, max: 25, step: 0.1 });
+      expect(comp.paramSliders.setSliderBounds(0, { min: 5, max: 3 })).toBe(false);
+      expect(comp.paramSliders.setSliderBounds(0, { max: 20, step: 0.5 })).toBe(true);
+      expect(comp.functions()[0].raw).toBe('k = 20');
+    });
+
+    it('slider bounds round-trip through a share link', () => {
+      window.location.hash = buildShareHash({
+        v: 2,
+        functions: [
+          { raw: 'y = a*x', color: '#00ff88', visible: true },
+          { raw: 'a = 3', color: '#ff6b35', visible: true, slider: { min: 0, max: 5, step: 0.5 } },
+        ],
+        viewport: { xMin: -5, xMax: 5, yMin: -5, yMax: 5 },
+        tool: { active: null },
+      });
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      fixture.detectChanges();
+      const comp = fixture.componentInstance;
+      expect(evalExpression(comp.functions()[0].ast!, 2)).toBe(6);
+      expect(comp.functions()[1].slider).toEqual({ min: 0, max: 5, step: 0.5 });
+      const shared = (comp as unknown as { buildShareState(): unknown }).buildShareState();
+      const parsed = parseShareState(extractShareFragment(buildShareHash(shared as never))!);
+      expect(parsed?.functions[1].slider).toEqual({ min: 0, max: 5, step: 0.5 });
+      expect(parsed?.functions[0].slider).toBeUndefined();
     });
   });
 });

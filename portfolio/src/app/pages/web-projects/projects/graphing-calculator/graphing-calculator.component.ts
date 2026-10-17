@@ -68,6 +68,7 @@ import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode, maskNested, unwrapParametricPair } from './engine/mode-detector';
+import { substituteParams } from './engine/params';
 import { FUNCTION_COLORS } from './utils/color';
 import { MathInput } from './components/math-input/math-input';
 import {
@@ -88,6 +89,7 @@ import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
 import { UiLayoutState } from './state/ui-layout.state';
 import { CalculusToolState, parseLimitPoint } from './state/calculus-tool.state';
+import { ParamSlidersState } from './state/param-sliders.state';
 import { IntegralExtrasState, centroidFor } from './state/integral-extras.state';
 import { IntegralExtras } from './components/integral-extras/integral-extras';
 import { drawCentroid, drawRiemannPanels } from './canvas/integral-extras-renderer';
@@ -185,6 +187,7 @@ const INTEGRAL_KEYS: ReadonlySet<string> = new Set(['integralA', 'integralB']);
     UiLayoutState,
     CalculusToolState,
     IntegralExtrasState,
+    ParamSlidersState,
   ],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
@@ -208,6 +211,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   interactionState = inject(GraphInteractionState);
   uiLayout = inject(UiLayoutState);
   calculusState = inject(CalculusToolState);
+  /** Free parameters: slider rows (`a = 2`) and the rows that use them. */
+  paramSliders = inject(ParamSlidersState);
   integralExtras = inject(IntegralExtrasState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
@@ -274,7 +279,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   canvasDescription = computed(() => {
     const parts: string[] = [];
     const descriptions = this.functions()
-      .filter((f) => f.visible && f.raw.trim())
+      .filter((f) => f.visible && f.raw.trim() && f.mode !== 'slider')
       .map((f) => this.describeFunctionForA11y(f));
     parts.push(
       descriptions.length > 0 ? `Graph of ${descriptions.join(', ')}.` : 'No functions plotted.',
@@ -760,6 +765,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     });
 
     this.solidToolState.connect(this.functions, this.angleUnit);
+    this.paramSliders.connect(this.functions, (fn, raw, values) => this.parseRow(fn, raw, values));
 
     // Snap or keyboard change: re-centre the plot above the sheet and repaint.
     effect(() => {
@@ -931,6 +937,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.solidToolState.handleFunctionRemoved(index);
     this.calculusState.handleFunctionRemoved(index);
     this.derivHintIndex.set(null);
+    // The removed row may have defined (or duplicated) a slider other rows use.
+    this.paramSliders.resolveAll();
     this.requestRender();
   }
 
@@ -939,11 +947,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private parseAndValidate(
     exprText: string,
     sampleVars: Record<string, number>,
+    values: ReadonlyMap<string, number>,
   ): { ast: ExpressionNode | null; error: string | null } {
     if (!exprText.trim()) return { ast: null, error: null };
     let ast: ExpressionNode;
     try {
-      ast = parse(exprText);
+      ast = substituteParams(parse(exprText), values);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ast: null, error: formatExpressionError(message, exprText) };
@@ -958,14 +967,81 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   updateExpression(index: number, raw: string): void {
-    this.functions.update((fns) =>
-      fns.map((fn, i) => {
-        if (i !== index) return fn;
-        const mode = this.detectMode(raw);
-        const effectiveRaw = mode === 'explicit' ? this.stripYEquals(raw) : raw;
-        if (mode === 'explicit-y') {
-          const rhs = raw.trim().replace(/^[xX]\s*=\s*/, '');
-          const { ast, error } = this.parseAndValidate(rhs, { y: 1 });
+    this.paramSliders.updateRow(index, raw);
+    this.requestRender();
+  }
+
+  /** One row read from `raw`, with the slider values substituted (called by ParamSlidersState,
+   *  which handles slider rows and missing parameters itself). */
+  private parseRow(
+    fn: MathExpression,
+    raw: string,
+    values: ReadonlyMap<string, number>,
+  ): MathExpression {
+    const mode = this.detectMode(raw);
+    const effectiveRaw = mode === 'explicit' ? this.stripYEquals(raw) : raw;
+    if (mode === 'explicit-y') {
+      const rhs = raw.trim().replace(/^[xX]\s*=\s*/, '');
+      const { ast, error } = this.parseAndValidate(rhs, { y: 1 }, values);
+      return {
+        ...fn,
+        raw,
+        ast,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error,
+      };
+    }
+    if (mode === 'implicit') {
+      // Length guard: the lazy `.*?` regex is quadratic on long inputs without an operator.
+      const top = maskNested(raw);
+      const inequalityMatch = raw.length <= MAX_INEQUALITY_RAW ? /(>=|<=|>|<)/.exec(top) : null;
+      // `1 < x^2+y^2 < 4`: the parser desugars the chain to a 1/0 indicator, drawn as `> 0`.
+      if (
+        inequalityMatch &&
+        raw.length <= MAX_INEQUALITY_RAW &&
+        top.match(/[<>]=?/g)!.length === 2
+      ) {
+        const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values);
+        return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: '>', error };
+      }
+      if (inequalityMatch) {
+        const lhs = raw.slice(0, inequalityMatch.index).trim();
+        const op = inequalityMatch[1] as '>' | '<' | '>=' | '<=';
+        const rhs = raw.slice(inequalityMatch.index + op.length).trim();
+        if (/^y$/i.test(lhs)) {
+          const { ast, error } = this.parseAndValidate(rhs, { x: 1 }, values);
+          return {
+            ...fn,
+            raw,
+            ast,
+            mode,
+            paramX: null,
+            paramY: null,
+            inequalityOp: op,
+            error,
+          };
+        }
+        const { ast, error } = this.parseAndValidate(`(${lhs})-(${rhs})`, { x: 1, y: 1 }, values);
+        return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op, error };
+      }
+      if (top.includes('=')) {
+        const eqIdx = top.indexOf('=');
+        const lhsText = raw.substring(0, eqIdx);
+        const rhsText = raw.substring(eqIdx + 1);
+        try {
+          const lhs = substituteParams(parse(lhsText), values);
+          const rhs = substituteParams(parse(rhsText), values);
+          evaluate(lhs, { x: 1, y: 1 }, this.angleUnit());
+          evaluate(rhs, { x: 1, y: 1 }, this.angleUnit());
+          const ast: ExpressionNode = {
+            type: 'BinaryOp',
+            operator: '=',
+            left: lhs,
+            right: rhs,
+          };
           return {
             ...fn,
             raw,
@@ -974,125 +1050,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
-            error,
+            error: null,
           };
-        }
-        if (mode === 'implicit') {
-          // Length guard: the lazy `.*?` regex is quadratic on long inputs without an operator.
-          const top = maskNested(raw);
-          const inequalityMatch =
-            raw.length <= MAX_INEQUALITY_RAW ? /(>=|<=|>|<)/.exec(top) : null;
-          // `1 < x^2+y^2 < 4`: the parser desugars the chain to a 1/0 indicator, drawn as `> 0`.
-          if (inequalityMatch && raw.length <= MAX_INEQUALITY_RAW && top.match(/[<>]=?/g)!.length === 2) {
-            const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 });
-            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: '>', error };
-          }
-          if (inequalityMatch) {
-            const lhs = raw.slice(0, inequalityMatch.index).trim();
-            const op = inequalityMatch[1] as '>' | '<' | '>=' | '<=';
-            const rhs = raw.slice(inequalityMatch.index + op.length).trim();
-            if (/^y$/i.test(lhs)) {
-              const { ast, error } = this.parseAndValidate(rhs, { x: 1 });
-              return {
-                ...fn,
-                raw,
-                ast,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: op,
-                error,
-              };
-            }
-            const { ast, error } = this.parseAndValidate(`(${lhs})-(${rhs})`, { x: 1, y: 1 });
-            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op, error };
-          }
-          if (top.includes('=')) {
-            const eqIdx = top.indexOf('=');
-            const lhsText = raw.substring(0, eqIdx);
-            const rhsText = raw.substring(eqIdx + 1);
-            try {
-              const lhs = parse(lhsText);
-              const rhs = parse(rhsText);
-              evaluate(lhs, { x: 1, y: 1 }, this.angleUnit());
-              evaluate(rhs, { x: 1, y: 1 }, this.angleUnit());
-              const ast: ExpressionNode = {
-                type: 'BinaryOp',
-                operator: '=',
-                left: lhs,
-                right: rhs,
-              };
-              return {
-                ...fn,
-                raw,
-                ast,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: undefined,
-                error: null,
-              };
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              return {
-                ...fn,
-                raw,
-                ast: null,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: undefined,
-                error: formatExpressionError(message, raw),
-              };
-            }
-          }
-          const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 });
-          return {
-            ...fn,
-            raw,
-            ast,
-            mode,
-            paramX: null,
-            paramY: null,
-            inequalityOp: undefined,
-            error,
-          };
-        }
-        if (mode === 'parametric') {
-          const pair = unwrapParametricPair(raw);
-          const commas = [...maskNested(pair).matchAll(/,/g)].map((m) => m.index);
-          const parts =
-            commas.length === 1 ? [pair.slice(0, commas[0]), pair.slice(commas[0] + 1)] : [];
-          if (parts.length === 2) {
-            const xExpr = parts[0].trim().replace(/^[xX]\s*=\s*/, '');
-            const yExpr = parts[1].trim().replace(/^[yY]\s*=\s*/, '');
-            try {
-              const paramX = parse(xExpr);
-              const paramY = parse(yExpr);
-              return {
-                ...fn,
-                raw,
-                ast: null,
-                mode,
-                paramX,
-                paramY,
-                inequalityOp: undefined,
-                error: null,
-              };
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              return {
-                ...fn,
-                raw,
-                ast: null,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: undefined,
-                error: formatExpressionError(message, raw),
-              };
-            }
-          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           return {
             ...fn,
             raw,
@@ -1101,38 +1062,94 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
-            error: null,
+            error: formatExpressionError(message, raw),
           };
         }
-        if (mode === 'polar') {
-          const expr = raw.replace(/^r\s*=\s*/i, '');
-          // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
-          const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 });
+      }
+      const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values);
+      return {
+        ...fn,
+        raw,
+        ast,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error,
+      };
+    }
+    if (mode === 'parametric') {
+      const pair = unwrapParametricPair(raw);
+      const commas = [...maskNested(pair).matchAll(/,/g)].map((m) => m.index);
+      const parts =
+        commas.length === 1 ? [pair.slice(0, commas[0]), pair.slice(commas[0] + 1)] : [];
+      if (parts.length === 2) {
+        const xExpr = parts[0].trim().replace(/^[xX]\s*=\s*/, '');
+        const yExpr = parts[1].trim().replace(/^[yY]\s*=\s*/, '');
+        try {
+          const paramX = substituteParams(parse(xExpr), values);
+          const paramY = substituteParams(parse(yExpr), values);
           return {
             ...fn,
             raw,
-            ast,
+            ast: null,
+            mode,
+            paramX,
+            paramY,
+            inequalityOp: undefined,
+            error: null,
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            ...fn,
+            raw,
+            ast: null,
             mode,
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
-            error,
+            error: formatExpressionError(message, raw),
           };
         }
-        const { ast, error } = this.parseAndValidate(effectiveRaw, { x: 1 });
-        return {
-          ...fn,
-          raw,
-          ast,
-          mode: 'explicit',
-          paramX: null,
-          paramY: null,
-          inequalityOp: undefined,
-          error,
-        };
-      }),
-    );
-    this.requestRender();
+      }
+      return {
+        ...fn,
+        raw,
+        ast: null,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error: null,
+      };
+    }
+    if (mode === 'polar') {
+      const expr = raw.replace(/^r\s*=\s*/i, '');
+      // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
+      const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 }, values);
+      return {
+        ...fn,
+        raw,
+        ast,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error,
+      };
+    }
+    const { ast, error } = this.parseAndValidate(effectiveRaw, { x: 1 }, values);
+    return {
+      ...fn,
+      raw,
+      ast,
+      mode: 'explicit',
+      paramX: null,
+      paramY: null,
+      inequalityOp: undefined,
+      error,
+    };
   }
 
   /** f′ row toggle; a no-op on rows it does not apply to (the button says why). */
@@ -1216,7 +1233,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else {
       this.closeSolidTool();
       this.activeMultiArea.set(null);
-      this.activeIntegral.set({ fnIndex: 0, a: -2, b: 2 });
+      const first = this.functions().findIndex((f) => f.mode !== 'slider');
+      this.activeIntegral.set({ fnIndex: Math.max(0, first), a: -2, b: 2 });
     }
     this.requestRender();
   }
@@ -1286,8 +1304,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else {
       this.activeIntegral.set(null);
       this.closeSolidTool();
-      const indices =
-        this.functions().length >= 2 ? [0, 1] : this.functions().length === 1 ? [0] : [];
+      const indices = this.functions()
+        .flatMap((f, i) => (f.mode === 'slider' ? [] : [i]))
+        .slice(0, 2);
 
       let a = -2;
       let b = 2;
@@ -1342,6 +1361,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   toggleMultiAreaFunction(index: number): void {
+    if (this.functions()[index]?.mode === 'slider') return;
     this.activeMultiArea.update((cfg) => {
       if (!cfg) return null;
       const has = cfg.functionIndices.includes(index);
@@ -1771,6 +1791,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         color: f.color,
         visible: f.visible,
         ...(f.showDerivative ? { derivative: true } : {}),
+        ...(f.slider ? { slider: { ...f.slider } } : {}),
       })),
       viewport: {
         xMin: this.viewport.xMin,
@@ -1895,9 +1916,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         visible: f.visible,
         mode: 'explicit' as const,
         error: null,
+        ...(f.slider ? { slider: { ...f.slider } } : {}),
       })),
     );
-    state.functions.forEach((f, i) => this.updateExpression(i, f.raw));
+    // All rows at once: a row may use a slider defined further down.
+    this.paramSliders.resolveAll();
     this.functions.update((fns) =>
       fns.map((fn, i) => (state.functions[i]?.derivative ? { ...fn, showDerivative: true } : fn)),
     );
@@ -2063,6 +2086,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       updated.splice(targetIndex, 0, moved);
       return updated;
     });
+    // Order decides which duplicate slider definition wins.
+    this.paramSliders.resolveAll();
 
     this.solidToolState.handleFunctionMoved(sourceIndex, targetIndex);
     this.calculusState.handleFunctionMoved(sourceIndex, targetIndex);
@@ -2181,7 +2206,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private parseAll(): void {
     this.functions.update((fns) =>
       fns.map((fn) => {
-        if (!fn.raw || fn.ast) return fn;
+        if (!fn.raw || fn.ast || fn.error || fn.mode === 'slider') return fn;
         try {
           return { ...fn, ast: parse(fn.raw) };
         } catch {

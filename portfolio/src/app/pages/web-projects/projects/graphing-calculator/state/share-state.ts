@@ -13,6 +13,8 @@ interface ShareFunction {
   visible: boolean;
   /** v2: plot f′ too (only written when true). */
   derivative?: boolean;
+  /** Slider rows (`a = 2`): the range. Optional, so v2 keeps loading either way (no bump). */
+  slider?: { min: number; max: number; step: number };
 }
 
 interface ShareViewport {
@@ -135,7 +137,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  *  An invalid `color` is replaced by the palette color for its slot. */
 function sanitizeFunction(f: unknown, index: number): ShareFunction | null {
   if (!isRecord(f)) return null;
-  const { raw, color, visible, derivative } = f;
+  const { raw, color, visible, derivative, slider } = f;
   if (typeof raw !== 'string' || raw.length > MAX_RAW_LENGTH) return null;
   if (typeof visible !== 'boolean') return null;
   const safeColor =
@@ -144,7 +146,20 @@ function sanitizeFunction(f: unknown, index: number): ShareFunction | null {
       : FUNCTION_COLORS[index % FUNCTION_COLORS.length];
   const out: ShareFunction = { raw, color: safeColor, visible };
   if (derivative === true) out.derivative = true;
+  const bounds = sanitizeSlider(slider);
+  if (bounds) out.slider = bounds;
   return out;
+}
+
+/** Slider range, or null (dropped, link kept) unless finite, bounded, min < max, 0 < step ≤ span. */
+function sanitizeSlider(v: unknown): ShareFunction['slider'] | null {
+  if (!isRecord(v)) return null;
+  const { min, max, step } = v;
+  if (![min, max, step].every((n) => isFiniteNumber(n) && Math.abs(n) <= MAX_TOOL_BOUND)) {
+    return null;
+  }
+  const [lo, hi, st] = [min, max, step] as number[];
+  return lo < hi && st > 0 && st <= hi - lo ? { min: lo, max: hi, step: st } : null;
 }
 
 function isValidViewport(v: unknown): v is ShareViewport {

@@ -88,6 +88,31 @@ describe('share-state', () => {
     expect(parsed?.functions[0].derivative).toBeUndefined();
   });
 
+  it('round-trips slider bounds and drops invalid ones, keeping the link', () => {
+    const state = makeState();
+    state.functions.push({
+      raw: 'a = 2',
+      color: '#00ccff',
+      visible: true,
+      slider: { min: -5, max: 20, step: 0.5 },
+    });
+    expect(parseShareState(serializeShareState(state))).toEqual(state);
+    for (const slider of [
+      { min: 3, max: 1, step: 0.1 },
+      { min: 0, max: 1, step: 0 },
+      { min: 0, max: 1e9, step: 1 },
+      { min: 0, max: 1, step: 2 },
+      'x',
+    ]) {
+      const junk = {
+        ...makeState(),
+        functions: [{ raw: 'a = 1', color: '#00ff88', visible: true, slider }],
+      };
+      const parsed = parseShareState(serializeShareState(junk as unknown as ShareState));
+      expect(parsed?.functions[0]).toEqual({ raw: 'a = 1', color: '#00ff88', visible: true });
+    }
+  });
+
   it('round-trips the v2 f′ and tangent toggles, dropping non-true values', () => {
     const state = makeState();
     state.functions[0].derivative = true;

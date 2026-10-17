@@ -52,6 +52,7 @@ function methodOrientation(
 
 /** Whether a function row can be used as a solid curve for the given integration variable. */
 function curveCompatible(fn: MathExpression, variable: IntegrationVariable): boolean {
+  if (fn.mode === 'slider') return false;
   if (fn.mode === 'explicit' || fn.mode === 'explicit-y') {
     return curveModeMatchesVariable(fn.mode as DetectedCurveMode, variable);
   }
@@ -128,7 +129,9 @@ export class SolidToolState implements OnDestroy {
   curveOptions = computed<SolidCurveOption[]>(() => {
     const variable = this.variable();
     const selected = this.curveIndices();
-    return this.functionsSignal().map((fn, index) => {
+    // Slider rows (`a = 2`) are not curves: never offered.
+    return this.functionsSignal().flatMap((fn, index) => {
+      if (fn.mode === 'slider') return [];
       const compatible = fn.visible && curveCompatible(fn, variable);
       return {
         index,

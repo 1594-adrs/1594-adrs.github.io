@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { detectCurveMode, maskNested, unwrapParametricPair } from './mode-detector';
+import {
+  detectCurveMode,
+  isParamName,
+  maskNested,
+  sliderName,
+  unwrapParametricPair,
+} from './mode-detector';
 
 describe('detectCurveMode', () => {
   it('detects r=cos(theta) as polar', () => {
@@ -85,5 +91,32 @@ describe('relations nested in if() do not change the mode', () => {
     ['y < if(x < 0, -x, x)', 'implicit'],
   ])('%s → %s', (raw, mode) => {
     expect(detectCurveMode(raw)).toBe(mode);
+  });
+});
+
+describe('slider rows', () => {
+  it('detects `<param> = <constant>` as a slider row', () => {
+    expect(detectCurveMode('a = 2')).toBe('slider');
+    expect(detectCurveMode('k=-0.5')).toBe('slider');
+    expect(detectCurveMode('n = sqrt(2)/3')).toBe('slider');
+    expect(sliderName(' b = 2a ')).toBe('b'); // shortcut: invalid value, still a slider row
+  });
+
+  it('keeps reserved names and curve-variable right-hand sides as curves', () => {
+    expect(detectCurveMode('y = 2')).toBe('explicit');
+    expect(detectCurveMode('x = 3')).toBe('implicit');
+    expect(detectCurveMode('r = 2')).toBe('polar');
+    expect(detectCurveMode('e = 2')).toBe('implicit');
+    expect(detectCurveMode('a = x^2')).toBe('implicit');
+    expect(detectCurveMode('a = 2xt')).toBe('implicit');
+    expect(sliderName('a = exp(1)')).toBe('a');
+    expect(sliderName('a =')).toBeNull();
+    expect(sliderName('a = 1, 2')).toBeNull();
+    expect(sliderName('ab = 1')).toBeNull();
+  });
+
+  it('isParamName excludes the reserved names', () => {
+    expect(['a', 'n', 'k', 'T', 'E'].every(isParamName)).toBe(true);
+    expect(['x', 'y', 't', 'r', 'e', 'X', 'pi', 'theta', 'ab'].some(isParamName)).toBe(false);
   });
 });

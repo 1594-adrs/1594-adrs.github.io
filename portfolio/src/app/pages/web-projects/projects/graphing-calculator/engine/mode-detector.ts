@@ -5,7 +5,40 @@
  * leaf engine module; `DetectedCurveMode` is structurally identical to the
  * app-level `CurveMode` and can be assigned to it directly.
  */
-export type DetectedCurveMode = 'explicit' | 'explicit-y' | 'implicit' | 'parametric' | 'polar';
+export type DetectedCurveMode =
+  'explicit' | 'explicit-y' | 'implicit' | 'parametric' | 'polar' | 'slider';
+
+/** Names bound by the evaluator / mode detection; never free parameters. X, Y, R are included
+ *  because `x =`, `y =`, `r =` rows are detected case-insensitively. */
+const RESERVED_NAMES = new Set(['x', 'X', 'y', 'Y', 't', 'r', 'R', 'e', 'θ', 'theta', 'pi', 'π']);
+
+/** A free parameter (slider) name: any single letter the evaluator does not bind. */
+export function isParamName(name: string): boolean {
+  return /^[A-Za-z]$/.test(name) && !RESERVED_NAMES.has(name);
+}
+
+/** Whether `text` mentions a curve variable (x, y, t, r, theta), using the parser's split rule:
+ *  a letter run made only of x/y/t is implicit multiplication (`2xt`). */
+function mentionsCurveVariable(text: string): boolean {
+  for (const [run] of text.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
+    if (/^[xyt]+$/.test(run) || run === 'r' || run === 'theta') return true;
+  }
+  return false;
+}
+
+/**
+ * The parameter a slider row defines (`a = 2` -> 'a'), else null. A slider row is
+ * `<param> = <rhs>` with a single top-level `=` and an rhs free of curve variables.
+ * shortcut: the RHS must be constant, so `b = 2a` is not supported; upgrade when someone asks.
+ * (`b = 2a` still reads as a slider row; its value is reported as invalid.)
+ */
+export function sliderName(raw: string): string | null {
+  const m = /^\s*([A-Za-z])\s*=(.*)$/s.exec(raw);
+  if (!m || !isParamName(m[1])) return null;
+  const rhs = m[2];
+  if (!rhs.trim() || /[=<>,!]/.test(maskNested(rhs)) || mentionsCurveVariable(rhs)) return null;
+  return m[1];
+}
 
 function hasTopLevelComma(raw: string): boolean {
   let depth = 0;
@@ -65,6 +98,7 @@ function containsVariable(expr: string, name: string): boolean {
  * of being treated as an implicit vertical line.
  */
 export function detectCurveMode(raw: string): DetectedCurveMode {
+  if (sliderName(raw)) return 'slider';
   const trimmed = unwrapParametricPair(raw).trim();
 
   if (/^r\s*=/i.test(trimmed)) return 'polar';
