@@ -306,3 +306,37 @@
   font-size: 11px;
   color: var(--color-text-muted);
 }
+.add-sliders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0.75rem 4px 2.6rem;
+}
+.add-slider-btn {
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--color-primary);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.add-slider-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+.add-slider-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+.add-slider-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+@media (pointer: coarse) {
+  .add-slider-btn {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+}

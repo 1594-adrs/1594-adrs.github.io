@@ -197,6 +197,7 @@
             (drop)="onDrop($index, $event)"
             (dragend)="onDragEnd()"
           >
+            @if (fn.mode !== 'slider') {
             <div class="fn-gutter">
               <button
                 type="button"
@@ -214,6 +215,9 @@
                 (colorChange)="updateColor($index, $event)"
               />
             </div>
+            } @else {
+              <div class="fn-gutter" aria-hidden="true"></div>
+            }
             <div class="fn-expression">
               <app-math-input
                 [inputId]="'fn-input-' + $index"
@@ -260,6 +264,7 @@
                   <app-icon name="arrow-down" />
                 </button>
               </span>
+              @if (fn.mode !== 'slider') {
               <button
                 class="action-btn mode-btn"
                 (click)="cycleMode($index)"
@@ -280,7 +285,8 @@
                           : 'y'
                 }}
               </button>
-              @if (derivatives()[$index]; as d) {
+              }
+              @if (fn.mode !== 'slider' && derivatives()[$index]; as d) {
                 <button
                   type="button"
                   class="action-btn mode-btn deriv-btn"
@@ -325,6 +331,13 @@
               </button>
             </div>
           </div>
+          @if (paramSliders.sliders()[$index]; as spec) {
+            <app-param-slider
+              [spec]="spec"
+              (valueChange)="paramSliders.setSliderValue($index, $event)"
+              (boundsChange)="paramSliders.setSliderBounds($index, $event)"
+            />
+          }
           @if (fn.error) {
             <p [id]="'fn-error-' + $index" role="alert" aria-live="polite" class="fn-error">
               {{ fn.error }}
@@ -333,6 +346,25 @@
             <p role="status" aria-live="polite" class="fn-error">{{ fnIssues()[$index][0] }}</p>
           } @else if (expHint(fn.raw); as hint) {
             <p role="status" aria-live="polite" class="fn-error">{{ hint }}</p>
+          }
+          @if (paramSliders.missing()[$index]?.length) {
+            <div class="add-sliders">
+              @for (name of paramSliders.missing()[$index]; track name) {
+                <button
+                  type="button"
+                  class="add-slider-btn"
+                  [disabled]="functions().length >= 5"
+                  [title]="
+                    functions().length >= 5
+                      ? 'Limit of 5 expressions reached'
+                      : 'Add a slider row for ' + name
+                  "
+                  (click)="paramSliders.addSlider(name)"
+                >
+                  add slider: {{ name }}
+                </button>
+              }
+            </div>
           }
           @if (!derivatives()[$index]?.applicable && derivHintIndex() === $index) {
             <p [id]="'deriv-hint-' + $index" role="status" class="deriv-reason deriv-hint">
@@ -581,6 +613,7 @@
           <span class="range-label">Area between curves</span>
           <div class="bounded-fn-selects" role="group" aria-label="Curves for the area">
             @for (fn of functions(); track $index) {
+              @if (fn.mode !== 'slider') {
               <label class="range-field multi-fn-toggle">
                 <input
                   type="checkbox"
@@ -591,6 +624,7 @@
                 <span class="color-swatch" [style.background]="fn.color"></span>
                 f{{ $index + 1 }}
               </label>
+              }
             }
           </div>
           <div class="range-inputs">

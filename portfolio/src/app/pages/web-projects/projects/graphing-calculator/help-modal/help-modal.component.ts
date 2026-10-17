@@ -121,6 +121,10 @@ import {
             1) means 0 &lt;= x and x &lt; 1. A cases block ends with "otherwise" for the else value.
           </p>
           <p class="help-note">
+            Parameters: type a = 1 to make a slider; letters other than x, y, t, r, e, θ in a
+            function become parameters.
+          </p>
+          <p class="help-note">
             x = g(y): switch a row's mode to "x" to plot a curve as x in terms of y (e.g. x=y^2);
             integral/area/solid tools don't support these rows yet.
           </p>

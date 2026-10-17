@@ -85,6 +85,7 @@ import { CalculusPanel } from './components/calculus-panel/calculus-panel';
 import { ValueTable } from './components/value-table/value-table';
 import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
 import { ColorPicker } from './components/color-picker/color-picker';
+import { ParamSlider } from './components/param-slider/param-slider';
 import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
 import { UiLayoutState } from './state/ui-layout.state';
@@ -177,6 +178,7 @@ const INTEGRAL_KEYS: ReadonlySet<string> = new Set(['integralA', 'integralB']);
     MathRendererComponent,
     ValueTable,
     ColorPicker,
+    ParamSlider,
     IconComponent,
     ShortcutsPopover,
   ],

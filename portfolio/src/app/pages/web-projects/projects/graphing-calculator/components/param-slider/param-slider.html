@@ -1,0 +1,47 @@
+@let s = spec();
+<div class="ps">
+  <input
+    class="ps-num"
+    type="text"
+    inputmode="decimal"
+    [class.invalid]="invalid() === 'min'"
+    [value]="s.min"
+    [attr.aria-label]="s.name + ' minimum'"
+    [attr.aria-invalid]="invalid() === 'min' ? 'true' : null"
+    (change)="onBound('min', $event)"
+  />
+  <input
+    class="ps-range"
+    type="range"
+    [min]="s.min"
+    [max]="s.max"
+    [step]="s.step"
+    [value]="s.value ?? s.min"
+    [disabled]="s.value === null"
+    [attr.aria-label]="s.name + ' value'"
+    (input)="onRange($event)"
+  />
+  <input
+    class="ps-num"
+    type="text"
+    inputmode="decimal"
+    [class.invalid]="invalid() === 'max'"
+    [value]="s.max"
+    [attr.aria-label]="s.name + ' maximum'"
+    [attr.aria-invalid]="invalid() === 'max' ? 'true' : null"
+    (change)="onBound('max', $event)"
+  />
+  <label class="ps-step">
+    step
+    <input
+      class="ps-num"
+      type="text"
+      inputmode="decimal"
+      [class.invalid]="invalid() === 'step'"
+      [value]="s.step"
+      [attr.aria-label]="s.name + ' step'"
+      [attr.aria-invalid]="invalid() === 'step' ? 'true' : null"
+      (change)="onBound('step', $event)"
+    />
+  </label>
+</div>
