@@ -185,4 +185,19 @@ describe('share-state', () => {
       expect(parsed?.tool.solid).toEqual(solid);
     });
   });
+
+  describe('infinite integral bounds', () => {
+    for (const [a, b] of [
+      [0, Infinity],
+      [-Infinity, 1],
+    ]) {
+      it(`round-trips a=${a}, b=${b}`, () => {
+        const state = makeState();
+        state.tool.integral = { fnIndex: 0, a, b };
+        const parsed = parseShareState(serializeShareState(state));
+        expect(parsed?.tool.active).toBe('integral');
+        expect(parsed?.tool.integral).toEqual({ fnIndex: 0, a, b });
+      });
+    }
+  });
 });

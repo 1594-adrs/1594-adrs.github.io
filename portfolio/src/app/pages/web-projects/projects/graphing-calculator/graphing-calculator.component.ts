@@ -87,7 +87,7 @@ import { ColorPicker } from './components/color-picker/color-picker';
 import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
 import { UiLayoutState } from './state/ui-layout.state';
-import { CalculusToolState } from './state/calculus-tool.state';
+import { CalculusToolState, parseLimitPoint } from './state/calculus-tool.state';
 import { IntegralExtrasState, centroidFor } from './state/integral-extras.state';
 import { IntegralExtras } from './components/integral-extras/integral-extras';
 import { drawCentroid, drawRiemannPanels } from './canvas/integral-extras-renderer';
@@ -156,6 +156,9 @@ function formatExpressionError(message: string, exprText: string): string {
 function roundLimit(v: number): number {
   return Math.round(v * 10000) / 10000;
 }
+
+/** Limit fields that accept ±∞. */
+const INTEGRAL_KEYS: ReadonlySet<string> = new Set(['integralA', 'integralB']);
 
 @Component({
   selector: 'app-graphing-calculator',
@@ -639,7 +642,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const fn = (x: number) => compiled(x, 0);
         const result = integrateAdaptive(fn, intg.a, intg.b);
         const abs =
-          result.status === 'ok' || result.status === 'inaccurate'
+          Number.isFinite(intg.a) &&
+          Number.isFinite(intg.b) &&
+          (result.status === 'ok' || result.status === 'inaccurate')
             ? areaSingle(fn, Math.min(intg.a, intg.b), Math.max(intg.a, intg.b))
             : undefined;
         res.push(...describeIntegral(expr.raw, intg.a, intg.b, result, abs));
@@ -1991,8 +1996,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
    *  incomplete (keeps `pi/2`, and `pi/` mid-typing, instead of echoing 1.5707…), else the number. */
   limitText(key: string, num: number): string {
     const typed = this.limitTexts()[key];
-    if (typed === undefined) return String(num);
-    const { value } = parseLimitText(typed);
+    if (typed === undefined)
+      return Number.isFinite(num) || Number.isNaN(num) ? String(num) : num > 0 ? 'inf' : '-inf';
+    const { value } = INTEGRAL_KEYS.has(key) ? parseLimitPoint(typed) : parseLimitText(typed);
     return value === null || value === num ? typed : String(num);
   }
 
@@ -2143,7 +2149,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   private parseLimit(value: string, key: string): number | null {
     this.limitTexts.update((t) => ({ ...t, [key]: value }));
-    const { value: v, invalid } = parseLimitText(value);
+    const { value: v, invalid } = (INTEGRAL_KEYS.has(key) ? parseLimitPoint : parseLimitText)(
+      value,
+    );
     this.limitErrors.update((e) => ({ ...e, [key]: invalid }));
     return v;
   }

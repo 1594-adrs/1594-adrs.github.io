@@ -79,7 +79,29 @@ function fromBase64Url(encoded: string): string {
 /** Serializes app state to a base64url string suitable for `location.hash` (without the
  *  leading `#s=`). Never throws. */
 export function serializeShareState(state: ShareState): string {
-  return toBase64Url(JSON.stringify(state));
+  const integral = state.tool.integral;
+  // JSON turns ±Infinity into null: write non-finite integral bounds as 'inf' / '-inf'.
+  const out = integral
+    ? {
+        ...state,
+        tool: {
+          ...state.tool,
+          integral: { ...integral, a: encodeBound(integral.a), b: encodeBound(integral.b) },
+        },
+      }
+    : state;
+  return toBase64Url(JSON.stringify(out));
+}
+
+function encodeBound(v: number): number | string {
+  return Number.isFinite(v) ? v : v > 0 ? 'inf' : '-inf';
+}
+
+/** Integral bound: a bounded number, or the strings 'inf' / '-inf'. */
+function decodeIntegralBound(v: unknown): number | null {
+  if (v === 'inf') return Infinity;
+  if (v === '-inf') return -Infinity;
+  return isBoundNumber(v) ? v : null;
 }
 
 const MAX_FUNCTIONS = 5;
@@ -163,8 +185,10 @@ function sanitizeIntegral(t: unknown): ShareIntegralTool | null {
   if (!Number.isInteger(fnIndex) || (fnIndex as number) < 0 || (fnIndex as number) >= MAX_CURVES) {
     return null;
   }
-  if (!isBoundNumber(a) || !isBoundNumber(b)) return null;
-  return { fnIndex: fnIndex as number, a, b };
+  const lo = decodeIntegralBound(a);
+  const hi = decodeIntegralBound(b);
+  if (lo === null || hi === null) return null;
+  return { fnIndex: fnIndex as number, a: lo, b: hi };
 }
 
 function sanitizeArea(t: unknown): ShareAreaTool | null {

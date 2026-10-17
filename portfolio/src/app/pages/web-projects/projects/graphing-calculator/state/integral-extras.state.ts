@@ -120,6 +120,19 @@ export class IntegralExtrasState {
         : 'The integral does not converge, so there is no exact value to compare.',
     };
 
+    if (!Number.isFinite(intg.a) || !Number.isFinite(intg.b)) {
+      return {
+        ...base,
+        n: NaN,
+        dx: Infinity,
+        value: NaN,
+        status: 'undefined',
+        panels: [],
+        message: 'Riemann sums need finite limits.',
+        invalidN: false,
+      };
+    }
+
     const text = this.riemannNText().trim();
     const n = /^\d+$/.test(text) ? Number(text) : NaN;
     let message: string | null = null;

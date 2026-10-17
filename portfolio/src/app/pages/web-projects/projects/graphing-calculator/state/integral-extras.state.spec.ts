@@ -50,6 +50,21 @@ describe('IntegralExtrasState', () => {
     expect(state.riemann()!.invalidN).toBe(true);
   });
 
+  it('needs finite limits: message and no panels for [0, Infinity]', () => {
+    intg.set({ fnIndex: 0, a: 0, b: Infinity });
+    state.riemannRule.set('mid');
+    const v = state.riemann()!;
+    expect(v.message).toMatch(/finite limits/);
+    expect(v.panels).toHaveLength(0);
+  });
+
+  it('arc length over [0, Infinity] is divergent', () => {
+    intg.set({ fnIndex: 0, a: 0, b: Infinity });
+    const v = state.arcLength()!;
+    expect(v.status).toBe('divergent');
+    expect(v.text).toBe('divergent');
+  });
+
   it('has no error to report when the integral diverges', () => {
     fns.set([row('1/x')]);
     intg.set({ fnIndex: 0, a: -1, b: 1 });
