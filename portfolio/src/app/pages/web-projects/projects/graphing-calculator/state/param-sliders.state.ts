@@ -2,6 +2,7 @@ import { computed, inject, Injectable, PLATFORM_ID, signal } from '@angular/core
 import { isPlatformBrowser } from '@angular/common';
 import type { WritableSignal } from '@angular/core';
 import type { MathExpression, SliderBounds } from '../models/calculator.models';
+import { MAX_SLIDER_ROWS } from '../models/calculator.models';
 import { isParamName, sliderName } from '../engine/mode-detector';
 import {
   formatSliderValue,
@@ -13,7 +14,6 @@ import {
 import { FUNCTION_COLORS } from '../utils/color';
 
 export const DEFAULT_SLIDER_BOUNDS: SliderBounds = { min: -10, max: 10, step: 0.1 };
-const MAX_ROWS = 5;
 /** Same cap as share links (share-state MAX_TOOL_BOUND), so every range round-trips. */
 const MAX_BOUND = 1e6;
 
@@ -190,10 +190,12 @@ export class ParamSlidersState {
     return true;
   }
 
-  /** "add slider: a": appends the row `a = 1`. False when rows are full or `a` is defined. */
+  /** "add slider: a": appends the row `a = 1`. False when slider rows are full or `a` is defined. */
   addSlider(name: string): boolean {
     const fns = this.functions();
-    if (!isParamName(name) || fns.length >= MAX_ROWS) return false;
+    if (!isParamName(name) || fns.filter((f) => f.mode === 'slider').length >= MAX_SLIDER_ROWS) {
+      return false;
+    }
     if (sliderEnv(fns.map((f) => f.raw)).claimed.has(name)) return false;
     const row: MathExpression = {
       raw: '',

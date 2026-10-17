@@ -340,3 +340,14 @@
     font-size: 13px;
   }
 }
+
+/* Desktop sidebar: with up to 10 rows the list scrolls on its own so the tool tabs stay in view.
+   The mobile sheet (<= 768px) keeps scrolling as a whole. */
+@media (min-width: 769px) {
+  .functions-list {
+    max-height: 42vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+}

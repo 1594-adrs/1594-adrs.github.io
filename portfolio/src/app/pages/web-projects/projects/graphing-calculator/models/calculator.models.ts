@@ -47,3 +47,7 @@ export interface MultiFunctionAreaConfig {
   autoDetectIntersections: boolean;
   overlapMode: OverlapMode;
 }
+
+/** Row caps, counted separately: slider rows (`a = 1`) never count as curves. */
+export const MAX_CURVE_ROWS = 10;
+export const MAX_SLIDER_ROWS = 10;

@@ -48,6 +48,18 @@ describe('share-state', () => {
     expect(parseShareState(encoded)?.functions[0].raw).toBe('r=cos(3*θ)');
   });
 
+  it('round-trips 10 curves + 2 sliders and loads an old 5-row link', () => {
+    const rows = (n: number, raw: (i: number) => string) =>
+      Array.from({ length: n }, (_, i) => ({ raw: raw(i), color: '#00ff88', visible: true }));
+    const big = makeState();
+    big.functions = [...rows(10, (i) => `x+${i}`), ...rows(2, (i) => `${'ab'[i]} = 1`)];
+    big.tool = { active: 'integral', integral: { fnIndex: 9, a: 0, b: 1 } };
+    expect(parseShareState(serializeShareState(big))).toEqual(big);
+    const old = makeState();
+    old.functions = rows(5, (i) => `x+${i}`);
+    expect(parseShareState(serializeShareState(old))).toEqual(old);
+  });
+
   it('rejects invalid base64', () => {
     expect(parseShareState('not-valid-base64!!!')).toBeNull();
   });
@@ -148,9 +160,12 @@ describe('share-state', () => {
       }
     });
 
-    it('rejects more than 5 functions and over-long raw (2MB style)', () => {
+    it('rejects more than 10 curves, more than 10 sliders and over-long raw (2MB style)', () => {
       const f = { raw: 'x', color: '#00ff88', visible: true };
-      expect(parseShareState(enc({ ...base(), functions: Array(6).fill(f) }))).toBeNull();
+      const sl = { raw: 'a = 1', color: '#00ff88', visible: true };
+      expect(parseShareState(enc({ ...base(), functions: Array(11).fill(f) }))).toBeNull();
+      expect(parseShareState(enc({ ...base(), functions: Array(11).fill(sl) }))).toBeNull();
+      expect(parseShareState(enc({ ...base(), functions: Array(10).fill(f) }))).not.toBeNull();
       const huge = { ...f, raw: 'x'.repeat(2_000_000) };
       expect(parseShareState(enc({ ...base(), functions: [huge] }))).toBeNull();
     });
@@ -186,7 +201,7 @@ describe('share-state', () => {
       expect(
         parseShareState(enc({ ...base(), tool: { active: 'area', area } }))?.tool.active,
       ).toBeNull();
-      const area2 = { functionIndices: [0, 7], a: 0, b: 1, overlapMode: 'all' };
+      const area2 = { functionIndices: [0, 25], a: 0, b: 1, overlapMode: 'all' };
       expect(
         parseShareState(enc({ ...base(), tool: { active: 'area', area: area2 } }))?.tool.active,
       ).toBeNull();

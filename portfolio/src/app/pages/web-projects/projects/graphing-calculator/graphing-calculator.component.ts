@@ -123,6 +123,7 @@ import type {
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
+import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from './models/calculator.models';
 
 /** Screen-px hit radius for snapping the pointer to a curve (trace mode). */
 const TRACE_SNAP_PX = 12;
@@ -215,6 +216,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   calculusState = inject(CalculusToolState);
   /** Free parameters: slider rows (`a = 2`) and the rows that use them. */
   paramSliders = inject(ParamSlidersState);
+  protected readonly MAX_CURVE_ROWS = MAX_CURVE_ROWS;
+  protected readonly MAX_SLIDER_ROWS = MAX_SLIDER_ROWS;
   integralExtras = inject(IntegralExtrasState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
@@ -232,6 +235,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       error: null,
     },
   ]);
+
+  /** Rows by kind: a new empty row is a curve until it turns into a slider (`a = 1`). */
+  protected readonly sliderRowCount = computed(
+    () => this.functions().filter((f) => f.mode === 'slider').length,
+  );
+  protected readonly curveRowCount = computed(
+    () => this.functions().length - this.sliderRowCount(),
+  );
 
   activeIntegral = signal<{ fnIndex: number; a: number; b: number } | null>(null);
   showSolidTool = signal(false);
@@ -915,7 +926,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   addFunction(): void {
-    if (this.functions().length >= 5) return;
+    if (this.curveRowCount() >= MAX_CURVE_ROWS) return;
     const idx = this.functions().length;
     this.functions.update((fns) => [
       ...fns,
@@ -2166,7 +2177,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   addConicToGraph(expression: string): void {
-    if (this.functions().length >= 5) return;
+    if (this.curveRowCount() >= MAX_CURVE_ROWS) return;
     const idx = this.functions().length;
     this.functions.update((fns) => [
       ...fns,

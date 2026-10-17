@@ -4,6 +4,8 @@ import { provideRouter } from '@angular/router';
 import { GraphingCalculatorComponent } from './graphing-calculator.component';
 import { evalExpression } from './engine/evaluator';
 import { buildShareHash, extractShareFragment, parseShareState } from './state/share-state';
+import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from './models/calculator.models';
+import { FUNCTION_COLORS } from './utils/color';
 
 describe('GraphingCalculatorComponent', () => {
   beforeEach(async () => {
@@ -109,13 +111,31 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.functions().length).toBe(2);
   });
 
-  it('should not exceed 5 functions', () => {
+  it('caps curve rows at 10; slider rows do not count and have their own cap of 10', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     const comp = fixture.componentInstance;
-    for (let i = 0; i < 5; i++) comp.addFunction();
-    expect(comp.functions().length).toBe(5);
+    for (let i = 0; i < 12; i++) comp.addFunction();
+    expect(comp.functions().length).toBe(MAX_CURVE_ROWS);
+    // Turning a row into a slider frees a curve slot.
+    comp.updateExpression(1, 'a = 1');
+    expect(comp.functions()[1].mode).toBe('slider');
     comp.addFunction();
-    expect(comp.functions().length).toBe(5);
+    expect(comp.functions().length).toBe(MAX_CURVE_ROWS + 1);
+    comp.addFunction();
+    expect(comp.functions().length).toBe(MAX_CURVE_ROWS + 1);
+    // Slider chips ignore the curve cap and stop at the slider cap.
+    const names = 'bcdefghijk';
+    for (const n of names) comp.paramSliders.addSlider(n);
+    const sliders = comp.functions().filter((f) => f.mode === 'slider').length;
+    expect(sliders).toBe(MAX_SLIDER_ROWS);
+    expect(comp.paramSliders.addSlider('z')).toBe(false);
+  });
+
+  it('assigns palette colours 6-10 to new rows', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    for (let i = 0; i < 9; i++) comp.addFunction();
+    expect(comp.functions().map((f) => f.color)).toEqual(FUNCTION_COLORS);
+    expect(new Set(FUNCTION_COLORS).size).toBe(10);
   });
 
   it('should remove a function', () => {

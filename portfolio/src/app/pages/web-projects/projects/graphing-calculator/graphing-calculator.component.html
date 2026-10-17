@@ -198,23 +198,23 @@
             (dragend)="onDragEnd()"
           >
             @if (fn.mode !== 'slider') {
-            <div class="fn-gutter">
-              <button
-                type="button"
-                class="visibility-dot"
-                [class.visible]="fn.visible"
-                [style.--dot-color]="fn.color"
-                (click)="toggleVisibility($index)"
-                [attr.aria-pressed]="fn.visible"
-                [attr.aria-label]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
-                [title]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
-              ></button>
-              <app-color-picker
-                [color]="fn.color"
-                [label]="'Change colour of f' + ($index + 1)"
-                (colorChange)="updateColor($index, $event)"
-              />
-            </div>
+              <div class="fn-gutter">
+                <button
+                  type="button"
+                  class="visibility-dot"
+                  [class.visible]="fn.visible"
+                  [style.--dot-color]="fn.color"
+                  (click)="toggleVisibility($index)"
+                  [attr.aria-pressed]="fn.visible"
+                  [attr.aria-label]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
+                  [title]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
+                ></button>
+                <app-color-picker
+                  [color]="fn.color"
+                  [label]="'Change colour of f' + ($index + 1)"
+                  (colorChange)="updateColor($index, $event)"
+                />
+              </div>
             } @else {
               <div class="fn-gutter" aria-hidden="true"></div>
             }
@@ -265,26 +265,26 @@
                 </button>
               </span>
               @if (fn.mode !== 'slider') {
-              <button
-                class="action-btn mode-btn"
-                (click)="cycleMode($index)"
-                [attr.aria-label]="
-                  'Cycle curve type for ' + functionLabel($index) + ', currently ' + fn.mode
-                "
-                [title]="'Curve type: ' + fn.mode"
-              >
-                {{
-                  fn.mode === 'implicit'
-                    ? '='
-                    : fn.mode === 'explicit-y'
-                      ? 'x'
-                      : fn.mode === 'parametric'
-                        ? 't'
-                        : fn.mode === 'polar'
-                          ? 'r'
-                          : 'y'
-                }}
-              </button>
+                <button
+                  class="action-btn mode-btn"
+                  (click)="cycleMode($index)"
+                  [attr.aria-label]="
+                    'Cycle curve type for ' + functionLabel($index) + ', currently ' + fn.mode
+                  "
+                  [title]="'Curve type: ' + fn.mode"
+                >
+                  {{
+                    fn.mode === 'implicit'
+                      ? '='
+                      : fn.mode === 'explicit-y'
+                        ? 'x'
+                        : fn.mode === 'parametric'
+                          ? 't'
+                          : fn.mode === 'polar'
+                            ? 'r'
+                            : 'y'
+                  }}
+                </button>
               }
               @if (fn.mode !== 'slider' && derivatives()[$index]; as d) {
                 <button
@@ -353,10 +353,10 @@
                 <button
                   type="button"
                   class="add-slider-btn"
-                  [disabled]="functions().length >= 5"
+                  [disabled]="sliderRowCount() >= MAX_SLIDER_ROWS"
                   [title]="
-                    functions().length >= 5
-                      ? 'Limit of 5 expressions reached'
+                    sliderRowCount() >= MAX_SLIDER_ROWS
+                      ? 'Limit of ' + MAX_SLIDER_ROWS + ' sliders reached'
                       : 'Add a slider row for ' + name
                   "
                   (click)="paramSliders.addSlider(name)"
@@ -452,16 +452,24 @@
       <button
         class="add-expression-btn"
         (click)="addFunction()"
-        [disabled]="functions().length >= 5"
+        [disabled]="curveRowCount() >= MAX_CURVE_ROWS"
         [attr.aria-label]="
-          functions().length >= 5
-            ? 'Add expression, limit of 5 expressions reached'
+          curveRowCount() >= MAX_CURVE_ROWS
+            ? 'Add expression, limit of ' + MAX_CURVE_ROWS + ' expressions reached'
             : 'Add expression'
         "
-        [title]="functions().length >= 5 ? 'Limit of 5 expressions reached' : 'Add expression'"
+        [title]="
+          curveRowCount() >= MAX_CURVE_ROWS
+            ? 'Limit of ' + MAX_CURVE_ROWS + ' expressions reached'
+            : 'Add expression'
+        "
       >
         <app-icon name="plus" />
-        <span>{{ functions().length >= 5 ? 'Limit of 5 reached' : 'Add expression' }}</span>
+        <span>{{
+          curveRowCount() >= MAX_CURVE_ROWS
+            ? 'Limit of ' + MAX_CURVE_ROWS + ' reached'
+            : 'Add expression'
+        }}</span>
       </button>
 
       <div class="tool-tabs" role="tablist" aria-label="Graph tools">
@@ -614,16 +622,16 @@
           <div class="bounded-fn-selects" role="group" aria-label="Curves for the area">
             @for (fn of functions(); track $index) {
               @if (fn.mode !== 'slider') {
-              <label class="range-field multi-fn-toggle">
-                <input
-                  type="checkbox"
-                  [checked]="activeMultiArea()!.functionIndices.includes($index)"
-                  [attr.aria-label]="'Include f' + ($index + 1) + ' in the area'"
-                  (change)="toggleMultiAreaFunction($index)"
-                />
-                <span class="color-swatch" [style.background]="fn.color"></span>
-                f{{ $index + 1 }}
-              </label>
+                <label class="range-field multi-fn-toggle">
+                  <input
+                    type="checkbox"
+                    [checked]="activeMultiArea()!.functionIndices.includes($index)"
+                    [attr.aria-label]="'Include f' + ($index + 1) + ' in the area'"
+                    (change)="toggleMultiAreaFunction($index)"
+                  />
+                  <span class="color-swatch" [style.background]="fn.color"></span>
+                  f{{ $index + 1 }}
+                </label>
               }
             }
           </div>

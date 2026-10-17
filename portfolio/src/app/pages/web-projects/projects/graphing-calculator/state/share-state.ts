@@ -1,5 +1,7 @@
 import type { OverlapMode } from '../models/calculator.models';
 import { FUNCTION_COLORS } from '../utils/color';
+import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from '../models/calculator.models';
+import { sliderName } from '../engine/mode-detector';
 import type { CrossSectionShape, SolidMethod } from '../engine/solids/solid.types';
 
 /** Current on-the-wire share format. v2 adds the optional f′ toggles and the tangent toggle;
@@ -106,13 +108,14 @@ function decodeIntegralBound(v: unknown): number | null {
   return isBoundNumber(v) ? v : null;
 }
 
-const MAX_FUNCTIONS = 5;
+/** Rows in a link: curves and sliders are capped separately (see parseShareState). */
+const MAX_FUNCTIONS = MAX_CURVE_ROWS + MAX_SLIDER_ROWS;
 const MAX_RAW_LENGTH = 500;
 const MAX_VIEWPORT_ABS = 1e9;
 const MIN_RELATIVE_WIDTH = 1e-9;
 const MAX_TOOL_BOUND = 1e6;
 const MAX_BOUND_TEXT_LENGTH = 100;
-const MAX_CURVES = 5;
+const MAX_CURVES = MAX_FUNCTIONS;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const METHODS: readonly string[] = ['disk-washer', 'shell', 'cross-section'];
 const SHAPES: readonly string[] = [
@@ -278,6 +281,9 @@ export function parseShareState(encoded: string): ShareState | null {
       if (!fn) return null;
       functions.push(fn);
     }
+    // Over-cap links are rejected whole (not trimmed): trimming would shift row indices the tools use.
+    const sliders = functions.filter((f) => sliderName(f.raw) !== null).length;
+    if (sliders > MAX_SLIDER_ROWS || functions.length - sliders > MAX_CURVE_ROWS) return null;
     const viewport = parsed['viewport'];
     if (!isValidViewport(viewport)) return null;
     const tool = sanitizeTool(parsed['tool']);
