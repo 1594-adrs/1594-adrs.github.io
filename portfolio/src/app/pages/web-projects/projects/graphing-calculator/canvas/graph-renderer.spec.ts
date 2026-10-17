@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Viewport } from './viewport';
-import { drawIntegralArea, drawAreaBetween, drawInequality } from './graph-renderer';
+import {
+  drawIntegralArea,
+  drawAreaBetween,
+  drawInequality,
+  drawFunction,
+  drawExplicitY,
+} from './graph-renderer';
 
 interface MockContext {
   calls: Array<{ method: string; args: unknown[] }>;
@@ -351,5 +357,69 @@ describe('drawIntegralArea / drawAreaBetween hardening', () => {
     const last = ctx.calls[closeIdx - 1];
     // Closing point is the last valid sample (x < 0 => screen x < 400), not the NaN stretch.
     expect(last.args[0] as number).toBeLessThan(400);
+  });
+});
+
+describe('traceCurve at finite jumps', () => {
+  // 1200x800 over [-10,10]: 60 px per unit on both axes.
+  const vp = new Viewport(-10, 10, -20 / 3, 20 / 3);
+  const W = 1200;
+  const H = 800;
+  type Seg = [number, number, number, number];
+  function segments(draw: (ctx: CanvasRenderingContext2D) => void): {
+    segs: Seg[];
+    moves: number;
+  } {
+    const ctx = createMockContext();
+    draw(ctx);
+    const segs: Seg[] = [];
+    let moves = 0;
+    let p: [number, number] | null = null;
+    for (const c of ctx.calls) {
+      const [x, y] = c.args as [number, number];
+      if (c.method === 'moveTo') {
+        moves++;
+        p = [x, y];
+      } else if (c.method === 'lineTo' && p) {
+        segs.push([p[0], p[1], x, y]);
+        p = [x, y];
+      }
+    }
+    return { segs, moves };
+  }
+  /** Segments that cross screen coordinate `at` along axis i while spanning more than `px` on the other. */
+  const risers = (segs: Seg[], at: number, px: number, i: 0 | 1 = 0) =>
+    segs.filter(
+      (s) =>
+        Math.min(s[i], s[i + 2]) - 1 <= at &&
+        at <= Math.max(s[i], s[i + 2]) + 1 &&
+        Math.abs(s[3 - i] - s[1 - i]) > px,
+    ).length;
+
+  it.each<[string, (x: number) => number, number[], number]>([
+    ['sign-like step', (x) => (x < 0 ? -1 : 1), [0], 120],
+    ['jump off a sample point', (x) => (x < 0.123 ? 0 : 2), [0.123], 120],
+    ['floor(x)', Math.floor, [-9, -3, 1, 7], 60],
+    ['jump next to a pole', (x) => (x < 1 ? 1 / x : x + 5), [1], 300],
+  ])('y = f(x): %s draws no riser', (_, f, jumps, gap) => {
+    const { segs } = segments((ctx) => drawFunction(ctx, vp, f, '#fff', W, H));
+    for (const j of jumps) expect(risers(segs, ((j + 10) / 20) * W, gap / 2), `at ${j}`).toBe(0);
+  });
+
+  it('x = g(y): floor(y) draws no riser', () => {
+    const { segs } = segments((ctx) => drawExplicitY(ctx, vp, Math.floor, '#fff', W, H));
+    const sy = (y: number) => H - ((y + 20 / 3) / (40 / 3)) * H;
+    for (const j of [-5, -1, 2, 6]) expect(risers(segs, sy(j), 30, 1), `at ${j}`).toBe(0);
+  });
+
+  it.each<[string, (x: number) => number]>([
+    ['1000x', (x) => 1000 * x],
+    ['x^3', (x) => x ** 3],
+    ['cbrt(x)', Math.cbrt],
+    ['x^(1/9)', (x) => Math.sign(x) * Math.abs(x) ** (1 / 9)],
+    ['tanh(50x)', (x) => Math.tanh(50 * x)],
+    ['sin(x)', Math.sin],
+  ])('a continuous %s stays one stroke', (_, f) => {
+    expect(segments((ctx) => drawFunction(ctx, vp, f, '#fff', W, H)).moves).toBe(1);
   });
 });

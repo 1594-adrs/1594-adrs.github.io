@@ -320,12 +320,8 @@ function budget(rec: Recording, ms: number): string[] {
 
 // ---------------------------------------------------------------- known bugs
 
-// Still-open bugs, as { 'test name': 'reason' }: each runs as it.fails until fixed.
+// Still-open bugs, as { 'test name': 'reason' }: each runs as it.fails until fixed. None open.
 const KNOWN: Record<string, string> = {};
-// traceCurve only breaks a step wider than half the canvas: a smaller finite jump gets a riser.
-for (const l of ['jump if(x<0,-1,1)', 'jump+pole if(x<1,1/x,x+5)'])
-  for (const v of ['default', 'phone default', 'tall default'])
-    KNOWN[`${l}@${v} no jump bridge`] = 'traceCurve draws a riser across a jump < H/2';
 
 const registered = new Set<string>();
 function check(name: string, problems: () => string[]): void {

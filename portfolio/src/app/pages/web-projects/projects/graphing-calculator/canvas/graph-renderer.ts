@@ -12,6 +12,10 @@ const COLOR_LABEL_BORDER = '#333355';
 const MAX_REFINE_DEPTH = 64;
 /** A parametric step whose midpoint is farther than this from the chord is refined, in px. */
 const SMOOTH_TOLERANCE_PX = 1;
+/** A short step moving more than this is probed for a jump, in px. */
+const JUMP_PROBE_PX = 3;
+/** Halvings a jump probe follows (~1/1000 px): a change still concentrated there is a jump. */
+const JUMP_PROBE_DEPTH = 10;
 
 type Pt = [number, number];
 
@@ -21,6 +25,8 @@ type Pt = [number, number];
  *   zoom and an off-screen run stays off-screen.
  * - A step that moves more than half the canvas is bisected: a steep but continuous piece
  *   converges and is drawn, a pole or a jump never does and the path breaks there.
+ * - A shorter step moving more than JUMP_PROBE_PX is probed: if its change stays concentrated in
+ *   a vanishing interval it is a finite jump and the path breaks there too (y = f(x), x = g(y)).
  * - A step next to an undefined sample is extended to the edge of the domain (sqrt at 0, r = 1/θ).
  * - `smooth` also bisects steps whose midpoint is off the chord (parametric curves, few samples).
  * Refinement draws on a budget of extra evaluations (`samples`, 4x with `smooth`) to bound a frame.
@@ -46,9 +52,34 @@ function traceCurve(
   const bent = (a: Pt, m: Pt, b: Pt): boolean =>
     Math.hypot(m[0] - (a[0] + b[0]) / 2, m[1] - (a[1] + b[1]) / 2) > SMOOTH_TOLERANCE_PX;
 
+  const span = (a: Pt, b: Pt): number => Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+  /** The two sides of a jump inside [ta, tb], or null if the step is continuous. */
+  const jump = (ta: number, a: Pt, tb: number, b: Pt): [Pt, Pt] | null => {
+    const d0 = span(a, b);
+    for (let k = 0; k < JUMP_PROBE_DEPTH; k++) {
+      const tm = (ta + tb) / 2;
+      if (tm === ta || tm === tb) return null; // float-quantized t (far pans): keep the line
+      const m = budget-- > 0 ? at(tm) : null;
+      if (!m) return null;
+      // Follow the half holding more of the change; a continuous piece halves it within a few levels.
+      if (span(a, m) >= span(m, b)) [tb, b] = [tm, m];
+      else [ta, a] = [tm, m];
+      if (span(a, b) <= d0 / 2) return null;
+    }
+    return [a, b];
+  };
+
   const join = (ta: number, a: Pt, tb: number, b: Pt, depth: number): void => {
     const isFar = far(a, b);
-    if (!isFar && !smooth) return void ctx.lineTo(b[0], b[1]);
+    if (!isFar && !smooth) {
+      // shortcut: parametric/polar (smooth) steps are not probed, add it if piecewise ones need it.
+      const j = span(a, b) > JUMP_PROBE_PX ? jump(ta, a, tb, b) : null;
+      if (j) {
+        ctx.lineTo(j[0][0], j[0][1]);
+        ctx.moveTo(j[1][0], j[1][1]);
+      }
+      return void ctx.lineTo(b[0], b[1]);
+    }
     const tm = (ta + tb) / 2;
     const m = depth > 0 && tm !== ta && tm !== tb && budget-- > 0 ? at(tm) : null;
     if (!m || (!isFar && !bent(a, m, b))) {
