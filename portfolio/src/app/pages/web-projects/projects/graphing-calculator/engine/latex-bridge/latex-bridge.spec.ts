@@ -692,3 +692,53 @@ describe('never throws', () => {
     expect(rawToLatex(undefined as unknown as string)).toBe('');
   });
 });
+
+describe('piecewise: cases <-> if()', () => {
+  it.each<[string, string]>([
+    [String.raw`\begin{cases}-1 & x<0\\ 1 & \text{otherwise}\end{cases}`, 'if(x<0,-1,1)'],
+    [
+      String.raw`\begin{cases}x^2, & \text{if } 0\le x<1\\ 2-x, & 1\le x\le 2\end{cases}`,
+      'if(0<=x<1,x^2,if(1<=x<=2,2-x))',
+    ],
+    [String.raw`y=\begin{cases}x & x=0\\[3pt] 2 & \end{cases}`, 'y=if(x==0,x,2)'],
+    [String.raw`\begin{dcases}1 & x\ne 2\\ 0 & \text{else}\end{dcases}`, 'if(x!=2,1,0)'],
+    [String.raw`2\begin{cases}x & x>0\\ 0 & \text{otherwise}\end{cases}`, '2*if(x>0,x,0)'],
+  ])('%s -> %s', (latex, raw) => {
+    expect(latexToRaw(latex)).toEqual({ raw, issues: [] });
+  });
+
+  it('flags unsupported environments and a missing end', () => {
+    expect(latexToRaw(String.raw`\begin{matrix}1\end{matrix}`).issues).toContain(
+      'Unsupported: \\begin{matrix}',
+    );
+    expect(latexToRaw(String.raw`\begin{cases}1 & x<0`).issues).toContain('Missing \\end{cases}');
+  });
+
+  it.each<[string, string]>([
+    ['if(x<0, -1, 1)', String.raw`\begin{cases}-1 & x<0\\ 1 & \text{otherwise}\end{cases}`],
+    ['if(x<0, -x, if(x<1, x^2))', String.raw`\begin{cases}-x & x<0\\ x^{2} & x<1\end{cases}`],
+    ['if(0<=x<1, x, 0)', String.raw`\begin{cases}x & 0\le x<1\\ 0 & \text{otherwise}\end{cases}`],
+  ])('rawToLatex %s', (raw, latex) => {
+    expect(rawToLatex(raw)).toBe(latex);
+  });
+
+  it.each([
+    'y = if(x<0, -1, 1)',
+    'y = if(x < 0, -x, if(x < 1, x^2, 1))',
+    'y = if(0 <= x < 1, x^2, if(1 <= x <= 2, 2 - x))',
+    'y = if(x == 2, 4, 3/(x-2))',
+    'y = 2*if(x != 0, sin(x)/x, 1)^2',
+  ])('round trip latex -> raw -> latex: %s', (raw) => {
+    const latex = rawToLatex(raw);
+    const back = latexToRaw(latex);
+    expect(back.issues).toEqual([]);
+    expect(rawToLatex(back.raw)).toBe(latex);
+    const rhs = (s: string) => parse(s.replace(/^y\s*=\s*/, ''));
+    for (const x of [-1.5, -0.5, 0, 0.5, 1, 1.5, 2, 3]) {
+      const want = evaluate(rhs(raw), { x });
+      const got = evaluate(rhs(back.raw), { x });
+      if (Number.isNaN(want)) expect(got).toBeNaN();
+      else expect(got).toBeCloseTo(want, 12);
+    }
+  });
+});

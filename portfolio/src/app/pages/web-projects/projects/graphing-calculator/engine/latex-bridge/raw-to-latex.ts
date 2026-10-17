@@ -135,8 +135,11 @@ function emit(n: ExpressionNode): L {
       return binary(n.operator, emit(n.left), emit(n.right));
     case 'FunctionCall':
       return call(n.name, [emit(n.arg)]);
-    case 'FunctionCallMultiArg':
-      return call(n.name, n.args.map(emit));
+    case 'FunctionCallMultiArg': {
+      if (n.name !== 'if') return call(n.name, n.args.map(emit));
+      const links = chainLinks(n);
+      return links ? chain(links) : cases(n);
+    }
     case 'PoweredFunctionCall':
       return powered(n.name, n.arg, n.power);
   }
@@ -168,6 +171,46 @@ function binary(op: string, l: L, r: L): L {
       return { s: `${l.p <= REL ? paren(l) : l.s}${sym}${r.p <= REL ? paren(r) : r.s}`, p: REL };
     }
   }
+}
+
+const isComparison = (n: ExpressionNode): n is ExpressionNode & { type: 'BinaryOp' } =>
+  n.type === 'BinaryOp' && Object.hasOwn(COMPARISON, n.operator) && n.operator !== '=';
+
+/**
+ * The comparisons of a parser-desugared chain `a<b<c` = `if(a<b, b<c, 0)` (the middle operand is
+ * the same node), or null for any other `if`.
+ */
+function chainLinks(n: ExpressionNode): Array<ExpressionNode & { type: 'BinaryOp' }> | null {
+  if (n.type !== 'FunctionCallMultiArg' || n.name !== 'if' || n.args.length !== 3) return null;
+  const [first, rest, zero] = n.args;
+  if (!isComparison(first) || zero.type !== 'NumberLiteral' || zero.value !== 0) return null;
+  const tail = isComparison(rest) ? [rest] : chainLinks(rest);
+  return tail && tail[0].left === first.right ? [first, ...tail] : null;
+}
+
+function chain(links: Array<ExpressionNode & { type: 'BinaryOp' }>): L {
+  const operand = (node: ExpressionNode): string => {
+    const l = emit(node);
+    return l.p <= REL ? paren(l) : l.s;
+  };
+  let s = operand(links[0].left);
+  for (const link of links) s += COMPARISON[link.operator] + operand(link.right);
+  return { s, p: REL };
+}
+
+/** `if(c1, v1, if(c2, v2, v3))` -> one cases row per branch; a final 2-arg `if` keeps its condition. */
+function cases(n: ExpressionNode): L {
+  const rows: string[] = [];
+  let node = n;
+  while (node.type === 'FunctionCallMultiArg' && node.name === 'if' && !chainLinks(node)) {
+    rows.push(`${emit(node.args[1]).s} & ${emit(node.args[0]).s}`);
+    if (node.args.length < 3) break;
+    node = node.args[2];
+  }
+  if (node.type !== 'FunctionCallMultiArg' || node.name !== 'if' || chainLinks(node)) {
+    rows.push(`${emit(node).s} & \\text{otherwise}`);
+  }
+  return { s: `\\begin{cases}${rows.join('\\\\ ')}\\end{cases}`, p: ATOM };
 }
 
 function call(name: string, a: L[]): L {

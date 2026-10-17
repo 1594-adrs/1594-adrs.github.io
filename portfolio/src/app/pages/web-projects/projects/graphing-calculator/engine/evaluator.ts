@@ -186,6 +186,33 @@ function signedRealPow(base: number, exponent: number): number {
   return sign * Math.pow(Math.abs(base), exponent);
 }
 
+const COMPARISON_OPS = new Set(['<', '>', '<=', '>=', '==', '!=']);
+
+/** 1 / 0 for a comparison; NaN when either side is undefined (so `if` and plots stay undefined there). */
+function compare(op: string, l: number, r: number): number {
+  if (Number.isNaN(l) || Number.isNaN(r)) return NaN;
+  switch (op) {
+    case '<':
+      return l < r ? 1 : 0;
+    case '>':
+      return l > r ? 1 : 0;
+    case '<=':
+      return l <= r ? 1 : 0;
+    case '>=':
+      return l >= r ? 1 : 0;
+    case '==':
+      return l === r ? 1 : 0;
+    default:
+      return l !== r ? 1 : 0;
+  }
+}
+
+/** The `if(cond, a, b?)` argument to evaluate: none (NaN) for a NaN cond or a false 2-arg form. */
+function pickBranch(cond: number, args: ExpressionNode[]): ExpressionNode | undefined {
+  if (Number.isNaN(cond)) return undefined;
+  return cond !== 0 ? args[1] : args[2];
+}
+
 const MULTI_ARG_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   min: (...args) => Math.min(...args),
   max: (...args) => Math.max(...args),
@@ -264,19 +291,8 @@ export function evaluate(
             return left / right;
           case '^':
             return signedRealPow(left, right);
-          case '<':
-            return left < right ? 1 : 0;
-          case '>':
-            return left > right ? 1 : 0;
-          case '<=':
-            return left <= right ? 1 : 0;
-          case '>=':
-            return left >= right ? 1 : 0;
-          case '==':
-            return left === right ? 1 : 0;
-          case '!=':
-            return left !== right ? 1 : 0;
           default:
+            if (COMPARISON_OPS.has(node.operator)) return compare(node.operator, left, right);
             throw new Error(`Unknown operator: '${node.operator}'`);
         }
       }
@@ -299,6 +315,10 @@ export function evaluate(
       }
 
       case 'FunctionCallMultiArg': {
+        if (node.name === 'if') {
+          const branch = pickBranch(evalNode(node.args[0]), node.args);
+          return branch ? evalNode(branch) : NaN;
+        }
         const mfn = MULTI_ARG_FUNCTIONS[node.name];
         if (mfn) {
           let result = mfn(...node.args.map((a) => evalNode(a)));
@@ -395,20 +415,9 @@ function compileNode(node: ExpressionNode, angleUnit: 'rad' | 'deg'): CompiledEx
           return (a, b) => left(a, b) / right(a, b);
         case '^':
           return (a, b) => signedRealPow(left(a, b), right(a, b));
-        case '<':
-          return (a, b) => (left(a, b) < right(a, b) ? 1 : 0);
-        case '>':
-          return (a, b) => (left(a, b) > right(a, b) ? 1 : 0);
-        case '<=':
-          return (a, b) => (left(a, b) <= right(a, b) ? 1 : 0);
-        case '>=':
-          return (a, b) => (left(a, b) >= right(a, b) ? 1 : 0);
-        case '==':
-          return (a, b) => (left(a, b) === right(a, b) ? 1 : 0);
-        case '!=':
-          return (a, b) => (left(a, b) !== right(a, b) ? 1 : 0);
         default: {
           const op = node.operator;
+          if (COMPARISON_OPS.has(op)) return (a, b) => compare(op, left(a, b), right(a, b));
           return () => {
             throw new Error(`Unknown operator: '${op}'`);
           };
@@ -436,6 +445,16 @@ function compileNode(node: ExpressionNode, angleUnit: 'rad' | 'deg'): CompiledEx
     }
 
     case 'FunctionCallMultiArg': {
+      if (node.name === 'if') {
+        const cond = compileNode(node.args[0], angleUnit);
+        const then = compileNode(node.args[1], angleUnit);
+        const otherwise = node.args[2] ? compileNode(node.args[2], angleUnit) : () => NaN;
+        return (a, b) => {
+          const c = cond(a, b);
+          if (Number.isNaN(c)) return NaN;
+          return c !== 0 ? then(a, b) : otherwise(a, b);
+        };
+      }
       const mfn = MULTI_ARG_FUNCTIONS[node.name];
       if (mfn) {
         const argFns = node.args.map((arg) => compileNode(arg, angleUnit));

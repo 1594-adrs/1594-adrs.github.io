@@ -501,6 +501,15 @@ export function differentiate(ast: Node, variable: string): Node {
         const pickR = bin(name === 'min' ? '>' : '<', a, r);
         return add(mul(pickA, d(a)), mul(pickR, d(r)));
       }
+      case 'if': {
+        // Branch-wise: the jump/corner itself is the numeric layer's concern.
+        const [c, a, b] = args;
+        const da = d(a);
+        if (b === undefined) return { type: 'FunctionCallMultiArg', name, args: [c, da] };
+        const db = d(b);
+        if (isNum(da, 0) && isNum(db, 0)) return ZERO;
+        return { type: 'FunctionCallMultiArg', name, args: [c, da, db] };
+      }
       default:
         throw new DifferentiationError(`d/d${variable} of ${name}() is not supported`);
     }

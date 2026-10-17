@@ -34,6 +34,22 @@ export function unwrapParametricPair(raw: string): string {
   return hasTopLevelComma(inner) ? inner : raw;
 }
 
+/**
+ * `raw` with everything inside brackets blanked to spaces (same length, brackets kept), so a
+ * relation or `=` search only sees the top level: `y = if(x<0, 1, 2)` is not an inequality.
+ * Match on the mask, then slice `raw` with the same indices.
+ */
+export function maskNested(raw: string): string {
+  let depth = 0;
+  let out = '';
+  for (const ch of raw) {
+    if (ch === ')' || ch === ']' || ch === '}') depth = Math.max(0, depth - 1);
+    out += depth > 0 ? ' '.repeat(ch.length) : ch;
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+  }
+  return out;
+}
+
 /** Whether `name` appears in `expr` as a standalone identifier (not e.g. the 'x' inside 'exp'). */
 function containsVariable(expr: string, name: string): boolean {
   const re = new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`);
@@ -52,7 +68,8 @@ export function detectCurveMode(raw: string): DetectedCurveMode {
   const trimmed = unwrapParametricPair(raw).trim();
 
   if (/^r\s*=/i.test(trimmed)) return 'polar';
-  if (/[<>]=?/.test(trimmed)) return 'implicit';
+  const top = maskNested(trimmed);
+  if (/[<>]/.test(top)) return 'implicit';
   if (hasTopLevelComma(trimmed)) return 'parametric';
 
   const xEqualsMatch = /^x\s*=\s*(.*)$/i.exec(trimmed);
@@ -61,6 +78,6 @@ export function detectCurveMode(raw: string): DetectedCurveMode {
     if (!containsVariable(rhs, 'x') && containsVariable(rhs, 'y')) return 'explicit-y';
   }
 
-  if (/[=]/.test(trimmed) && !/^[yY]\s*=/.test(trimmed)) return 'implicit';
+  if (/=/.test(top) && !/^[yY]\s*=/.test(trimmed)) return 'implicit';
   return 'explicit';
 }

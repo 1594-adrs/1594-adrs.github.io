@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as engineUtils from './numeric-utils';
 import * as canvasUtils from '../canvas/utils';
+import { compileExpression } from './evaluator';
+import { parse } from './parser';
 
 describe('numeric-utils (H22)', () => {
   it('canvas/utils re-exports the engine implementations (no duplicate copies)', () => {
@@ -65,5 +67,22 @@ describe('numeric-utils (H22)', () => {
     const even = engineUtils.findAxisCrossings((x) => (x - 1) ** 10, 0.01, 1.99, 0);
     expect(even.length).toBe(1);
     expect(even[0]).toBeCloseTo(1, 4);
+  });
+});
+
+describe('numeric-utils: piecewise jumps', () => {
+  const f = compileExpression(parse('if(x < 0, -1, 1)'));
+  const g = (x: number) => f(x, NaN);
+
+  it('a sign change across a finite jump is not a root', () => {
+    expect(engineUtils.findAxisCrossings(g, -2, 2, 0)).toEqual([]);
+    expect(engineUtils.findAxisCrossings(g, -2.37, 3.11, 0)).toEqual([]);
+  });
+
+  it('a continuous piecewise crossing still is', () => {
+    const h = compileExpression(parse('if(x < 1, x - 1, (x - 1)^2 + x - 1)'));
+    const roots = engineUtils.findAxisCrossings((x) => h(x, NaN), -2, 3, 0);
+    expect(roots.length).toBe(1);
+    expect(roots[0]).toBeCloseTo(1, 9);
   });
 });

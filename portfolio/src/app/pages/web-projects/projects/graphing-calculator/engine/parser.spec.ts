@@ -695,3 +695,25 @@ describe('parser hardening (H12, H23)', () => {
     expect(lowercaseExponentWarning('3e^2')).toBeNull();
   });
 });
+
+describe('if() and chained comparisons', () => {
+  const ev = (s: string, x: number) => evaluate(parse(s), { x });
+
+  it('if takes 2 or 3 arguments', () => {
+    expect(parse('if(x<0, -1, 1)')).toMatchObject({ type: 'FunctionCallMultiArg', name: 'if' });
+    expect(parse('if(x<0, -1)')).toMatchObject({ name: 'if', args: [{}, {}] });
+    expect(() => parse('if(x<0)')).toThrow(ParseError);
+    expect(() => parse('if(x<0, 1, 2, 3)')).toThrow(ParseError);
+  });
+
+  it('a < b < c is (a < b) and (b < c); an explicit (a < b) < c is not', () => {
+    expect(ev('1 < x < 3', 2)).toBe(1);
+    expect(ev('1 < x < 3', 4)).toBe(0);
+    expect(ev('1 < x < 3', 0)).toBe(0);
+    expect(ev('(1 < x) < 3', 4)).toBe(1);
+    expect(ev('0 <= x < 1 <= 2', 0)).toBe(1);
+    expect(ev('0 <= x < 1 <= 2', 1)).toBe(0);
+    const chain = parse('0 < x <= 1');
+    expect(chain).toMatchObject({ type: 'FunctionCallMultiArg', name: 'if' });
+  });
+});

@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { compileExpression } from './evaluator';
+import { parse } from './parser';
 import { integrateAdaptive } from './quadrature';
 
 function relErr(actual: number, expected: number): number {
@@ -310,5 +312,23 @@ describe('integrateAdaptive with infinite bounds', () => {
 
   it('never calls an unresolvably fast oscillation ok: sin(1000x)/x', () => {
     expect(integrateAdaptive((x) => Math.sin(1000 * x) / x, 1, I).status).toBe('inaccurate');
+  });
+});
+
+describe('integrateAdaptive: piecewise if()', () => {
+  const fn = (src: string) => {
+    const c = compileExpression(parse(src));
+    return (x: number) => c(x, NaN);
+  };
+
+  it.each<[string, number, number, number]>([
+    ['if(x < 0, -1, 1)', -1, 1, 0],
+    ['if(x < 0, -1, 1)', -1, 2, 1],
+    ['if(x < 1/3, x^2, 5 - x)', 0, 1, 1 / 81 + (5 * 2) / 3 - (1 - 1 / 9) / 2],
+    ['if(x < 0, -x, x)', -1, 2, 2.5],
+  ])('∫ %s on [%d, %d] = %d', (src, a, b, want) => {
+    const r = integrateAdaptive(fn(src), a, b);
+    expect(r.status).toBe('ok');
+    expect(r.value).toBeCloseTo(want, 7);
   });
 });

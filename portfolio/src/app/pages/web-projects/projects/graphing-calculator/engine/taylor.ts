@@ -276,8 +276,20 @@ function expand(ast: ExpressionNode, center: number, n: number): Series {
       case 'PoweredFunctionCall':
         return pow(fn(node.name, walk(node.arg)), walk(node.power), n);
       case 'FunctionCallMultiArg':
+        if (node.name === 'if') return branchAt(node.args);
         return multi(node.name, node.args.map(walk));
     }
+  };
+
+  // The branch selected at the center; NaN on the boundary (even a removable one: shortcut,
+  // if(x != 0, sin(x)/x, 1) at 0 is NaN — upgrade with a one-sided series if exercises need it).
+  const branchAt = ([c, a, b]: ExpressionNode[]): Series => {
+    const cond = walk(c);
+    if (!cond.length) return [];
+    const z = leadingZeros(cond);
+    if (Number.isNaN(cond[0]) || (z > 0 && z < cond.length)) return nans(n);
+    if (cond[0] !== 0) return walk(a);
+    return b ? walk(b) : nans(n);
   };
 
   // A function of a series with no valid term has none either ([] asks for guard terms).

@@ -100,7 +100,17 @@ const KNOWN_FUNCTIONS = new Set([
   'gamma',
 ]);
 
-const MULTI_ARG_FUNCTIONS = new Set(['min', 'max', 'mod', 'logb', 'root', 'atan2', 'npr', 'ncr']);
+const MULTI_ARG_FUNCTIONS = new Set([
+  'min',
+  'max',
+  'mod',
+  'logb',
+  'root',
+  'atan2',
+  'npr',
+  'ncr',
+  'if',
+]);
 
 const MULTI_ARG_REQUIRED_ARGS = new Map([
   ['mod', 2],
@@ -110,6 +120,8 @@ const MULTI_ARG_REQUIRED_ARGS = new Map([
   ['npr', 2],
   ['ncr', 2],
 ]);
+
+const COMPARISON_OPS = new Set(['<', '>', '<=', '>=', '==', '!=']);
 
 const MAX_AST_NODES = 500;
 /** Longest accepted expression text. Bounds lexing/parsing work and recursion depth up front. */
@@ -404,23 +416,32 @@ class Parser {
     }
   }
 
+  /**
+   * A chain `a < b < c` means (a < b) and (b < c), Python-style. It is desugared
+   * to `if(a<b, b<c, 0)` (the middle node is shared, so it is not re-counted), so
+   * every AST consumer only needs to know `if`. An explicit `(a<b)<c` is untouched.
+   */
   private parseComparison(): ExpressionNode {
-    let left = this.parseAddSub();
-    while (
-      this.current().type === 'operator' &&
-      (this.current().value === '<' ||
-        this.current().value === '>' ||
-        this.current().value === '<=' ||
-        this.current().value === '>=' ||
-        this.current().value === '==' ||
-        this.current().value === '!=')
-    ) {
+    let operand = this.parseAddSub();
+    const links: ExpressionNode[] = [];
+    while (this.current().type === 'operator' && COMPARISON_OPS.has(this.current().value)) {
       const op = this.advance().value;
       const right = this.parseAddSub();
       this.countNode();
-      left = { type: 'BinaryOp', operator: op, left, right };
+      links.push({ type: 'BinaryOp', operator: op, left: operand, right });
+      operand = right;
     }
-    return left;
+    if (links.length === 0) return operand;
+    let chain = links[links.length - 1];
+    for (let i = links.length - 2; i >= 0; i--) {
+      this.countNode();
+      chain = {
+        type: 'FunctionCallMultiArg',
+        name: 'if',
+        args: [links[i], chain, { type: 'NumberLiteral', value: 0 }],
+      };
+    }
+    return chain;
   }
 
   private parseAddSub(): ExpressionNode {
@@ -508,6 +529,9 @@ class Parser {
           args.push(this.parseExpression());
         }
         this.expect('rparen');
+        if (name === 'if' && args.length !== 2 && args.length !== 3) {
+          throw new ParseError(`if() expects 2 or 3 arguments, got ${args.length}`);
+        }
         const expected = MULTI_ARG_REQUIRED_ARGS.get(name);
         if (expected !== undefined && args.length !== expected) {
           throw new ParseError(`${name}() expects ${expected} arguments, got ${args.length}`);

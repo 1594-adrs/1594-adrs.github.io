@@ -222,9 +222,10 @@ const NAMED_FUNCTIONS = new Set([
   'asin',
   'acos',
   'atan',
+  'if',
 ]);
 
-const MULTI_ARG = new Set(['min', 'max', 'mod', 'logb', 'root', 'atan2', 'npr', 'ncr']);
+const MULTI_ARG = new Set(['min', 'max', 'mod', 'logb', 'root', 'atan2', 'npr', 'ncr', 'if']);
 
 /** `\sin^{-1}` is read as the inverse function (textbook convention). */
 const INVERSE_OF_POWER_MINUS_ONE: Record<string, string> = {
@@ -301,7 +302,14 @@ const NON_FACTOR_COMMANDS = new Set([
   'neq',
   'lt',
   'gt',
+  '\\',
+  'cr',
+  'end',
 ]);
+
+const CASES_ENVIRONMENTS = new Set(['cases', 'dcases', 'rcases']);
+/** Words that mark the default row of a cases block. */
+const ELSE_WORDS = new Set(['otherwise', 'else']);
 
 type GroupKind = 'paren' | 'abs' | 'floor' | 'ceil';
 
@@ -758,6 +766,8 @@ class LatexParser {
         return this.group('abs', true);
       case 'lbrace':
         return this.group('paren', false);
+      case 'begin':
+        return this.environment();
       case 'placeholder': {
         if (this.isSym(this.peek(), '[')) {
           while (!this.isSym(this.peek(), ']') && this.peek().k !== 'eof') this.next();
@@ -774,6 +784,104 @@ class LatexParser {
         this.issue(`Unsupported: ${t.v}`);
         return empty();
     }
+  }
+
+  /** `{name}` after `\begin` / `\end`, read from letter tokens. */
+  private envName(): string {
+    if (!this.isSym(this.peek(), '{')) return '';
+    this.next();
+    let name = '';
+    while (!this.isSym(this.peek(), '}') && this.peek().k !== 'eof') name += this.next().v;
+    this.next();
+    return name;
+  }
+
+  private atRowEnd(): boolean {
+    const t = this.peek();
+    return t.k === 'eof' || (t.k === 'c' && (t.n === '\\' || t.n === 'cr' || t.n === 'end'));
+  }
+
+  /** Consumes a default-row word (`\text{otherwise}`, plain letters `else`) if it fills the cell. */
+  private elseWord(): boolean {
+    const t = this.peek();
+    if (t.k === 't' && ELSE_WORDS.has(decodeText(t.v).trim().toLowerCase())) {
+      this.next();
+      return true;
+    }
+    let word = '';
+    let k = 0;
+    while (this.peek(k).k === 'l') word += this.peek(k++).v;
+    if (!ELSE_WORDS.has(word.toLowerCase())) return false;
+    this.pos += k;
+    return true;
+  }
+
+  /** A row condition; `=` means equality here (`x=0` -> `x==0`). */
+  private condition(): string {
+    let s = this.expr().s;
+    for (let op = this.tryRelation(); op !== null; op = this.tryRelation()) {
+      s += (op === '=' ? '==' : op) + this.expr().s;
+    }
+    return s;
+  }
+
+  /**
+   * `\begin{cases} a & cond \\ b & \text{otherwise} \end{cases}` -> `if(cond,a,b)`, nested
+   * for more rows. A last row with a real condition gives the 2-arg form (undefined elsewhere).
+   */
+  private environment(): N {
+    const env = this.envName();
+    if (!CASES_ENVIRONMENTS.has(env)) {
+      this.issue(`Unsupported: \\begin{${env}}`);
+      while (this.peek().k !== 'eof' && !(this.peek().k === 'c' && this.peek().n === 'end')) {
+        this.next();
+      }
+      this.next();
+      this.envName();
+      return empty();
+    }
+    const rows: Array<{ value: string; cond: string | null }> = [];
+    for (;;) {
+      const value = this.relationItem().s;
+      if (this.isSym(this.peek(), ',')) this.next();
+      let cond: string | null = null;
+      if (this.isSym(this.peek(), '&')) {
+        this.next();
+        const t = this.peek();
+        if (t.k === 't' && decodeText(t.v).trim().toLowerCase() === 'if') this.next();
+        if (!this.elseWord() && !this.atRowEnd()) cond = this.condition();
+        if (this.isSym(this.peek(), ',')) this.next();
+      }
+      while (!this.atRowEnd()) this.stray(this.next());
+      if (value !== '' || cond !== null) rows.push({ value, cond });
+      if (value === '' && cond !== null) this.issue('Incomplete expression');
+      const t = this.next();
+      if (t.k === 'eof') {
+        this.issue(`Missing \\end{${env}}`);
+        break;
+      }
+      if (t.n === 'end') {
+        this.envName();
+        break;
+      }
+      // A row gap: `\\[3pt]`.
+      if (this.isSym(this.peek(), '[')) {
+        while (!this.isSym(this.peek(), ']') && this.peek().k !== 'eof') this.next();
+        this.next();
+      }
+    }
+    if (rows.length === 0) {
+      this.issue('Incomplete expression');
+      return empty();
+    }
+    const last = rows[rows.length - 1];
+    let acc = last.cond === null ? last.value : `if(${last.cond},${last.value})`;
+    for (let i = rows.length - 2; i >= 0; i--) {
+      const { value, cond } = rows[i];
+      // A default row before the end shadows the rest, as in `if(1, a, …)`.
+      acc = cond === null ? value : `if(${cond},${value},${acc})`;
+    }
+    return rows[0].cond === null ? { s: `(${acc})`, p: ATOM, paren: true } : atom(acc);
   }
 
   /** After an opening `{` has been consumed: skip to the matching `}`. */

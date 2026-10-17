@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectCurveMode, unwrapParametricPair } from './mode-detector';
+import { detectCurveMode, maskNested, unwrapParametricPair } from './mode-detector';
 
 describe('detectCurveMode', () => {
   it('detects r=cos(theta) as polar', () => {
@@ -66,5 +66,24 @@ describe('detectCurveMode', () => {
 
   it('does not confuse exp(y) rhs with a bare x (word boundary)', () => {
     expect(detectCurveMode('x=exp(y)')).toBe('explicit-y');
+  });
+});
+
+describe('relations nested in if() do not change the mode', () => {
+  it('maskNested blanks bracket contents and keeps the length', () => {
+    expect(maskNested('y = if(x<0, 1, 2)')).toBe('y = if(         )');
+    expect(maskNested('a(b[c]{d})e')).toBe('a(       )e');
+  });
+
+  it.each<[string, string]>([
+    ['y = if(x < 0, -1, 1)', 'explicit'],
+    ['if(x == 2, 1, 2)', 'explicit'],
+    ['if(x < 0, -x, x)', 'explicit'],
+    ['r = if(t < pi, 1, 2)', 'polar'],
+    ['(if(t < 0, -t, t), t)', 'parametric'],
+    ['if(x < 0, x, y) = 1', 'implicit'],
+    ['y < if(x < 0, -x, x)', 'implicit'],
+  ])('%s → %s', (raw, mode) => {
+    expect(detectCurveMode(raw)).toBe(mode);
   });
 });

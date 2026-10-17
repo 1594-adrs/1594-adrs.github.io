@@ -236,3 +236,23 @@ describe('taylorCoefficients', () => {
     }
   });
 });
+
+describe('taylorCoefficients: if()', () => {
+  it.each<[string, number, number[]]>([
+    ['if(x < 0, -x, x^2)', -2, [2, -1, 0]],
+    ['if(x < 0, -x, x^2)', 1, [1, 2, 1]],
+    ['if(x < 1, 2)', 0, [2, 0, 0]],
+    ['if(0 < x < 2, exp(x), 0)', 1, [Math.E, Math.E, Math.E / 2]],
+  ])('%s at %d takes the branch selected there', (expr, center, want) => {
+    expectSeries(taylor(expr, center, 2), want);
+  });
+
+  it.each<[string, number]>([
+    ['if(x < 0, -1, 1)', 0],
+    ['if(x < 1, 2)', 1],
+    // shortcut in taylor.ts: a removable boundary is NaN too.
+    ['if(x != 0, sin(x)/x, 1)', 0],
+  ])('%s on its boundary %d is NaN', (expr, center) => {
+    expect(taylor(expr, center, 2).every(Number.isNaN)).toBe(true);
+  });
+});

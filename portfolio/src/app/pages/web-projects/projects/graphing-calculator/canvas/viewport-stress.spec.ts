@@ -196,6 +196,24 @@ function noPoleBridge(segs: Seg[], fr: Frame, poles: number[]): string[] {
   return out;
 }
 
+/** At a finite jump wider than 3 px on screen, no segment may draw the riser between the sides. */
+function noJumpBridge(segs: Seg[], fr: Frame, f: (w: number) => number, jumps: number[]): string[] {
+  const out: string[] = [];
+  const onScreen = (a: number, b: number) =>
+    Math.min(fr.M, Math.max(a, b)) - Math.max(0, Math.min(a, b));
+  for (const j of jumps) {
+    const pu = fr.toU(j);
+    const gap = onScreen(fr.toV(f(fr.indepAt(pu - 1))), fr.toV(f(fr.indepAt(pu + 1))));
+    if (!(gap > 3)) continue;
+    const n = segs.filter(
+      ([u0, v0, u1, v1]) =>
+        Math.min(u0, u1) - 1 <= pu && pu <= Math.max(u0, u1) + 1 && onScreen(v0, v1) > gap / 2,
+    ).length;
+    if (n) out.push(`${n} segments draw a riser across the jump at ${j} (${gap.toFixed(0)} px)`);
+  }
+  return out;
+}
+
 /**
  * Next to a visible pole, on each side where the function diverges beyond an edge (at 0.5 px from
  * the pole) and is visible somewhere on that side, a drawn path between the pole column and the
@@ -302,8 +320,12 @@ function budget(rec: Recording, ms: number): string[] {
 
 // ---------------------------------------------------------------- known bugs
 
-// Still-open bugs, as { 'test name': 'reason' }: each runs as it.fails until fixed. None open.
+// Still-open bugs, as { 'test name': 'reason' }: each runs as it.fails until fixed.
 const KNOWN: Record<string, string> = {};
+// traceCurve only breaks a step wider than half the canvas: a smaller finite jump gets a riser.
+for (const l of ['jump if(x<0,-1,1)', 'jump+pole if(x<1,1/x,x+5)'])
+  for (const v of ['default', 'phone default', 'tall default'])
+    KNOWN[`${l}@${v} no jump bridge`] = 'traceCurve draws a riser across a jump < H/2';
 
 const registered = new Set<string>();
 function check(name: string, problems: () => string[]): void {
@@ -325,6 +347,7 @@ interface FnCase {
   poles?: (vp: Viewport, W: number) => number[];
   odd?: boolean;
   continuous?: boolean;
+  jumps?: (vp: Viewport) => number[];
 }
 const at = (p: number) => (vp: Viewport) => (p > vp.xMin && p < vp.xMax ? [p] : []);
 const poleOfShift = (v: View) => v.cx + 0.1 * v.w;
@@ -349,6 +372,14 @@ const FN_CASES: FnCase[] = [
   { label: 'exp(x)', src: () => 'exp(x)', continuous: true },
   { label: 'x', src: () => 'x', continuous: true },
   { label: '1000x', src: () => '1000*x', continuous: true },
+  { label: 'jump if(x<0,-1,1)', src: () => 'if(x<0,-1,1)', jumps: at(0) },
+  {
+    label: 'jump+pole if(x<1,1/x,x+5)',
+    src: () => 'if(x<1,1/x,x+5)',
+    poles: at(0),
+    odd: true,
+    jumps: at(1),
+  },
 ];
 
 /** Views centred on the curve itself far from the origin: (c, f(c)). */
@@ -383,6 +414,8 @@ function runFn(
   check(`${key} bounded`, () => boundedCoords(rec, v.W, v.H));
   if (fc.odd && poles.length) check(`${key} no pole bridge`, () => noPoleBridge(segs, fr, poles));
   if (poles.length) check(`${key} reaches edges at poles`, () => poleReach(rec, fr, fx, poles));
+  const jumps = fc.jumps?.(vp) ?? [];
+  if (jumps.length) check(`${key} no jump bridge`, () => noJumpBridge(segs, fr, fx, jumps));
   check(`${key} coverage`, () => coverage(segs, fr, fx, poles, !!fc.continuous));
   check(`${key} budget`, () => budget(rec, ms));
 }

@@ -97,3 +97,18 @@ describe('symbolic-diff', () => {
     expect(at(n, x)).toBeCloseTo(ref, 3);
   });
 });
+
+describe('symbolic-diff: if()', () => {
+  it('differentiates branch-wise', () => {
+    const dd = d('if(x < 0, -x, x^2)');
+    expect(at(dd, -1)).toBe(-1);
+    expect(at(dd, 3)).toBe(6);
+    expect(toExpressionString(dd)).toBe('if(x < 0, -1, 2*x)');
+  });
+
+  it('keeps the 2-arg form and folds constant branches to 0', () => {
+    expect(at(d('if(x > 0, x^3)'), 2)).toBe(12);
+    expect(at(d('if(x > 0, x^3)'), -2)).toBeNaN();
+    expect(toExpressionString(d('if(x < 0, -1, if(x > 0, 1, 0))'))).toBe('0');
+  });
+});

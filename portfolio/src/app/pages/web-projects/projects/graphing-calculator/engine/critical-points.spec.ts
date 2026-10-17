@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { compileExpression } from './evaluator';
+import { parse } from './parser';
 import {
   findRoots,
   findExtrema,
@@ -172,5 +174,23 @@ describe('critical-points: flat, close, cusp and wide-interval extrema', () => {
 
   it('an inflection with f′ = 0 is not an extremum', () => {
     expect(findExtrema((x) => x ** 3, -2, 2)).toEqual([]);
+  });
+});
+
+describe('critical-points: piecewise if()', () => {
+  const fn = (src: string) => {
+    const c = compileExpression(parse(src));
+    return (x: number) => c(x, NaN);
+  };
+
+  it('a corner written with if() keeps its extremum', () => {
+    const p = findExtrema(fn('if(x < 0, -x, x)'), -1, 2);
+    expect(p.map((e) => e.kind)).toEqual(['min']);
+    expect(Math.abs(p[0].x)).toBeLessThan(1e-6);
+  });
+
+  it('a jump is neither a root nor an extremum', () => {
+    expect(findRoots(fn('if(x < 0, -1, 1)'), -2, 2)).toEqual([]);
+    expect(findExtrema(fn('if(x < 0, x, x + 3)'), -2, 2)).toEqual([]);
   });
 });

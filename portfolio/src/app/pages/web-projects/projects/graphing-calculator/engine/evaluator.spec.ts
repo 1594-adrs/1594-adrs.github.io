@@ -520,3 +520,31 @@ describe('evaluator wave-1 regressions (H24)', () => {
     expect(evalExpression('gamma(-0.5)', 0)).toBeCloseTo(-2 * Math.sqrt(Math.PI), 9);
   });
 });
+
+describe('if() and comparisons', () => {
+  const both = (s: string, x: number): [number, number] => [
+    evaluate(parse(s), { x, y: 0, t: x }),
+    compileExpression(parse(s))(x, 0),
+  ];
+
+  it.each<[string, number, number]>([
+    ['if(x < 0, -1, 1)', -2, -1],
+    ['if(x < 0, -1, 1)', 0, 1],
+    ['if(x, 2, 3)', 0.5, 2],
+    ['if(x < 0, -1)', 2, NaN],
+    ['if(sqrt(x) < 1, 1, 2)', -1, NaN],
+    ['if(x > 0, ln(x), 0)', -1, 0],
+    ['if(x < 0, -x, if(x < 1, x^2, 1))', 0.5, 0.25],
+    ['sqrt(x) < 1', -1, NaN],
+    ['x == 2', 2, 1],
+    ['x != 2', 2, 0],
+  ])('%s at %d = %d (evaluate and compiled)', (s, x, want) => {
+    expect(both(s, x)).toEqual([want, want]);
+  });
+
+  it('only the selected branch is evaluated', () => {
+    expect(evaluate(parse('if(x < 0, 1, foo)'), { x: -1 })).toBe(1);
+    expect(compileExpression(parse('if(x < 0, 1, foo)'))(-1, 0)).toBe(1);
+    expect(() => evaluate(parse('if(x < 0, 1, foo)'), { x: 1 })).toThrow(/foo/);
+  });
+});
