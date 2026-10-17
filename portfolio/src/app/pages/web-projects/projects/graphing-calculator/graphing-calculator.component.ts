@@ -55,6 +55,7 @@ import { findAxisCrossings } from './canvas/utils';
 import { findNearestCurvePoint } from './canvas/curve-locator';
 import type { TraceCurve } from './canvas/curve-locator';
 import { drawTracePoint, drawPointOfInterest } from './canvas/trace-renderer';
+import { drawLimitMarker, drawNewtonSteps, drawTangentOverlay } from './canvas/calculus-renderer';
 import { computePointsOfInterest } from './engine/critical-points';
 import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
@@ -72,11 +73,15 @@ import {
 } from './components/math-input/mathlive-loader';
 import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
 import { SolidPanelComponent } from './components/solid-panel/solid-panel.component';
+import { CalculusPanel } from './components/calculus-panel/calculus-panel';
 import { ValueTable } from './components/value-table/value-table';
+import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
 import { ColorPicker } from './components/color-picker/color-picker';
 import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
 import { UiLayoutState } from './state/ui-layout.state';
+import { CalculusToolState } from './state/calculus-tool.state';
+import { derivativeOf, differentialCurveOf, tangentAt } from './state/derivative-view';
 import type { ToolTab, SheetSnap } from './state/ui-layout.state';
 import { IconComponent } from '../../../../shared/icons/icon.component';
 import { ShortcutsPopover } from './components/shortcuts-popover/shortcuts-popover';
@@ -84,6 +89,7 @@ import {
   buildShareHash,
   extractShareFragment,
   parseShareState,
+  SHARE_STATE_VERSION,
   type ShareState,
 } from './state/share-state';
 import { formatValue } from './utils/format-value';
@@ -112,6 +118,9 @@ const POI_HIT_PX_FINE = 12;
 const POI_HIT_PX_COARSE = 22;
 /** Debounce for recomputing points of interest after a pan/zoom. */
 const POI_RECOMPUTE_DELAY_MS = 150;
+/** Quiet time before the tangent readout under the pointer is announced to screen readers. */
+const TANGENT_ANNOUNCE_DELAY_MS = 600;
+const NO_TANGENT_TEXT = 'No visible curve supports a tangent line.';
 /** Quiet time after the last wheel/key/button view change before the full-resolution redraw. */
 const GESTURE_IDLE_MS = 150;
 /** Movement (screen px) beyond which a single-finger touch commits to panning
@@ -148,13 +157,15 @@ function roundLimit(v: number): number {
     MathInput,
     ConicAssistantComponent,
     SolidPanelComponent,
+    CalculusPanel,
+    MathRendererComponent,
     ValueTable,
     ColorPicker,
     IconComponent,
     ShortcutsPopover,
   ],
   host: { '[style.--kb-h.px]': 'kbHeight()' },
-  providers: [SolidToolState, GraphInteractionState, UiLayoutState],
+  providers: [SolidToolState, GraphInteractionState, UiLayoutState, CalculusToolState],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
     './graphing-calculator.component.css',
@@ -176,6 +187,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   solidToolState = inject(SolidToolState);
   interactionState = inject(GraphInteractionState);
   uiLayout = inject(UiLayoutState);
+  calculusState = inject(CalculusToolState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
@@ -217,6 +229,24 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   poiAnnouncement = signal<string>('');
   tableOpenIndex = signal<number | null>(null);
   shareNotice = signal<string>('');
+  /** Debounced screen-reader text for the tangent at the traced point. */
+  tangentAnnouncement = signal<string>('');
+  private tangentTimerId: ReturnType<typeof setTimeout> | null = null;
+  /** Row whose "f′ unavailable" reason is shown under it (tap/click on the disabled f′ button). */
+  derivHintIndex = signal<number | null>(null);
+  /** True while a finger-lifted trace point is kept on screen (touch has no hover). */
+  private touchHeld = false;
+
+  /** Whether any visible row can be traced for a tangent / normal (implicit curves cannot). */
+  canTangent = computed(() =>
+    this.functions().some((f) => f.visible && !f.error && !!differentialCurveOf(f)),
+  );
+
+  /** f′ per row (or why not), for the row toggle, its formula line and the dashed curve. */
+  derivatives = computed(() => {
+    const au = this.angleUnit();
+    return this.functions().map((f) => derivativeOf(f, au));
+  });
   private shareNoticeTimerId: ReturnType<typeof setTimeout> | null = null;
 
   /** Accessible description of what's currently on the canvas, for aria-describedby. */
@@ -231,6 +261,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.showSolidTool()) parts.push('Solid of revolution tool active.');
     if (this.activeIntegral()) parts.push('Integral tool active.');
     if (this.activeMultiArea()) parts.push('Area between curves tool active.');
+    if (this.calculusState.open()) parts.push('Calculus tool active.');
+    if (this.interactionState.showTangent()) {
+      parts.push('Tangent line shown at the traced point.');
+    }
     if (this.poiAnnouncement()) parts.push(this.poiAnnouncement());
     return parts.join(' ');
   });
@@ -292,6 +326,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private poiKey: string | null = null;
   private touchAnchor: { x: number; y: number } | null = null;
   private touchPanEngaged = false;
+  private touchPinched = false;
 
   /** Canvas size in CSS px (logical drawing space — what Viewport/renderers use) and
    *  its bounding rect, cached by `measureCanvas()` (the ResizeObserver callback and
@@ -452,6 +487,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.showSolidTool() && target !== 'solids') this.toggleSolidTool();
     if (this.activeMultiArea() && target !== 'area') this.activeMultiArea.set(null);
     if (this.showConicAssistant() && target !== 'conics') this.showConicAssistant.set(false);
+    this.calculusState.open.set(target === 'calculus');
     if (target === 'integral' && !this.activeIntegral()) this.activateIntegral();
     else if (target === 'solids' && !this.showSolidTool()) this.toggleSolidTool();
     else if (target === 'area' && !this.activeMultiArea()) this.activateMultiArea();
@@ -700,7 +736,28 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.showSolidTool,
       this.activeMultiArea,
       this.showConicAssistant,
+      this.calculusState.open,
     );
+    this.calculusState.connect(this.functions, this.angleUnit);
+
+    // No traceable curve left: drop the stale tangent text so screen readers don't keep it.
+    effect(() => {
+      if (this.canTangent()) return;
+      if (this.tangentTimerId !== null) clearTimeout(this.tangentTimerId);
+      this.tangentTimerId = null;
+      this.tangentAnnouncement.set('');
+    });
+
+    // f′ curves, the tangent toggles and the calculus overlays are drawn imperatively.
+    effect(() => {
+      this.derivatives();
+      this.interactionState.showTangent();
+      this.interactionState.showNormal();
+      this.calculusState.limit();
+      this.calculusState.newton();
+      if (!this.isBrowser) return;
+      this.requestRender();
+    });
 
     // The 2D canvas is drawn imperatively (not from template bindings), so solid-panel
     // edits (method/axis/bounds/curve selection) need an explicit trigger to redraw —
@@ -795,6 +852,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       clearTimeout(this.shareNoticeTimerId);
       this.shareNoticeTimerId = null;
     }
+    if (this.tangentTimerId !== null) {
+      clearTimeout(this.tangentTimerId);
+      this.tangentTimerId = null;
+    }
     if (this.wheelIdleTimerId !== null) {
       clearTimeout(this.wheelIdleTimerId);
       this.wheelIdleTimerId = null;
@@ -824,6 +885,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.activeMultiArea.set(null);
     }
     this.solidToolState.handleFunctionRemoved(index);
+    this.calculusState.handleFunctionRemoved(index);
+    this.derivHintIndex.set(null);
     this.requestRender();
   }
 
@@ -1017,6 +1080,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       }),
     );
     this.requestRender();
+  }
+
+  /** f′ row toggle; a no-op on rows it does not apply to (the button says why). */
+  toggleDerivative(index: number): void {
+    if (!this.derivatives()[index]?.applicable) {
+      this.derivHintIndex.update((i) => (i === index ? null : index));
+      return;
+    }
+    this.functions.update((fns) =>
+      fns.map((fn, i) => (i === index ? { ...fn, showDerivative: !fn.showDerivative } : fn)),
+    );
   }
 
   toggleVisibility(index: number): void {
@@ -1388,6 +1462,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       case 'P':
         this.cyclePointOfInterest();
         return;
+      case 't':
+      case 'T':
+        this.toggleTangentKey();
+        return;
+      case 'n':
+      case 'N':
+        this.toggleNormalKey();
+        return;
       case 'Escape':
         if (this.interactionState.pinnedPoints().length > 0) {
           this.interactionState.clearPinned();
@@ -1402,19 +1484,51 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.requestRender();
   }
 
+  /** T key / tangent button: toggles the tangent and says so (the readout is otherwise mouse-only). */
+  toggleTangentKey(): void {
+    if (!this.canTangent()) return this.announceReadout(NO_TANGENT_TEXT);
+    this.interactionState.toggleTangent();
+    const on = this.interactionState.showTangent();
+    if (!on && this.touchHeld) this.releaseTouchTrace();
+    this.announceReadout(
+      on ? 'Tangent line on. Hover or touch a curve to read it.' : 'Tangent and normal lines off.',
+    );
+  }
+
+  /** N key / normal button. */
+  toggleNormalKey(): void {
+    if (!this.canTangent()) return this.announceReadout(NO_TANGENT_TEXT);
+    this.interactionState.toggleNormal();
+    this.announceReadout(
+      this.interactionState.showNormal()
+        ? 'Normal line on, with the tangent. Hover or touch a curve to read it.'
+        : 'Normal line off.',
+    );
+  }
+
+  private releaseTouchTrace(): void {
+    this.touchHeld = false;
+    this.mousePos.set(null);
+    this.requestRender();
+  }
+
   /** Cycles the keyboard focus through the currently visible points of interest,
    *  announcing the current one via the canvas's aria-describedby region. */
   private cyclePointOfInterest(): void {
-    if (!this.interactionState.showPointsOfInterest()) return;
+    if (!this.interactionState.showPointsOfInterest()) {
+      this.announceReadout('Points of interest are hidden. Turn them on first.');
+      return;
+    }
     const next = this.interactionState.cycleNext();
     if (!next) {
       this.poiAnnouncement.set('No points of interest in view.');
+      this.announceReadout('No points of interest in view.');
       return;
     }
     const { point, index, total } = next;
-    this.poiAnnouncement.set(
-      `Point of interest ${index + 1} of ${total}: (${point.x.toFixed(3)}, ${point.y.toFixed(3)}), ${point.label}.`,
-    );
+    const text = `Point of interest ${index + 1} of ${total}: (${point.x.toFixed(3)}, ${point.y.toFixed(3)}), ${point.label}.`;
+    this.poiAnnouncement.set(text);
+    this.announceReadout(text);
     this.requestRender();
   }
 
@@ -1431,6 +1545,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
       this.touchAnchor = { x, y };
+      this.touchHeld = false;
+      this.touchPinched = false;
       this.touchPanEngaged = false;
       this.isDragging.set(false);
       this.lastDrag.set({ x, y });
@@ -1442,6 +1558,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const dx = touch2.clientX - touch1.clientX;
       const dy = touch2.clientY - touch1.clientY;
       this.lastDrag.set({ x: Math.hypot(dx, dy), y: 0 });
+      this.touchPinched = true;
     }
   }
 
@@ -1506,8 +1623,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.isDragging.set(false);
       this.lastDrag.set(null);
       this.touchAnchor = null;
+      // A still finger leaves its trace (and tangent) in place: touch has no hover. A tap elsewhere,
+      // the tangent toggle or a pan/pinch clears it.
+      this.touchHeld = !this.touchPanEngaged && !this.touchPinched && !!this.mousePos();
+      if (!this.touchHeld) this.mousePos.set(null);
       this.touchPanEngaged = false;
-      this.mousePos.set(null);
+      this.touchPinched = false;
       this.gestureActive = false;
       this.requestRender();
     } else if (event.touches.length === 1) {
@@ -1591,8 +1712,13 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const intg = this.activeIntegral();
     const area = this.activeMultiArea();
     const state: ShareState = {
-      v: 1,
-      functions: this.functions().map((f) => ({ raw: f.raw, color: f.color, visible: f.visible })),
+      v: SHARE_STATE_VERSION,
+      functions: this.functions().map((f) => ({
+        raw: f.raw,
+        color: f.color,
+        visible: f.visible,
+        ...(f.showDerivative ? { derivative: true } : {}),
+      })),
       viewport: {
         xMin: this.viewport.xMin,
         xMax: this.viewport.xMax,
@@ -1610,6 +1736,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         overlapMode: area.overlapMode,
       };
     }
+    if (this.interactionState.showTangent()) state.tangent = true;
     if (this.showSolidTool()) {
       state.tool.solid = {
         method: this.solidToolState.method(),
@@ -1656,6 +1783,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       /* clipboard unavailable; the input still shows the URL if focus lands there */
     }
     document.body.removeChild(input);
+  }
+
+  private announceReadout(text: string): void {
+    if (text === this.tangentAnnouncement()) return;
+    if (this.tangentTimerId !== null) clearTimeout(this.tangentTimerId);
+    this.tangentTimerId = setTimeout(() => {
+      this.tangentTimerId = null;
+      this.tangentAnnouncement.set(text);
+    }, TANGENT_ANNOUNCE_DELAY_MS);
   }
 
   private announceShare(message: string): void {
@@ -1709,6 +1845,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       })),
     );
     state.functions.forEach((f, i) => this.updateExpression(i, f.raw));
+    this.functions.update((fns) =>
+      fns.map((fn, i) => (state.functions[i]?.derivative ? { ...fn, showDerivative: true } : fn)),
+    );
+    this.interactionState.showTangent.set(!!state.tangent);
 
     this.viewport.xMin = state.viewport.xMin;
     this.viewport.xMax = state.viewport.xMax;
@@ -1871,6 +2011,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     });
 
     this.solidToolState.handleFunctionMoved(sourceIndex, targetIndex);
+    this.calculusState.handleFunctionMoved(sourceIndex, targetIndex);
+    this.derivHintIndex.set(null);
 
     if (this.activeIntegral()) {
       this.activeIntegral.update((intg) => {
@@ -2016,7 +2158,34 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           mode: 'explicit-y',
           fn: (y: number) => compiled(0, y),
         });
+      } else if (fn.mode === 'polar') {
+        const compiled = compileExpression(fn.ast, au);
+        curves.push({
+          index,
+          color: fn.color,
+          mode: 'parametric',
+          xy: (t: number) => {
+            const r = compiled(t, 0);
+            return [r * Math.cos(t), r * Math.sin(t)];
+          },
+          tMin: this.evalRange(fn.thetaMin, 0),
+          tMax: this.evalRange(fn.thetaMax, 2 * Math.PI),
+        });
       }
+    });
+    // Parametric rows keep their components in paramX / paramY (ast is null).
+    this.functions().forEach((fn, index) => {
+      if (!fn.visible || fn.mode !== 'parametric' || !fn.paramX || !fn.paramY) return;
+      const cx = compileExpression(fn.paramX, au);
+      const cy = compileExpression(fn.paramY, au);
+      curves.push({
+        index,
+        color: fn.color,
+        mode: 'parametric',
+        xy: (t: number) => [cx(t, 0), cy(t, 0)],
+        tMin: this.evalRange(fn.tMin, 0),
+        tMax: this.evalRange(fn.tMax, 2 * Math.PI),
+      });
     });
     return curves;
   }
@@ -2198,6 +2367,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    const derivatives = this.derivatives();
+    this.functions().forEach((fn, i) => {
+      const d = derivatives[i]?.ast;
+      if (!fn.visible || !fn.showDerivative || !d) return;
+      const compiled = compileExpression(d, au);
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      drawFunction(ctx, this.viewport, (x: number) => compiled(x, 0), fn.color, w, h, d);
+      ctx.restore();
+    });
+
     const intg = this.activeIntegral();
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
@@ -2259,6 +2439,19 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    const limit = this.calculusState.limit();
+    if (limit) {
+      drawLimitMarker(
+        ctx,
+        this.viewport,
+        { x0: limit.x0, value: limit.result.value, text: limit.text, color: limit.color },
+        w,
+        h,
+      );
+    }
+    const newtonRun = this.calculusState.newton();
+    if (newtonRun) drawNewtonSteps(ctx, this.viewport, newtonRun.rows, newtonRun.color, w, h);
+
     if (this.interactionState.showPointsOfInterest()) {
       this.schedulePoiRecompute();
       const activeIndex = this.interactionState.activeIndex();
@@ -2285,7 +2478,32 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         h,
         TRACE_SNAP_PX,
       );
-      if (trace) {
+      const traceFn = trace ? this.functions()[trace.curveIndex] : undefined;
+      const tangent =
+        trace && traceFn && this.interactionState.showTangent()
+          ? tangentAt(
+              traceFn,
+              traceFn.mode === 'explicit' || traceFn.mode === 'explicit-y'
+                ? trace.worldX
+                : trace.param,
+              traceFn.mode === 'explicit-y' ? trace.worldY : undefined,
+              au,
+              this.interactionState.showNormal(),
+            )
+          : null;
+      if (trace && tangent) {
+        drawTangentOverlay(
+          ctx,
+          this.viewport,
+          tangent,
+          [trace.screenX, trace.screenY],
+          trace.color,
+          this.interactionState.showNormal(),
+          w,
+          h,
+        );
+        this.announceReadout(tangent.summary);
+      } else if (trace) {
         drawTracePoint(
           ctx,
           trace.screenX,

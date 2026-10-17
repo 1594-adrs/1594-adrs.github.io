@@ -79,6 +79,30 @@ describe('share-state', () => {
     expect(parseShareState(encoded)).toBeNull();
   });
 
+  it('reads a v1 link (no derivative/tangent fields) and upgrades it to v2', () => {
+    const v1 = { ...makeState(), v: 1 };
+    const parsed = parseShareState(serializeShareState(v1));
+    expect(parsed).toEqual({ ...makeState(), v: SHARE_STATE_VERSION });
+    expect(SHARE_STATE_VERSION).toBe(2);
+    expect(parsed?.tangent).toBeUndefined();
+    expect(parsed?.functions[0].derivative).toBeUndefined();
+  });
+
+  it('round-trips the v2 f′ and tangent toggles, dropping non-true values', () => {
+    const state = makeState();
+    state.functions[0].derivative = true;
+    state.tangent = true;
+    expect(parseShareState(serializeShareState(state))).toEqual(state);
+    const junk = {
+      ...makeState(),
+      tangent: 'yes',
+      functions: [{ raw: 'x', color: '#00ff88', visible: true, derivative: 1 }],
+    };
+    const parsed = parseShareState(serializeShareState(junk as unknown as ShareState));
+    expect(parsed?.tangent).toBeUndefined();
+    expect(parsed?.functions[0]).toEqual({ raw: 'x', color: '#00ff88', visible: true });
+  });
+
   it('extracts nothing when there is no #s= fragment', () => {
     expect(extractShareFragment('#foo=bar')).toBeNull();
   });

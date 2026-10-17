@@ -45,6 +45,17 @@ describe('differential: slopeAt', () => {
     expect(lineAt(n, 0)).toBeCloseTo(0, 10);
   });
 
+  it('tangentLine snaps a rounding-noise slope to 0 so the normal is vertical', () => {
+    const circle: DifferentialCurve = { mode: 'parametric', x: P('5*cos(t)'), y: P('5*sin(t)') };
+    expect(tangentLine(circle, Math.PI / 2).slope).toBe(0);
+    expect(tangentLine(circle, Math.PI / 2, { normal: true }).slope).toBe(Infinity);
+    const sin: DifferentialCurve = { mode: 'explicit', f: P('sin(x)') };
+    expect(tangentLine(sin, Math.PI / 2, { normal: true }).slope).toBe(Infinity);
+    // Near-vertical stays vertical (quotient tolerance), normal horizontal.
+    expect(tangentLine(circle, Math.PI).slope).toBe(Infinity);
+    expect(tangentLine(circle, Math.PI, { normal: true }).slope).toBe(0);
+  });
+
   it('implicit x²+y²=1: second derivative is −1/y³', () => {
     const c: DifferentialCurve = { mode: 'implicit', lhs: P('x^2 + y^2'), rhs: P('1') };
     expect(slopeAt(c, 0.6, { y0: 0.8, order: 2 }).value).toBeCloseTo(-1 / 0.8 ** 3, 8);

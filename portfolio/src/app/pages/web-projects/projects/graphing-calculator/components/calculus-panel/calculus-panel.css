@@ -1,0 +1,277 @@
+/* Own view encapsulation: repeats the sidebar look (dark tokens, 11px uppercase labels,
+   1px borders, green active state) instead of inheriting it. */
+:host {
+  display: block;
+  font-family: var(--font-family);
+  border-top: 1px solid var(--color-border);
+}
+
+.calc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0.75rem;
+}
+
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  min-height: 32px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
+}
+
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.seg-btn:hover,
+.chip:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.seg-btn.active {
+  color: var(--color-primary);
+  background: var(--color-glow-10);
+}
+
+.seg-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.group {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.label {
+  display: block;
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background-color 0.15s;
+}
+
+.chip.selected {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-glow-10);
+}
+
+/* The native radio stays in the accessibility tree and takes the focus ring onto the chip. */
+.chip input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.chip:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--color-border-hover);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.field-name {
+  flex-shrink: 0;
+}
+
+.field-math {
+  display: block;
+  flex: 1;
+  min-width: 6ch;
+}
+
+.text-input {
+  box-sizing: border-box;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 1.9rem;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.text-input:focus {
+  border-color: var(--color-primary);
+}
+
+.text-input[aria-invalid='true'] {
+  border-color: var(--color-corruption);
+}
+
+.hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.hint.error,
+.warn {
+  color: var(--color-warning);
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-left: 2px solid var(--color-primary);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.result:empty {
+  display: none;
+}
+
+.result-caption {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.result-value {
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--color-primary);
+  overflow-wrap: anywhere;
+}
+
+.result-value.muted {
+  color: var(--color-text);
+}
+
+.result-detail {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+.table-scroll {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.table-scroll:focus-visible {
+  outline: 2px solid var(--color-primary);
+}
+
+.iter-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.iter-table th,
+.iter-table td {
+  padding: 3px 8px;
+  text-align: right;
+}
+
+.iter-table th {
+  position: sticky;
+  top: 0;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-bg-dark);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.iter-table td:first-child,
+.iter-table th:first-child {
+  text-align: left;
+  color: var(--color-text-muted);
+}
+
+.iter-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (pointer: coarse) {
+  .seg-btn,
+  .chip,
+  .text-input {
+    min-height: 44px;
+  }
+}

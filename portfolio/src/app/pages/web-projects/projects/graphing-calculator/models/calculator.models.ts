@@ -18,6 +18,8 @@ export interface MathExpression {
   thetaMin?: string;
   thetaMax?: string;
   inequalityOp?: '>' | '<' | '>=' | '<=';
+  /** f′ toggle: also plot the derivative (explicit rows only). */
+  showDerivative?: boolean;
   /** Inline validation message (parse or unknown-variable/function), or null when valid. */
   error: string | null;
 }

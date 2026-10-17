@@ -24,6 +24,15 @@ export class ShortcutsPopover {
     { keys: '↑ ↓ ← →', action: 'Pan the graph' },
     { keys: 'R', action: 'Reset view' },
     { keys: 'P', action: 'Cycle points of interest' },
+    { keys: 'T', action: 'Tangent at the traced point (also the tangent button)' },
+    { keys: 'N', action: 'Normal line at the traced point (also the normal button)' },
+    { keys: 'f′ button', action: 'Plot the derivative of a y = f(x) row (dashed)' },
+    { keys: 'Calculus', action: 'Tab: limit (inf, -inf, side) and Newton x₀/steps' },
+    {
+      keys: 'Touch',
+      action: 'Hold a finger on a curve to trace it; it stays until you tap elsewhere',
+    },
+    { keys: 'Touch', action: 'Drag to pan, pinch to zoom' },
     { keys: 'Esc', action: 'Clear pinned labels' },
   ];
 }

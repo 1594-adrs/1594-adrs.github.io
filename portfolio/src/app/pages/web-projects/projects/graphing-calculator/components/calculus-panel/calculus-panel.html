@@ -1,0 +1,202 @@
+<div class="calc-panel">
+  <div class="seg" role="group" aria-label="Calculus tool">
+    <button
+      type="button"
+      class="seg-btn"
+      [class.active]="state.mode() === 'limit'"
+      [attr.aria-pressed]="state.mode() === 'limit'"
+      (click)="state.mode.set('limit')"
+    >
+      Limit
+    </button>
+    <button
+      type="button"
+      class="seg-btn"
+      [class.active]="state.mode() === 'newton'"
+      [attr.aria-pressed]="state.mode() === 'newton'"
+      (click)="state.mode.set('newton')"
+    >
+      Newton's method
+    </button>
+  </div>
+
+  @if (state.choices().length === 0) {
+    <p class="note" role="status">Add a visible y = f(x) expression to use this tool.</p>
+  } @else {
+    <fieldset class="group">
+      <legend class="label">function</legend>
+      <div class="chips">
+        @for (c of state.choices(); track c.index) {
+          <label class="chip" [class.selected]="state.selected()?.index === c.index">
+            <input
+              type="radio"
+              name="calc-fn"
+              [checked]="state.selected()?.index === c.index"
+              (change)="state.select(c.index)"
+            />
+            <span class="swatch" [style.background]="c.color"></span>
+            {{ c.label }}
+          </label>
+        }
+      </div>
+      @if (state.selectionNote(); as note) {
+        <p class="hint" role="status">{{ note }}</p>
+      }
+    </fieldset>
+
+    @if (state.mode() === 'limit') {
+      <div class="group">
+        <label class="field">
+          <span class="field-name">x →</span>
+          <app-math-input
+            kind="limit"
+            class="field-math"
+            inputId="calc-limit-x0"
+            [value]="state.limitX0Text()"
+            label="Point the limit approaches"
+            placeholder="0"
+            [invalid]="state.limitX0().invalid"
+            [describedBy]="
+              state.limitX0().invalid ? 'calc-limit-hint calc-limit-error' : 'calc-limit-hint'
+            "
+            (valueChange)="state.limitX0Text.set($event)"
+          />
+        </label>
+        <p id="calc-limit-hint" class="hint">Numbers, pi/2, inf or -inf.</p>
+        @if (state.limitX0().invalid) {
+          <p id="calc-limit-error" class="hint error" role="alert">
+            Enter a number, pi/2, inf or -inf.
+          </p>
+        }
+      </div>
+
+      <fieldset class="group">
+        <legend class="label">side</legend>
+        <div class="chips">
+          @for (s of sides; track s.value) {
+            <label class="chip" [class.selected]="state.side() === s.value">
+              <input
+                type="radio"
+                name="calc-side"
+                [checked]="state.side() === s.value"
+                [attr.aria-label]="s.aria"
+                (change)="state.side.set(s.value)"
+              />
+              {{ s.label }}
+            </label>
+          }
+        </div>
+      </fieldset>
+
+      <div class="result" aria-hidden="true">
+        @if (state.limit(); as lim) {
+          <span class="result-caption">lim {{ approach() }} of f{{ lim.fnIndex + 1 }}(x)</span>
+          <span
+            class="result-value"
+            [class.muted]="lim.result.status === 'dne' || lim.result.status === 'unknown'"
+            >{{ lim.text }}</span
+          >
+          @if (lim.detail) {
+            <span class="result-detail">{{ lim.detail }}</span>
+          }
+        } @else {
+          <span class="result-caption">Enter the point x approaches.</span>
+        }
+      </div>
+      <p class="sr-only" role="status" aria-live="polite">{{ announced() }}</p>
+    } @else {
+      <div class="group">
+        <div class="fields">
+          <label class="field">
+            <span class="field-name">x₀ =</span>
+            <app-math-input
+              kind="limit"
+              class="field-math"
+              inputId="calc-newton-x0"
+              [value]="state.newtonX0Text()"
+              label="Newton starting point x0"
+              placeholder="1"
+              [invalid]="state.newtonX0().invalid"
+              [describedBy]="state.newtonX0().invalid ? 'calc-x0-error' : null"
+              (valueChange)="state.newtonX0Text.set($event)"
+            />
+          </label>
+          <label class="field">
+            <span class="field-name">steps</span>
+            <input
+              type="text"
+              class="text-input"
+              inputmode="numeric"
+              placeholder="auto"
+              [value]="state.stepsText()"
+              [attr.aria-invalid]="state.steps().invalid || null"
+              [attr.aria-describedby]="
+                state.steps().invalid ? 'calc-steps-hint calc-steps-error' : 'calc-steps-hint'
+              "
+              (input)="state.stepsText.set($any($event.target).value)"
+            />
+          </label>
+        </div>
+        @if (state.newtonX0().invalid) {
+          <p id="calc-x0-error" class="hint error" role="alert">x₀ must be a finite number.</p>
+        }
+        <p id="calc-steps-hint" class="hint">Leave steps empty to run until it converges.</p>
+        @if (state.steps().invalid) {
+          <p id="calc-steps-error" class="hint error" role="alert">
+            Steps must be a whole number from 1 to {{ maxSteps }}.
+          </p>
+        }
+      </div>
+
+      <div class="result" aria-hidden="true">
+        @if (state.newtonBlocked(); as reason) {
+          <span class="result-detail">{{ reason }}</span>
+        } @else if (state.newton(); as run) {
+          @if (run.status === 'converged' || run.status === 'steps') {
+            <span class="result-caption"
+              >{{ run.status === 'converged' ? 'root of' : 'iterate of' }} f{{
+                run.fnIndex + 1
+              }}</span
+            >
+            <span class="result-value">{{ format(run.value) }}</span>
+          }
+          <span
+            class="result-detail"
+            [class.warn]="!(run.status === 'converged' || run.status === 'steps')"
+            >{{ run.message }}</span
+          >
+        }
+      </div>
+
+      <p class="sr-only" role="status" aria-live="polite">{{ announced() }}</p>
+
+      @if (!state.newtonBlocked() && state.newton(); as run) {
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Newton iterates">
+          <table class="iter-table">
+            <caption class="sr-only">
+              Newton's method iterates for f{{
+                run.fnIndex + 1
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">n</th>
+                <th scope="col">xₙ</th>
+                <th scope="col">f(xₙ)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of run.rows; track r.n) {
+                <tr>
+                  <td>{{ r.n }}</td>
+                  <td>{{ format(r.x) }}</td>
+                  <td>{{ format(r.fx) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+</div>

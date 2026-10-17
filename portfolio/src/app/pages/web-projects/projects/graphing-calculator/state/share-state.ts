@@ -2,14 +2,17 @@ import type { OverlapMode } from '../models/calculator.models';
 import { FUNCTION_COLORS } from '../utils/color';
 import type { CrossSectionShape, SolidMethod } from '../engine/solids/solid.types';
 
-/** Current on-the-wire share format. Bumping this invalidates old links, which are then
- *  ignored (not partially restored). */
-export const SHARE_STATE_VERSION = 1;
+/** Current on-the-wire share format. v2 adds the optional f′ toggles and the tangent toggle;
+ *  v1 links (same shape without them) still load. Any other version is ignored. */
+export const SHARE_STATE_VERSION = 2;
+const READABLE_VERSIONS: readonly unknown[] = [1, 2];
 
 interface ShareFunction {
   raw: string;
   color: string;
   visible: boolean;
+  /** v2: plot f′ too (only written when true). */
+  derivative?: boolean;
 }
 
 interface ShareViewport {
@@ -54,6 +57,8 @@ export interface ShareState {
   functions: ShareFunction[];
   viewport: ShareViewport;
   tool: ShareTool;
+  /** v2: tangent at the trace point (only written when true). */
+  tangent?: boolean;
 }
 
 function toBase64Url(json: string): string {
@@ -108,14 +113,16 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  *  An invalid `color` is replaced by the palette color for its slot. */
 function sanitizeFunction(f: unknown, index: number): ShareFunction | null {
   if (!isRecord(f)) return null;
-  const { raw, color, visible } = f;
+  const { raw, color, visible, derivative } = f;
   if (typeof raw !== 'string' || raw.length > MAX_RAW_LENGTH) return null;
   if (typeof visible !== 'boolean') return null;
   const safeColor =
     typeof color === 'string' && COLOR_RE.test(color)
       ? color
       : FUNCTION_COLORS[index % FUNCTION_COLORS.length];
-  return { raw, color: safeColor, visible };
+  const out: ShareFunction = { raw, color: safeColor, visible };
+  if (derivative === true) out.derivative = true;
+  return out;
 }
 
 function isValidViewport(v: unknown): v is ShareViewport {
@@ -223,7 +230,7 @@ export function parseShareState(encoded: string): ShareState | null {
     const json = fromBase64Url(encoded);
     const parsed: unknown = JSON.parse(json);
     if (!isRecord(parsed)) return null;
-    if (parsed['v'] !== SHARE_STATE_VERSION) return null;
+    if (!READABLE_VERSIONS.includes(parsed['v'])) return null;
     const rawFunctions = parsed['functions'];
     if (!Array.isArray(rawFunctions) || rawFunctions.length > MAX_FUNCTIONS) return null;
     const functions: ShareFunction[] = [];
@@ -236,7 +243,7 @@ export function parseShareState(encoded: string): ShareState | null {
     if (!isValidViewport(viewport)) return null;
     const tool = sanitizeTool(parsed['tool']);
     if (!tool) return null;
-    return {
+    const state: ShareState = {
       v: SHARE_STATE_VERSION,
       functions,
       viewport: {
@@ -247,6 +254,8 @@ export function parseShareState(encoded: string): ShareState | null {
       },
       tool,
     };
+    if (parsed['tangent'] === true) state.tangent = true;
+    return state;
   } catch {
     return null;
   }

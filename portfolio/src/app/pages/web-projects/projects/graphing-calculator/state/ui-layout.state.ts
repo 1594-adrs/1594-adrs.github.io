@@ -13,7 +13,7 @@ export const SHEET_COVER_FRACTION: Record<SheetSnap, number> = {
 };
 
 /** Which tool panel is open in the tab bar. 'none' means the "Graph" tab (no panel). */
-export type ToolTab = 'none' | 'integral' | 'area' | 'solids' | 'conics';
+export type ToolTab = 'none' | 'integral' | 'area' | 'solids' | 'conics' | 'calculus';
 
 /**
  * UI-only layout state for the mobile bottom sheet and the tool tab bar.
@@ -40,12 +40,14 @@ export class UiLayoutState {
     showSolidTool: Signal<boolean>,
     activeMultiArea: Signal<unknown>,
     showConicAssistant: Signal<boolean>,
+    showCalculus: Signal<boolean>,
   ): void {
     this.activeTool = computed<ToolTab>(() => {
       if (activeIntegral()) return 'integral';
       if (showSolidTool()) return 'solids';
       if (activeMultiArea()) return 'area';
       if (showConicAssistant()) return 'conics';
+      if (showCalculus()) return 'calculus';
       return 'none';
     });
   }

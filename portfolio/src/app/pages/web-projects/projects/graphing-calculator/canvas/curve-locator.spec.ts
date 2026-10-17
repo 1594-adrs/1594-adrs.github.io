@@ -48,4 +48,48 @@ describe('findNearestCurvePoint', () => {
     expect(result).not.toBeNull();
     expect(result!.curveIndex).toBe(1);
   });
+
+  it('snaps to a parametric (polar) curve and reports its parameter', () => {
+    // r = 2 as a circle: (2cos t, 2sin t), t in [0, 2π].
+    const curves = [
+      {
+        index: 2,
+        color: '#00ccff',
+        mode: 'parametric' as const,
+        xy: (t: number): [number, number] => [2 * Math.cos(t), 2 * Math.sin(t)],
+        tMin: 0,
+        tMax: 2 * Math.PI,
+      },
+    ];
+    const t = Math.PI / 3;
+    const [sx, sy] = viewport.worldToScreen(2 * Math.cos(t), 2 * Math.sin(t), width, height);
+    const result = findNearestCurvePoint(curves, sx + 3, sy - 2, viewport, width, height, 12);
+    expect(result).not.toBeNull();
+    expect(result!.curveIndex).toBe(2);
+    expect(result!.param).toBeCloseTo(t, 1);
+    expect(Math.hypot(result!.worldX, result!.worldY)).toBeCloseTo(2, 6);
+  });
+
+  it('skips a parametric curve with an empty range or undefined points', () => {
+    const curves = [
+      {
+        index: 0,
+        color: '#00ccff',
+        mode: 'parametric' as const,
+        xy: (): [number, number] => [NaN, NaN],
+        tMin: 0,
+        tMax: 1,
+      },
+    ];
+    expect(findNearestCurvePoint(curves, 400, 280, viewport, width, height, 12)).toBeNull();
+    const empty = [{ ...curves[0], xy: (t: number): [number, number] => [t, t], tMax: 0 }];
+    expect(findNearestCurvePoint(empty, 400, 280, viewport, width, height, 12)).toBeNull();
+  });
+
+  it('reports x (explicit) as the trace parameter', () => {
+    const curves = [{ index: 0, color: '#fff', mode: 'explicit' as const, fn: (x: number) => x }];
+    const [sx, sy] = viewport.worldToScreen(1, 1, width, height);
+    const result = findNearestCurvePoint(curves, sx, sy, viewport, width, height, 12);
+    expect(result!.param).toBe(result!.worldX);
+  });
 });

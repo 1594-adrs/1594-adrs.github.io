@@ -80,6 +80,8 @@ const AGREE = 1e-3;
 const ON_CURVE = 1e-6;
 /** A quotient denominator below this × its numerator is zero (vertical tangent). */
 const VERTICAL = 1e-9;
+/** A tangent slope below this is 0 (the display epsilon of formatValue / lineEquation). */
+const SLOPE_ZERO = 1e-10;
 const NEWTON_MAX_ITER = 200;
 
 const T: Node = { type: 'Variable', name: 't' };
@@ -300,7 +302,11 @@ export function tangentLine(
   at: number,
   opts: { y0?: number; normal?: boolean } = {},
 ): Line {
-  const { x, y, value } = slopeAt(curve, at, { y0: opts.y0 });
+  const raw = slopeAt(curve, at, { y0: opts.y0 });
+  const { x, y } = raw;
+  // Rounding noise (cos(π/2) ≈ 6e-17) is a horizontal tangent, so the normal is vertical; the
+  // near-vertical side is already snapped by `quotient` / the blow-up check.
+  const value = Math.abs(raw.value) < SLOPE_ZERO ? 0 : raw.value;
   if (!opts.normal) return { x0: x, y0: y, slope: value };
   const slope = Number.isNaN(value)
     ? NaN
