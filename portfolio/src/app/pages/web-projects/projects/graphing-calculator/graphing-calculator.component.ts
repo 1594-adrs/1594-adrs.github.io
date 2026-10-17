@@ -837,19 +837,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.requestRender();
     });
 
-    // Points of interest are memoized off the visible functions; invalidate and
-    // recompute them the instant a function's text/visibility changes (add/edit/
-    // remove/hide), rather than waiting for some other render to notice the key
-    // changed — this also covers the case where a tool (e.g. solids) is active
-    // and would otherwise be the only thing driving further renders.
+    // Points of interest are memoized off the visible functions; invalidate them and
+    // schedule the (debounced) recompute as soon as a function's text/visibility changes
+    // (add/edit/remove/hide), rather than waiting for some other render to notice the key
+    // changed — this also covers the case where a tool (e.g. solids) is active and would
+    // otherwise be the only thing driving further renders. Debounced so a slider drag
+    // recomputes on its first tick and once it settles, not on every tick.
     effect(() => {
       this.functions();
       this.poiKey = null;
       if (!this.isBrowser) return;
-      if (this.interactionState.showPointsOfInterest()) {
-        this.recomputePointsOfInterest();
-        this.poiKey = this.poiComputeKey();
-      }
+      if (this.interactionState.showPointsOfInterest()) this.schedulePoiRecompute();
       this.requestRender();
     });
   }
@@ -2307,21 +2305,29 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return `${v.xMin.toFixed(4)},${v.xMax.toFixed(4)}|${fnsKey}`;
   }
 
-  /** Recomputes points of interest at most once per POI_RECOMPUTE_DELAY_MS, so panning
-   *  or zooming doesn't re-run root/extrema/intersection search every frame. Skipped
-   *  entirely while a gesture is active — not just debounced — so the key string
-   *  itself isn't rebuilt every drag frame; the trailing recompute runs once the
-   *  gesture ends (mouseup/touchend/wheel-idle already trigger a render). */
+  /** Recomputes points of interest at once on the first change after an idle spell (a fresh
+   *  load or edit shows them without delay), then once more POI_RECOMPUTE_DELAY_MS after the
+   *  last change of a burst, so panning, zooming or a slider drag doesn't re-run
+   *  root/extrema/intersection search every frame. Skipped entirely while a gesture is active
+   *  — not just debounced — so the key string itself isn't rebuilt every drag frame; the
+   *  trailing recompute runs once the gesture ends (mouseup/touchend/wheel-idle already
+   *  trigger a render). Waits for the view: an earlier run would spend the leading edge on
+   *  the pre-restore functions and push the real first result behind the debounce. */
   private schedulePoiRecompute(): void {
-    if (this.gestureActive) return;
+    if (this.gestureActive || !this.viewInitialized) return;
     if (this.poiComputeKey() === this.poiKey) return;
-    if (this.poiTimer !== null) return;
+    if (this.poiTimer === null) this.runPoiRecompute();
+    else clearTimeout(this.poiTimer);
     this.poiTimer = setTimeout(() => {
       this.poiTimer = null;
-      this.poiKey = this.poiComputeKey();
-      this.recomputePointsOfInterest();
-      this.requestRender();
+      if (this.poiComputeKey() !== this.poiKey) this.runPoiRecompute();
     }, POI_RECOMPUTE_DELAY_MS);
+  }
+
+  private runPoiRecompute(): void {
+    this.poiKey = this.poiComputeKey();
+    this.recomputePointsOfInterest();
+    this.requestRender();
   }
 
   private recomputePointsOfInterest(): void {

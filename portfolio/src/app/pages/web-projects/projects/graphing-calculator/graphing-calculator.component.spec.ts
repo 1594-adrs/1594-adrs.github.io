@@ -523,6 +523,9 @@ describe('GraphingCalculatorComponent', () => {
   });
 
   describe('reactive canvas redraw', () => {
+    /** Outlasts POI_RECOMPUTE_DELAY_MS (150 ms), the points-of-interest debounce. */
+    const settlePoi = () => new Promise((resolve) => setTimeout(resolve, 200));
+
     it('schedules a render when the solid tool state changes (e.g. axis value)', async () => {
       const fixture = TestBed.createComponent(GraphingCalculatorComponent);
       const comp = fixture.componentInstance;
@@ -559,8 +562,30 @@ describe('GraphingCalculatorComponent', () => {
       comp.updateExpression(0, 'x^2-1');
       fixture.detectChanges();
       await fixture.whenStable();
+      await settlePoi();
 
       expect(spy).toHaveBeenCalled();
+    });
+
+    it('a slider drag recomputes points of interest on its first tick and once it settles', async () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+      comp.updateExpression(0, 'y = a*sin(x)');
+      comp.addFunction();
+      comp.updateExpression(1, 'a = 1');
+      fixture.detectChanges();
+      await settlePoi();
+
+      const spy = vi.spyOn(comp.interactionState, 'setPoints');
+      for (let i = 1; i <= 10; i++) {
+        comp.paramSliders.setSliderValue(1, 1 + i / 10);
+        comp.paramSliders.flush();
+        fixture.detectChanges();
+      }
+      expect(spy).toHaveBeenCalledTimes(1);
+      await settlePoi();
+      expect(spy).toHaveBeenCalledTimes(2);
     });
 
     it('clears stale points of interest after replacing the function that produced them', async () => {
@@ -572,12 +597,14 @@ describe('GraphingCalculatorComponent', () => {
       comp.updateExpression(0, 'sin(x)');
       fixture.detectChanges();
       await fixture.whenStable();
+      await settlePoi();
       const withSin = comp.interactionState.pointsOfInterest();
       expect(withSin.length).toBeGreaterThan(0);
 
       comp.updateExpression(0, 'sqrt(1-x^2)');
       fixture.detectChanges();
       await fixture.whenStable();
+      await settlePoi();
 
       const afterReplace = comp.interactionState.pointsOfInterest();
       // sin(x) has a root near x = pi (~3.14) within the default viewport; that
