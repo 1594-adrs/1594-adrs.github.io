@@ -21,6 +21,7 @@ import {
 import { findIntersections } from '../../engine/intersection-finder';
 import {
   detectCurveMode,
+  isParamName,
   maskNested,
   unwrapParametricPair,
   type DetectedCurveMode,
@@ -95,8 +96,114 @@ interface Curve {
   parts?: [ExpressionNode, ExpressionNode];
 }
 
+/**
+ * Free-parameter samples: param i (alphabetical) of sample s is BASES[s]·RATIOS[s]^i — positive,
+ * not 0/1/integer, increasing in alphabetical order (books often need b > a, c > b), and with a
+ * different ratio per sample so `b/a` moves too.
+ */
+const PARAM_BASES = [0.6931, 1.2599, 1.7725];
+const PARAM_RATIOS = [1.4142, 1.6487, 1.2840];
+
 /** Runs one exercise through the calculator engine. Never throws. */
 export function runExercise(ex: Exercise): ExerciseRun {
+  const params = exerciseParams(ex);
+  if (!params.length) return runOnce(ex);
+  // Each sample substitutes numbers for the sliders in curves, bounds and answers.
+  const runs = PARAM_BASES.map((base, s) => {
+    // 6 significant digits keep substituted texts under the parser's length cap.
+    const values = new Map(
+      params.map((p, i) => [p, +(base * PARAM_RATIOS[s] ** i).toPrecision(6)]),
+    );
+    return runOnce(mapExpressions(ex, (text) => substituteText(text, values)));
+  });
+  const gap = runs.find((r) => r.status === 'unsupported' || r.status === 'parse-error');
+  if (gap) return gap;
+  const answerUsesParams = expressionTexts(ex, true).some((t) => textParams(t).length > 0);
+  if (!answerUsesParams && ex.expected) {
+    // The answer is a number but the result moves with the slider, or has no answer at generic
+    // slider values (a continuity / tangency condition picks them): the book asks to solve for it.
+    const [first, ...rest] = runs;
+    const same = rest.every(
+      (r) =>
+        r.status === first.status &&
+        (!r.got || !first.got || sameValues(r.got, first.got, DEFAULT_TOL, ABS_FLOOR, true)),
+    );
+    const noAnswer = (r: ExerciseRun) =>
+      r.status === 'mismatch' &&
+      !!r.got &&
+      !!r.expected &&
+      (r.got.length !== r.expected.length ||
+        r.got.some((g, i) => !Number.isFinite(g) && Number.isFinite(r.expected![i])));
+    if (!same || runs.some(noAnswer)) return { status: 'unsupported', feature: 'param:solve' };
+  }
+  return runs.find((r) => r.status !== 'ok') ?? runs[0];
+}
+
+/** Expression strings of an exercise: curves, bounds, op fields (or only the answers). */
+function expressionTexts(ex: Exercise, answersOnly = false): string[] {
+  const texts: string[] = [];
+  mapExpressions(ex, (t) => (texts.push(t), t), answersOnly);
+  return texts;
+}
+
+const OP_EXPRESSION_KEYS = ['a', 'b', 'x0', 'y0', 'center', 'f', 'xEnd', 'h'] as const;
+
+/** `ex` with `fn` applied to every expression string (metadata and enum fields untouched). */
+function mapExpressions(
+  ex: Exercise,
+  fn: (text: string) => string,
+  answersOnly = false,
+): Exercise {
+  const expected = ex.expected && {
+    ...ex.expected,
+    ...(ex.expected.values ? { values: ex.expected.values.map(fn) } : {}),
+    ...(ex.expected.fn !== undefined ? { fn: fn(ex.expected.fn) } : {}),
+  };
+  if (answersOnly) return { ...ex, expected };
+  const op: Record<string, unknown> = { ...ex.op };
+  for (const key of OP_EXPRESSION_KEYS) {
+    if (typeof op[key] === 'string') op[key] = fn(op[key]);
+  }
+  const axis = op['axis'] as { orientation: string; value: string } | undefined;
+  if (axis) op['axis'] = { ...axis, value: fn(axis.value) };
+  return {
+    ...ex,
+    curves: ex.curves.map(fn),
+    paramRange: ex.paramRange && { a: fn(ex.paramRange.a), b: fn(ex.paramRange.b) },
+    op: op as ExerciseOp,
+    expected,
+  };
+}
+
+/** Identifier runs and numbers (uppercase-E exponents included), as the lexer sees them. */
+const TOKEN = /(\d+\.?\d*|\.\d+)(E[+-]?\d+)?|[A-Za-z_][A-Za-z0-9_]*/g;
+
+/** Single-letter free parameters in an expression string (same rule as the slider rows). */
+function textParams(text: string): string[] {
+  const out = new Set<string>();
+  for (const [tok] of text.matchAll(TOKEN)) if (isParamName(tok)) out.add(tok);
+  return [...out];
+}
+
+function substituteText(text: string, values: ReadonlyMap<string, number>): string {
+  return text.replace(TOKEN, (tok) => (values.has(tok) ? `(${values.get(tok)})` : tok));
+}
+
+/** Sorted free parameters of the exercise; for sequences `n` and the recurrence id are bound. */
+function exerciseParams(ex: Exercise): string[] {
+  const bound = new Set<string>();
+  if (ex.op.kind === 'sequence' || ex.op.kind === 'series') {
+    bound.add('n');
+    for (const c of ex.curves) {
+      const id = RECURRENCE_ROW.exec(c)?.[1];
+      if (id) bound.add(id);
+    }
+  }
+  const all = expressionTexts(ex).flatMap(textParams);
+  return [...new Set(all)].filter((p) => !bound.has(p)).sort();
+}
+
+function runOnce(ex: Exercise): ExerciseRun {
   try {
     const op = ex.op;
     // Related rates: x and y each defined by an equation in t (Thomas 11.2).
@@ -253,6 +360,8 @@ function prepareCurve(raw: string): Curve {
         ast: { type: 'BinaryOp', operator: '=', left: lhs, right: rhs },
       };
     }
+    case 'slider':
+      throw new ParseFail(`'${raw}': a slider row is not a curve`);
   }
 }
 
@@ -382,6 +491,8 @@ function differentialCurve(c: Curve, kind: string): DifferentialCurve {
         return { mode: 'implicit', lhs: c.ast.left, rhs: c.ast.right };
       }
       throw new Unsupported(`${kind}:inequality`);
+    case 'slider':
+      throw new ParseFail('a slider row is not a curve');
   }
 }
 
@@ -589,6 +700,8 @@ function arcCurve(c: Curve, kind: string): ArcCurve {
       return { mode: 'polar', r: c.ast! };
     case 'implicit':
       throw new Unsupported(`${kind}:implicit`);
+    case 'slider':
+      throw new ParseFail('a slider row is not a curve');
   }
 }
 

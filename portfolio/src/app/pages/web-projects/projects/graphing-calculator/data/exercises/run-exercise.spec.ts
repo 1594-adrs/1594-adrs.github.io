@@ -577,19 +577,56 @@ cases.push(
     status: 'ok',
   },
   {
-    name: 'if() with a parameter stays unsupported',
+    name: 'if() with a parameter and a numeric answer asks to solve for it',
     exercise: ex(['y = if(x < a, -x, x)'], I('0', '1'), ['1']),
     status: 'unsupported',
-    feature: 'syntax:a',
+    feature: 'param:solve',
   },
 );
 
-const plannedSyntax: Array<[string, string]> = [
-  ['y = 1/n', 'syntax:n'],
-  ['y = a*x^2', 'syntax:a'],
-  ['y = sin(k*x)', 'syntax:k'],
-  ['y = int(sqrt(t), t, 0, x)', 'syntax:int'],
-];
+// free parameters (sliders): sampled at several values, substituted everywhere
+const solve = { status: 'unsupported' as const, feature: 'param:solve' };
+cases.push(
+  {
+    name: 'param in the answer: ∫_0^1 a·x² = a/3',
+    exercise: ex(['y = a*x^2'], I('0', '1'), ['a/3']),
+    status: 'ok',
+  },
+  {
+    name: 'param in the bounds: ∫_0^{π/k} sin(kx) = 2/k',
+    exercise: ex(['y = sin(k*x)'], I('0', 'pi/k'), ['2/k']),
+    status: 'ok',
+  },
+  {
+    name: 'answer free of the param that does not depend on it',
+    exercise: ex(['y = (sqrt(a*x+a^2)-a)/x'], { kind: 'limit', x0: '0' }, ['1/2']),
+    status: 'ok',
+  },
+  {
+    name: 'sequence: n is the index, a and b are sliders',
+    exercise: ex(['(a^n + b^n)^(1/n)'], { kind: 'sequence', nStart: 1 }, ['b']),
+    status: 'ok',
+  },
+  {
+    name: 'n outside sequences is a slider',
+    exercise: ex(['y = 1/n'], I('0', '1'), ['1']),
+    ...solve,
+  },
+  { name: 'result moves with the slider', exercise: ex(['y = c'], I('1', '4'), ['6']), ...solve },
+  {
+    name: 'no answer at generic slider values (continuity picks m, b)',
+    exercise: ex(['y = if(x < pi, sin(x), m*x+b)'], { kind: 'limit', x0: 'pi' }, ['0']),
+    ...solve,
+  },
+  {
+    name: 'r stays reserved',
+    exercise: ex(['y = r*x'], I('0', '1'), ['r/2']),
+    status: 'unsupported',
+    feature: 'syntax:r',
+  },
+);
+
+const plannedSyntax: Array<[string, string]> = [['y = int(sqrt(t), t, 0, x)', 'syntax:int']];
 
 // differential ops and limits
 const fnAnswer = (fn: string) => ({ expected: { fn, from: 'derived' as const } });

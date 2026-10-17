@@ -51,4 +51,19 @@ export const KNOWN_FAILURES: Record<string, 'mismatch' | 'parse-error'> = {
   // Derivative of cbrt(x)²·sin(x) ~ x^(5/3) at 0: the symbolic form is 0·∞, so the central difference's
   // O(h^(2/3)) error (4e-5) exceeds the tolerance at a non-smooth point.
   'thomas12-3A-22b': 'mismatch',
+  // Free parameters: the fixed slider samples (run-exercise.ts PARAM_BASES/RATIOS) fall outside the
+  // book's domain — bounds need b ≥ 2a (4A-17) or c ≥ b + m (4A-19d), asin((c-a)/a) needs c ≤ 2a
+  // (8.5-62b), 1 - x^k needs an even integer k (6A-11), ∫_e^∞ x^k ln x needs k < -1 (8.7-80) and
+  // Σ n·p^(n-1)(1-p) needs |p| < 1 (10A-31c).
+  'thomas12-4A-17': 'mismatch',
+  'thomas12-4A-19d': 'mismatch',
+  'thomas12-8.5-62b': 'parse-error',
+  'thomas12-6A-11': 'mismatch',
+  'thomas12-8.7-80': 'mismatch',
+  'thomas12-10A-31c': 'mismatch',
+  // Sequence (c^n/(2n+1))^(1/n) with c < 1: c^n underflows to 0 before the nth root restores c.
+  'thomas12-10.1-71': 'mismatch',
+  // Centroid of the half disk is (0, 4a/3π) (the engine's answer); the record's 2a/π is the
+  // centroid of the semicircular wire, which no op computes.
+  'thomas12-6.6-37': 'mismatch',
 };

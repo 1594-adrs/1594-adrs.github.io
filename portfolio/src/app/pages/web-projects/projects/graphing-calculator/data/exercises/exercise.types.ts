@@ -11,8 +11,12 @@ import type { CrossSectionShape, IntegrationVariable, SolidMethod } from '../../
  * - `curves` use the function-row forms: `y = f(x)`, `x = g(y)`, `F(x,y) = G(x,y)`, inequalities,
  *   `r = f(t)` (polar, angle `t`), `(f(t), g(t))` (parametric).
  * - Syntax the calculator does not support yet keeps one canonical spelling so it shows up as a
- *   gap instead of a typo: piecewise `if(cond, a, b)`, `asinh/acosh/atanh`, `cbrt`, free
- *   parameters `a, b, c, k` (sliders), sequences in `n`, ODE right-hand sides in `x, y`.
+ *   gap instead of a typo: piecewise `if(cond, a, b)`, `asinh/acosh/atanh`, `cbrt`, sequences in
+ *   `n`, ODE right-hand sides in `x, y`.
+ * - Free parameters are any single letter except x, y, t, r, e (and `n` in sequences): sliders in
+ *   the app. The runner samples them at a few non-integer values and substitutes them into curves,
+ *   bounds and answers. Keep the book's letters; a numeric answer that only holds for a particular
+ *   parameter value (the book gives it in the text) is reported as the `param:solve` gap.
  * - Bounds and answers are constant expressions (`'pi/2'`, `'16*pi/3'`); `'inf'`, `'-inf'` and
  *   `'dne'` (does not exist) are allowed in answers and `'inf'`/`'-inf'` in bounds.
  */
