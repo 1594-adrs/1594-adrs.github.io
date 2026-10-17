@@ -109,3 +109,20 @@ describe('differential: newton', () => {
     expect(newton(P('exp(x)'), 1).status).toBe('diverged');
   });
 });
+
+describe('differential: piecewise if() at a branch boundary', () => {
+  it('a one-point else branch: the one-sided quotients win over the branch formula', () => {
+    // The symbolic derivative reads 0 off the else branch at 0; the true f'(0) is 1/2.
+    expect(explicit('if(abs(x) > 0, (1-cos(x))/x, 0)', 0)).toBeCloseTo(0.5, 6);
+    expect(explicit('if(abs(x) > 0, x^2*sin(1/x), 0)', 0)).toBeCloseTo(0, 6);
+    expect(explicit('if(abs(x) > 0, x*sin(1/x), 0)', 0)).toBeNaN();
+  });
+
+  it('corners and jumps', () => {
+    expect(explicit('if(x < 0, -x, x)', 0)).toBeNaN();
+    expect(explicit('if(x < 0, 0, 1)', 0)).toBeNaN();
+    // sign(x) written piecewise: both difference quotients blow up to +inf (Thomas 3.1 #35).
+    expect(explicit('if(x < 0, -1, if(x > 0, 1, 0))', 0)).toBe(Infinity);
+    expect(explicit('if(x < 0, x^2, 2*x)', 1)).toBeCloseTo(2, 8);
+  });
+});

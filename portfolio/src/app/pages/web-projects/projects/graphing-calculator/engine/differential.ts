@@ -169,7 +169,8 @@ function safe(f: () => number): number {
 /**
  * g′(a), trusting the symbolic value `s` only when the second-order one-sided quotients agree
  * with it from both sides at some offset; NaN at a corner, jump or where g is undefined. A
- * NaN / infinite `s` (0/0 or 1/0 in the formula) is replaced by what both sides converge to:
+ * NaN / infinite / rejected `s` (0/0 or 1/0 in the formula, a piecewise branch evaluated on its
+ * boundary) is replaced by what both sides converge to:
  * a common finite value (x·|x| at 0) or a common-signed blow-up (x^(1/3) at 0).
  */
 export function checkedDerivative(g: Fn1, a: number, s: number): number {
@@ -186,11 +187,24 @@ export function checkedDerivative(g: Fn1, a: number, s: number): number {
   if (sides.some(([r, l]) => Number.isNaN(r) || Number.isNaN(l))) return NaN;
   const close = (p: number, q: number) =>
     Math.abs(p - q) <= AGREE * Math.max(1, Math.abs(p), Math.abs(q));
-  if (Number.isFinite(s)) return sides.some(([r, l]) => close(r, s) && close(l, s)) ? s : NaN;
+  if (Number.isFinite(s) && sides.some(([r, l]) => close(r, s) && close(l, s))) return s;
+  // A finite s the quotients reject is a branch formula read off its own boundary (the 0 of
+  // if(x != 0, (1-cos(x))/x, 0) at 0): fall back to what both sides converge to.
 
-  const [r1, l1] = sides[sides.length - 2];
-  const [r, l] = sides[sides.length - 1];
-  if (close(r, l) && close(r, r1) && close(l, l1)) return (r + l) / 2;
+  // The most consistent pair of offsets: the smallest h can be rounding noise ((1-cos h)/h).
+  let converged = NaN;
+  let spread = Infinity;
+  for (let i = 1; i < sides.length; i++) {
+    const [r1, l1] = sides[i - 1];
+    const [r, l] = sides[i];
+    const d = Math.abs(r - l) + Math.abs(r - r1) + Math.abs(l - l1);
+    if (close(r, l) && close(r, r1) && close(l, l1) && d < spread) {
+      spread = d;
+      converged = (r + l) / 2;
+    }
+  }
+  if (!Number.isNaN(converged)) return converged;
+  const r = sides[sides.length - 1][0];
   const sign = Math.sign(r);
   const blowsUp = (i: 0 | 1) =>
     sides.every((q) => Math.sign(q[i]) === sign) &&
