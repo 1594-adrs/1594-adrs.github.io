@@ -21,6 +21,7 @@ import {
 import { findIntersections } from '../../engine/intersection-finder';
 import {
   detectCurveMode,
+  maskNested,
   unwrapParametricPair,
   type DetectedCurveMode,
 } from '../../engine/mode-detector';
@@ -52,7 +53,7 @@ export interface ExerciseRun {
 }
 
 /** Planned syntax (see exercise.types.ts): reported as a gap, not as a typo. */
-const PLANNED_IDENTIFIERS = new Set(['if', 'int']);
+const PLANNED_IDENTIFIERS = new Set(['int']);
 const CONSTANT_NAMES = new Set(['e', 'pi', 'π']);
 const CURVE_VARIABLES = new Set(['x', 'y', 't']);
 const SPECIAL_VALUES: Record<string, number> = { inf: Infinity, '-inf': -Infinity, dne: NaN };
@@ -221,7 +222,9 @@ function prepareCurve(raw: string): Curve {
     case 'polar':
       return one(trimmed.replace(/^r\s*=\s*/i, ''), ['x', 't']);
     case 'parametric': {
-      const parts = unwrapParametricPair(raw).split(',');
+      const pair = unwrapParametricPair(raw);
+      const comma = [...maskNested(pair).matchAll(/,/g)].map((m) => m.index);
+      const parts = comma.length === 1 ? [pair.slice(0, comma[0]), pair.slice(comma[0] + 1)] : [];
       if (parts.length !== 2) throw new ParseFail(`'${raw}': parametric needs exactly one comma`);
       const xs = parseChecked(parts[0].trim().replace(/^[xX]\s*=\s*/, ''), ['t', 'x']);
       const ys = parseChecked(parts[1].trim().replace(/^[yY]\s*=\s*/, ''), ['t', 'x']);
@@ -229,14 +232,16 @@ function prepareCurve(raw: string): Curve {
       return { raw, mode, fns, ast: null, parts: [xs, ys] };
     }
     case 'implicit': {
-      const ineq = /(.*?)(>=|<=|>|<)(.*)/.exec(raw);
+      // Only a top-level relation splits the row: `if(x<0, …) = y` is an equation.
+      const top = maskNested(raw);
+      const ineq = /(>=|<=|>|<)/.exec(top);
       if (ineq) {
-        const lhs = ineq[1].trim();
-        const rhs = ineq[3].trim();
+        const lhs = raw.slice(0, ineq.index).trim();
+        const rhs = raw.slice(ineq.index + ineq[1].length).trim();
         if (/^y$/i.test(lhs)) return one(rhs, ['x']);
         return { ...one(`(${lhs})-(${rhs})`, ['x', 'y']), ast: null };
       }
-      const eq = raw.indexOf('=');
+      const eq = top.indexOf('=');
       if (eq < 0) return one(raw, ['x', 'y']);
       const lhs = parseChecked(raw.slice(0, eq), ['x', 'y']);
       const rhs = parseChecked(raw.slice(eq + 1), ['x', 'y']);

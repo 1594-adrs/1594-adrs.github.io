@@ -559,8 +559,32 @@ cases.push(
   },
 );
 
+// piecewise if(): jumps are no roots, corners keep extrema, nested relations stay explicit
+cases.push(
+  {
+    name: '∫ if(x<0,-1,1) on [-1,1] = 0',
+    exercise: ex(['y = if(x < 0, -1, 1)'], I('-1', '1'), ['0']),
+    status: 'ok',
+  },
+  {
+    name: 'a jump is not a root',
+    exercise: ex(['y = if(x < 0, -1, 1)'], { kind: 'roots', a: '-2', b: '2' }, []),
+    status: 'ok',
+  },
+  {
+    name: 'corner of if(x<0,-x,x) is a minimum',
+    exercise: ex(['y = if(x < 0, -x, x)'], { kind: 'extrema', a: '-1', b: '2' }, ['0']),
+    status: 'ok',
+  },
+  {
+    name: 'if() with a parameter stays unsupported',
+    exercise: ex(['y = if(x < a, -x, x)'], I('0', '1'), ['1']),
+    status: 'unsupported',
+    feature: 'syntax:a',
+  },
+);
+
 const plannedSyntax: Array<[string, string]> = [
-  ['y = if(x < 0, -x, x)', 'syntax:if'],
   ['y = 1/n', 'syntax:n'],
   ['y = a*x^2', 'syntax:a'],
   ['y = sin(k*x)', 'syntax:k'],
