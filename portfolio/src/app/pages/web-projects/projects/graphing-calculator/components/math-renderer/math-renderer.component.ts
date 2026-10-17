@@ -1,5 +1,6 @@
 import { Component, ChangeDetectionStrategy, ViewEncapsulation, input } from '@angular/core';
 import type { ExpressionNode, BinaryOp, PoweredFunctionCall } from '../../engine/parser';
+import { precedence } from '../../engine/symbolic-diff';
 
 @Component({
   selector: 'app-math-renderer',
@@ -70,8 +71,23 @@ export class MathRendererComponent {
   }
 
   private renderBinary(node: BinaryOp): string {
-    const left = this.renderNode(node.left);
-    const right = this.renderNode(node.right);
+    // The fraction bar groups both sides: no parentheses needed.
+    if (node.operator === '/') {
+      return `<span class="fraction"><span class="numerator">${this.renderNode(node.left)}</span><span class="fraction-line"></span><span class="denominator">${this.renderNode(node.right)}</span></span>`;
+    }
+    if (node.operator === '^') {
+      return `${this.wrapBase(node.left)}<span class="superscript">${this.renderNode(node.right)}</span>`;
+    }
+    // Minimum operand precedence per side: − is left-associative, and a negative right operand
+    // is always wrapped (a − (−b), x · (−2)).
+    const [minLeft, minRight] =
+      node.operator === '-' ? [1, 2] : node.operator === '*' ? [2, 2] : [1, 1];
+    const left = this.operand(node.left, minLeft, false);
+    const right = this.operand(
+      node.right,
+      minRight,
+      node.operator === '+' || node.operator === '-' || node.operator === '*',
+    );
 
     switch (node.operator) {
       case '+':
@@ -83,10 +99,6 @@ export class MathRendererComponent {
           return `${left}${right}`;
         }
         return `${left} <span class="operator">·</span> ${right}`;
-      case '/':
-        return `<span class="fraction"><span class="numerator">${left}</span><span class="fraction-line"></span><span class="denominator">${right}</span></span>`;
-      case '^':
-        return `${this.wrapBase(node.left)}<span class="superscript">${this.renderNode(node.right)}</span>`;
       case '<':
         return `${left} <span class="operator">&lt;</span> ${right}`;
       case '>':
@@ -110,15 +122,22 @@ export class MathRendererComponent {
   }
 
   private wrapUnary(node: ExpressionNode): string {
-    if (node.type === 'NumberLiteral' || node.type === 'Variable') {
-      return this.renderNode(node);
-    }
+    // −x², −sin(x), −a/b read right bare; sums, products and another sign need parentheses.
+    return displayPrecedence(node) <= UNARY_PREC ? this.paren(node) : this.renderNode(node);
+  }
+
+  private operand(node: ExpressionNode, min: number, wrapNegative: boolean): string {
+    const p = displayPrecedence(node);
+    return p < min || (wrapNegative && p === UNARY_PREC) ? this.paren(node) : this.renderNode(node);
+  }
+
+  private paren(node: ExpressionNode): string {
     return `<span class="paren">(</span>${this.renderNode(node)}<span class="paren">)</span>`;
   }
 
   private wrapBase(node: ExpressionNode): string {
     if (
-      node.type === 'NumberLiteral' ||
+      (node.type === 'NumberLiteral' && node.value >= 0) ||
       node.type === 'Variable' ||
       // A plain function call (sin(x), ln(x), ...) reads fine unparenthesised before a
       // superscript, e.g. sin(x)²; a radical does not - its vinculum has no fixed "cap
@@ -132,6 +151,13 @@ export class MathRendererComponent {
     }
     return `<span class="paren">(</span>${this.renderNode(node)}<span class="paren">)</span>`;
   }
+}
+
+const UNARY_PREC = 3;
+
+/** The engine printer's precedence, except that a fraction is visually grouped (an atom). */
+function displayPrecedence(node: ExpressionNode): number {
+  return node.type === 'BinaryOp' && node.operator === '/' ? 5 : precedence(node);
 }
 
 function isImplicitMultiply(node: BinaryOp): boolean {

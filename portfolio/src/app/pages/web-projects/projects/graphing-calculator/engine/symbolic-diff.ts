@@ -494,7 +494,8 @@ const PREC: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2, '^': 4 };
 const UNARY_PREC = 3;
 const ATOM_PREC = 5;
 
-function precedence(n: Node): number {
+/** Binding strength of `n` as an operand: 0 comparison, 1 + −, 2 · /, 3 unary minus, 4 ^, 5 atom. */
+export function precedence(n: Node): number {
   if (n.type === 'BinaryOp') return COMPARISONS.has(n.operator) ? 0 : (PREC[n.operator] ?? 0);
   if (n.type === 'UnaryOp') return UNARY_PREC;
   if (n.type === 'NumberLiteral' && n.value < 0) return UNARY_PREC;

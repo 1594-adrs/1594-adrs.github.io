@@ -14,6 +14,59 @@ function renderChildren(ast: ExpressionNode): string[] {
   return Array.from(container.children).map((el) => el.className);
 }
 
+function renderText(ast: ExpressionNode): string {
+  const fixture = TestBed.createComponent(MathRendererComponent);
+  fixture.componentRef.setInput('ast', ast);
+  fixture.detectChanges();
+  return (fixture.nativeElement as HTMLElement).textContent!.replace(/\s+/g, ' ').trim();
+}
+
+const num = (value: number): ExpressionNode => ({ type: 'NumberLiteral', value });
+const v = (name: string): ExpressionNode => ({ type: 'Variable', name });
+const bin = (operator: string, left: ExpressionNode, right: ExpressionNode): ExpressionNode => ({
+  type: 'BinaryOp',
+  operator,
+  left,
+  right,
+});
+const negate = (operand: ExpressionNode): ExpressionNode => ({
+  type: 'UnaryOp',
+  operator: '-',
+  operand,
+});
+
+describe('MathRendererComponent: parentheses by precedence', () => {
+  const lnx: ExpressionNode = { type: 'FunctionCall', name: 'ln', arg: v('x') };
+  it.each<[string, ExpressionNode, string]>([
+    // d/dx x^x: the sum factor must stay grouped.
+    [
+      'x^x·(ln x + 1)',
+      bin('*', bin('^', v('x'), v('x')), bin('+', lnx, num(1))),
+      'xx · (ln(x) + 1)',
+    ],
+    ['(a + b)·c', bin('*', bin('+', v('a'), v('b')), v('c')), '(a + b) · c'],
+    ['a − (b − c)', bin('-', v('a'), bin('-', v('b'), v('c'))), 'a − (b − c)'],
+    ['a − (b + c)', bin('-', v('a'), bin('+', v('b'), v('c'))), 'a − (b + c)'],
+    ['(a − b) − c', bin('-', bin('-', v('a'), v('b')), v('c')), 'a − b − c'],
+    ['a + (b − c)', bin('+', v('a'), bin('-', v('b'), v('c'))), 'a + b − c'],
+    ['a·(b·c)', bin('*', v('a'), bin('*', v('b'), v('c'))), 'a · bc'],
+    ['a − (−b)', bin('-', v('a'), negate(v('b'))), 'a − (−b)'],
+    ['a + (−2)', bin('+', v('a'), num(-2)), 'a + (-2)'],
+    ['x·(−2)', bin('*', v('x'), num(-2)), 'x · (-2)'],
+    ['(a + b)^c', bin('^', bin('+', v('a'), v('b')), v('c')), '(a + b)c'],
+    ['(−2)^x', bin('^', num(-2), v('x')), '(-2)x'],
+    ['(−x)^2', bin('^', negate(v('x')), num(2)), '(−x)2'],
+    ['−x^2', negate(bin('^', v('x'), num(2))), '−x2'],
+    ['−(a + b)', negate(bin('+', v('a'), v('b'))), '−(a + b)'],
+    ['−sin(x)', negate({ type: 'FunctionCall', name: 'sin', arg: v('x') }), '−sin(x)'],
+    ['(a/b)^2', bin('^', bin('/', v('a'), v('b')), num(2)), '(ab)2'],
+    ['(a + b)/c: fraction groups itself', bin('/', bin('+', v('a'), v('b')), v('c')), 'a + bc'],
+    ['2·(x + 1)', bin('*', num(2), bin('+', v('x'), num(1))), '2 · (x + 1)'],
+  ])('%s', (_, ast, text) => {
+    expect(renderText(ast)).toBe(text);
+  });
+});
+
 describe('MathRendererComponent', () => {
   it('wraps a radical in parentheses when it is the base of a power, superscript after', () => {
     // (sqrt(1 - x^2))^2
