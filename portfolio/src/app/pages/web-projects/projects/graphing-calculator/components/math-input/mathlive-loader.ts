@@ -46,9 +46,11 @@ function injectTheme(): void {
 /** Loads MathLive once (browser only). Resolves `false`, never rejects, when unavailable. */
 export function loadMathlive(): Promise<boolean> {
   if (!supported()) return Promise.resolve(false);
+  // MathLive's own font loader fetches all 20 KaTeX faces up front (~300 kB); this flag turns
+  // it off, and the @font-face rules in math-input.css let the browser fetch only those used.
+  document.documentElement.style.setProperty('--ML__static-fonts', '1');
   loading ??= import('mathlive')
     .then((m) => {
-      m.MathfieldElement.fontsDirectory = new URL('assets/mathlive/fonts', document.baseURI).href;
       m.MathfieldElement.soundsDirectory = null;
       injectTheme();
       window.mathVirtualKeyboard.layouts = EXPRESSION_LAYOUTS;
