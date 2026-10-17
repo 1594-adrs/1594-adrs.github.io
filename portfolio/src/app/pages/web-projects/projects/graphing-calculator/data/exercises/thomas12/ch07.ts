@@ -687,7 +687,7 @@ export default [
   {"id":"thomas12-7.7-33","source":"thomas12","section":"7.7","number":"33","curves":["y = asinh(1/(1/2)^x)"],"op":{"kind":"derivative"},"expected":{"fn":"ln(2)/sqrt(1+(1/2)^(2*x))","from":"book"}},
   {"id":"thomas12-7.7-34","source":"thomas12","section":"7.7","number":"34","curves":["y = asinh(1/2^x)"],"op":{"kind":"derivative"},"expected":{"fn":"-ln(2)/sqrt(4^x+1)","from":"derived"}},
   {"id":"thomas12-7.7-35","source":"thomas12","section":"7.7","number":"35","curves":["y = asinh(tan(x))"],"op":{"kind":"derivative"},"expected":{"fn":"abs(sec(x))","from":"book"}},
-  {"id":"thomas12-7.7-36","source":"thomas12","section":"7.7","number":"36","curves":["y = acosh(sec(x))"],"op":{"kind":"derivative"},"expected":{"fn":"sec(x)","from":"derived"}},
+  {"id":"thomas12-7.7-36","source":"thomas12","section":"7.7","number":"36","curves":["y = acosh(sec(x))"],"op":{"kind":"derivative"},"expected":{"fn":"sec(x)*sign(tan(x))","from":"derived"}},
   {"id":"thomas12-7.7-37a","source":"thomas12","section":"7.7","number":"37a","curves":["y = sech(x)"],"op":{"kind":"antiderivative","a":"0","b":"1"},"expected":{"fn":"atan(sinh(x))","from":"derived"}},
   {"id":"thomas12-7.7-37b","source":"thomas12","section":"7.7","number":"37b","curves":["y = sech(x)"],"op":{"kind":"antiderivative","a":"0","b":"1"},"expected":{"fn":"asin(tanh(x))","from":"derived"}},
   {"id":"thomas12-7.7-38","source":"thomas12","section":"7.7","number":"38","curves":["y = x*acosh(1/x)"],"op":{"kind":"antiderivative","a":"0.2","b":"0.8"},"expected":{"fn":"x^2*acosh(1/x)/2-sqrt(1-x^2)/2","from":"derived"}},

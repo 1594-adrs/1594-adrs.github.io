@@ -19,7 +19,11 @@ import {
   type CompiledExpr,
 } from '../../engine/evaluator';
 import { findIntersections } from '../../engine/intersection-finder';
-import { detectCurveMode, type DetectedCurveMode } from '../../engine/mode-detector';
+import {
+  detectCurveMode,
+  unwrapParametricPair,
+  type DetectedCurveMode,
+} from '../../engine/mode-detector';
 import { parse, type ExpressionNode } from '../../engine/parser';
 import { computeLimit, type LimitResult } from '../../engine/limit';
 import { findAxisCrossings } from '../../engine/numeric-utils';
@@ -48,7 +52,7 @@ export interface ExerciseRun {
 }
 
 /** Planned syntax (see exercise.types.ts): reported as a gap, not as a typo. */
-const PLANNED_IDENTIFIERS = new Set(['if', 'asinh', 'acosh', 'atanh', 'cbrt', 'int']);
+const PLANNED_IDENTIFIERS = new Set(['if', 'int']);
 const CONSTANT_NAMES = new Set(['e', 'pi', 'π']);
 const CURVE_VARIABLES = new Set(['x', 'y', 't']);
 const SPECIAL_VALUES: Record<string, number> = { inf: Infinity, '-inf': -Infinity, dne: NaN };
@@ -199,10 +203,6 @@ function constant(raw: string): number {
 function prepareCurve(raw: string): Curve {
   checkPlannedSyntax(raw);
   const trimmed = raw.trim();
-  // The contract allows `(f(t), g(t))` but the calculator only reads `f(t), g(t)`.
-  if (/^\(.*\)$/s.test(trimmed) && detectCurveMode(trimmed.slice(1, -1)) === 'parametric') {
-    throw new Unsupported('syntax:parametric-parens');
-  }
   const mode = detectCurveMode(raw);
   const one = (text: string, allowed: string[]): Curve => {
     const ast = parseChecked(text, allowed);
@@ -221,7 +221,7 @@ function prepareCurve(raw: string): Curve {
     case 'polar':
       return one(trimmed.replace(/^r\s*=\s*/i, ''), ['x', 't']);
     case 'parametric': {
-      const parts = raw.split(',');
+      const parts = unwrapParametricPair(raw).split(',');
       if (parts.length !== 2) throw new ParseFail(`'${raw}': parametric needs exactly one comma`);
       const xs = parseChecked(parts[0].trim().replace(/^[xX]\s*=\s*/, ''), ['t', 'x']);
       const ys = parseChecked(parts[1].trim().replace(/^[yY]\s*=\s*/, ''), ['t', 'x']);
@@ -281,7 +281,8 @@ function compute(op: ExerciseOp, curves: Curve[]): number[] {
     case 'integral':
     case 'antiderivative': {
       const [f] = explicitFns(curves, op.kind, 1);
-      const [a, b] = finiteBounds(op.kind, op.a, op.b);
+      // antiderivative stays finite: its expected F(b) - F(a) would need limits at infinity.
+      const [a, b] = finiteBounds(op.kind, op.a, op.b, op.kind === 'integral');
       return [quadValue(integrateAdaptive(f, a, b))];
     }
     case 'area':
@@ -477,12 +478,22 @@ function explicitFns(curves: Curve[], kind: string, min: number): Array<(x: numb
   });
 }
 
-/** The app has no infinite bounds: an op given one is a gap, `<op>:infinite-bounds`. */
-function finiteBounds(kind: string, aRaw: string, bRaw: string): [number, number] {
+/**
+ * The op's bounds. `infiniteOk` only for paths that go entirely through integrateAdaptive (which
+ * takes +-Infinity); every other op samples a grid on [a, b] (intersections, validation, roots),
+ * so an infinite bound there is a gap, `<op>:infinite-bounds`.
+ */
+function finiteBounds(
+  kind: string,
+  aRaw: string,
+  bRaw: string,
+  infiniteOk = false,
+): [number, number] {
   const a = constant(aRaw);
   const b = constant(bRaw);
   if (Number.isNaN(a) || Number.isNaN(b)) throw new ParseFail(`${kind}: bound is 'dne'`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) throw new Unsupported(`${kind}:infinite-bounds`);
+  const infinite = !Number.isFinite(a) || !Number.isFinite(b);
+  if (infinite && !infiniteOk) throw new Unsupported(`${kind}:infinite-bounds`);
   return [a, b];
 }
 
@@ -542,7 +553,8 @@ function areaBetween(curves: Curve[], variable: 'x' | 'y', aRaw?: string, bRaw?:
   let a: number;
   let b: number;
   if (aRaw !== undefined && bRaw !== undefined) {
-    [a, b] = finiteBounds('area', aRaw, bRaw);
+    // One curve = areaSingle (integrateAdaptive only); two or more split at a grid of crossings.
+    [a, b] = finiteBounds('area', aRaw, bRaw, fns.length === 1);
   } else {
     const xs =
       fns.length === 1

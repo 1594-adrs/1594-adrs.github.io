@@ -48,4 +48,7 @@ export const KNOWN_FAILURES: Record<string, 'mismatch' | 'parse-error'> = {
   // Polar area: the book excludes the inner loop; ½∫r² over the range counts it (no "outside loop" op).
   'openstax2-7.4-197': 'mismatch',
   'openstax2-7.4-208': 'mismatch',
+  // Derivative of cbrt(x)²·sin(x) ~ x^(5/3) at 0: the symbolic form is 0·∞, so the central difference's
+  // O(h^(2/3)) error (4e-5) exceeds the tolerance at a non-smooth point.
+  'thomas12-3A-22b': 'mismatch',
 };

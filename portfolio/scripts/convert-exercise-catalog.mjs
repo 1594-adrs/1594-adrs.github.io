@@ -115,6 +115,15 @@ const PATCHES = {
       (r) => (r.expected.tol = 0.01),
     ]),
   ),
+  // Parametric part (b) asks for d²y/dx²; the transcription left the default first derivative.
+  ...Object.fromEntries(
+    [...Array.from({ length: 14 }, (_, i) => `11.2-${i + 1}b`), '11P-9b', '11P-10b'].map((n) => [
+      `thomas12-${n}`,
+      (r) => (r.op.order = 2),
+    ]),
+  ),
+  // d/dx acosh(sec x) = sec x·sign(tan x); the book's sec x holds only where tan x > 0.
+  'thomas12-7.7-36': (r) => (r.expected.fn = 'sec(x)*sign(tan(x))'),
   // Δf = f(b) − f(a) for linearization error was modeled as ∫ f; no op fits.
   // Percent error 100·f′(x)dx/f(x) was modeled as f′(x0) (judge spot-check); no op fits either.
   ...Object.fromEntries(

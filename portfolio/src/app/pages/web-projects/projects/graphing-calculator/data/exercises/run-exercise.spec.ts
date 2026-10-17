@@ -47,16 +47,14 @@ const cases: Case[] = [
     status: 'mismatch',
   },
   {
-    name: '∫_1^inf 1/x',
+    name: '∫_1^inf 1/x → inf',
     exercise: ex(['y = 1/x'], I('1', 'inf'), ['inf']),
-    status: 'unsupported',
-    feature: 'integral:infinite-bounds',
+    status: 'ok',
   },
   {
-    name: '∫_-inf^0 e^x',
+    name: '∫_-inf^0 e^x = 1',
     exercise: ex(['y = e^x'], I('-inf', '0'), ['1']),
-    status: 'unsupported',
-    feature: 'integral:infinite-bounds',
+    status: 'ok',
   },
   {
     name: 'antiderivative with an infinite bound',
@@ -128,8 +126,13 @@ const cases: Case[] = [
     status: 'ok',
   },
   {
-    name: 'area with an infinite bound',
+    name: 'area under one curve with an infinite bound',
     exercise: ex(['y = 1/x^2'], { kind: 'area', wrt: 'x', a: '1', b: 'inf' }, ['1']),
+    status: 'ok',
+  },
+  {
+    name: 'area between curves with an infinite bound (grid of crossings)',
+    exercise: ex(['y = 1/x^2', 'y = 0'], { kind: 'area', wrt: 'x', a: '1', b: 'inf' }, ['1']),
     status: 'unsupported',
     feature: 'area:infinite-bounds',
   },
@@ -558,14 +561,9 @@ cases.push(
 
 const plannedSyntax: Array<[string, string]> = [
   ['y = if(x < 0, -x, x)', 'syntax:if'],
-  ['y = asinh(x)', 'syntax:asinh'],
-  ['y = acosh(x)', 'syntax:acosh'],
-  ['y = atanh(x)', 'syntax:atanh'],
-  ['y = cbrt(x)', 'syntax:cbrt'],
   ['y = 1/n', 'syntax:n'],
   ['y = a*x^2', 'syntax:a'],
   ['y = sin(k*x)', 'syntax:k'],
-  ['(cos(t), sin(t))', 'syntax:parametric-parens'],
   ['y = int(sqrt(t), t, 0, x)', 'syntax:int'],
 ];
 
@@ -655,6 +653,18 @@ cases.push(
   {
     name: 'extrema exclude f′ = 0 at the interval ends',
     exercise: ex(['y = sin(x)'], { kind: 'extrema', a: '-pi/2', b: '5*pi/6' }, ['pi/2']),
+    status: 'ok',
+  },
+);
+cases.push(
+  {
+    name: 'a parenthesized parametric pair reads like f(t), g(t)',
+    exercise: ex(['(t^2, t^3)'], { kind: 'derivative', x0: '1' }, ['1.5']),
+    status: 'ok',
+  },
+  {
+    name: 'cbrt and the hyperbolic reciprocals integrate',
+    exercise: ex(['y = cbrt(x) + sech(x)^2'], I('0', '1'), ['3/4 + tanh(1)']),
     status: 'ok',
   },
 );
