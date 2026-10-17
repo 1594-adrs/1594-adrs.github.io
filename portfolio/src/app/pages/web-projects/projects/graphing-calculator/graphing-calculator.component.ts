@@ -67,7 +67,7 @@ import { computePointsOfInterest } from './engine/critical-points';
 import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
-import { detectCurveMode, unwrapParametricPair } from './engine/mode-detector';
+import { detectCurveMode, maskNested, unwrapParametricPair } from './engine/mode-detector';
 import { FUNCTION_COLORS } from './utils/color';
 import { MathInput } from './components/math-input/math-input';
 import {
@@ -979,12 +979,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
         if (mode === 'implicit') {
           // Length guard: the lazy `.*?` regex is quadratic on long inputs without an operator.
+          const top = maskNested(raw);
           const inequalityMatch =
-            raw.length <= MAX_INEQUALITY_RAW ? raw.match(/(.*?)(>=|<=|>|<)(.*)/) : null;
+            raw.length <= MAX_INEQUALITY_RAW ? /(>=|<=|>|<)/.exec(top) : null;
+          // `1 < x^2+y^2 < 4`: the parser desugars the chain to a 1/0 indicator, drawn as `> 0`.
+          if (inequalityMatch && raw.length <= MAX_INEQUALITY_RAW && top.match(/[<>]=?/g)!.length === 2) {
+            const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 });
+            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: '>', error };
+          }
           if (inequalityMatch) {
-            const lhs = inequalityMatch[1].trim();
-            const op = inequalityMatch[2] as '>' | '<' | '>=' | '<=';
-            const rhs = inequalityMatch[3].trim();
+            const lhs = raw.slice(0, inequalityMatch.index).trim();
+            const op = inequalityMatch[1] as '>' | '<' | '>=' | '<=';
+            const rhs = raw.slice(inequalityMatch.index + op.length).trim();
             if (/^y$/i.test(lhs)) {
               const { ast, error } = this.parseAndValidate(rhs, { x: 1 });
               return {
@@ -1001,8 +1007,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             const { ast, error } = this.parseAndValidate(`(${lhs})-(${rhs})`, { x: 1, y: 1 });
             return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op, error };
           }
-          if (raw.includes('=')) {
-            const eqIdx = raw.indexOf('=');
+          if (top.includes('=')) {
+            const eqIdx = top.indexOf('=');
             const lhsText = raw.substring(0, eqIdx);
             const rhsText = raw.substring(eqIdx + 1);
             try {
@@ -1053,7 +1059,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           };
         }
         if (mode === 'parametric') {
-          const parts = unwrapParametricPair(raw).split(',');
+          const pair = unwrapParametricPair(raw);
+          const commas = [...maskNested(pair).matchAll(/,/g)].map((m) => m.index);
+          const parts =
+            commas.length === 1 ? [pair.slice(0, commas[0]), pair.slice(commas[0] + 1)] : [];
           if (parts.length === 2) {
             const xExpr = parts[0].trim().replace(/^[xX]\s*=\s*/, '');
             const yExpr = parts[1].trim().replace(/^[yY]\s*=\s*/, '');
@@ -2305,10 +2314,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private getImplicitDiffAst(fn: MathExpression): ExpressionNode | null {
     const cached = this.implicitDiffAstCache.get(fn);
     if (cached) return cached;
-    const parts = fn.raw.split('=');
-    if (parts.length !== 2) return null;
+    const top = maskNested(fn.raw);
+    const eq = top.indexOf('=');
+    if (eq < 0 || top.indexOf('=', eq + 1) >= 0) return null;
     try {
-      const expr = parse(`(${parts[0].trim()})-(${parts[1].trim()})`);
+      const expr = parse(`(${fn.raw.slice(0, eq).trim()})-(${fn.raw.slice(eq + 1).trim()})`);
       this.implicitDiffAstCache.set(fn, expr);
       return expr;
     } catch {
@@ -2368,7 +2378,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             );
           }
         } else {
-          if (!fn.raw.includes('=')) continue;
+          if (!maskNested(fn.raw).includes('=')) continue;
           // A recognized conic (circle/ellipse/parabola/hyperbola) is drawn
           // parametrically — ~300 points — instead of the marching-squares grid;
           // `fn.ast` is already the raw `lhs = rhs` equation detectConic expects.

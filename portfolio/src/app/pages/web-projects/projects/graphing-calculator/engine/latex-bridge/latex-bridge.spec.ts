@@ -703,6 +703,9 @@ describe('piecewise: cases <-> if()', () => {
     [String.raw`y=\begin{cases}x & x=0\\[3pt] 2 & \end{cases}`, 'y=if(x==0,x,2)'],
     [String.raw`\begin{dcases}1 & x\ne 2\\ 0 & \text{else}\end{dcases}`, 'if(x!=2,1,0)'],
     [String.raw`2\begin{cases}x & x>0\\ 0 & \text{otherwise}\end{cases}`, '2*if(x>0,x,0)'],
+    // What MathLive emits when `if(x<0,-1,1)` is typed on a physical keyboard.
+    [String.raw`if\left(x<0,-1,1\right)`, 'if(x<0,-1,1)'],
+    [String.raw`y=if\left(0\le x<1,x,0\right)`, 'y=if(0<=x<1,x,0)'],
   ])('%s -> %s', (latex, raw) => {
     expect(latexToRaw(latex)).toEqual({ raw, issues: [] });
   });

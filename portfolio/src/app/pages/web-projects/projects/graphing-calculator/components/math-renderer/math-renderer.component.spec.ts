@@ -116,3 +116,26 @@ describe('MathRendererComponent', () => {
     expect(renderChildren(ast)).toEqual(['radical']);
   });
 });
+
+describe('MathRendererComponent: if()', () => {
+  const call = (...args: ExpressionNode[]): ExpressionNode => ({
+    type: 'FunctionCallMultiArg',
+    name: 'if',
+    args,
+  });
+
+  it('renders if(c, a, b) as a cases block with an otherwise row', () => {
+    const text = renderText(call(bin('<', v('x'), num(0)), num(1), num(2)));
+    expect(text).toContain('{');
+    expect(text).toContain('otherwise');
+    expect(text).not.toContain('if(');
+  });
+
+  it('renders a chained comparison as a < b < c', () => {
+    const x = v('x'); // the parser shares the middle operand between the two links
+    const first = bin('<=', num(0), x);
+    const second = bin('<', x, num(1));
+    const text = renderText(call(first, second, num(0)));
+    expect(text.replace(/\s/g, '')).toBe('0≤x<1');
+  });
+});

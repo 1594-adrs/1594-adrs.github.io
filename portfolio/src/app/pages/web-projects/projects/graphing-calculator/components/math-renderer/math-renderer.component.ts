@@ -2,6 +2,27 @@ import { Component, ChangeDetectionStrategy, ViewEncapsulation, input } from '@a
 import type { ExpressionNode, BinaryOp, PoweredFunctionCall } from '../../engine/parser';
 import { precedence } from '../../engine/symbolic-diff';
 
+const OP_TEXT: Record<string, string> = {
+  '<': '&lt;',
+  '>': '&gt;',
+  '<=': '≤',
+  '>=': '≥',
+  '==': '=',
+  '!=': '≠',
+};
+
+type Cmp = BinaryOp;
+const isCmp = (n: ExpressionNode): n is Cmp => n.type === 'BinaryOp' && n.operator in OP_TEXT;
+
+/** Comparisons of a parser-desugared chain `a<b<c` = `if(a<b, b<c, 0)`, or null for any other `if`. */
+function ifChain(n: ExpressionNode): Cmp[] | null {
+  if (n.type !== 'FunctionCallMultiArg' || n.name !== 'if' || n.args.length !== 3) return null;
+  const [first, rest, zero] = n.args;
+  if (!isCmp(first) || zero.type !== 'NumberLiteral' || zero.value !== 0) return null;
+  const tail = isCmp(rest) ? [rest] : ifChain(rest);
+  return tail && tail[0].left === first.right ? [first, ...tail] : null;
+}
+
 @Component({
   selector: 'app-math-renderer',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -116,7 +137,35 @@ export class MathRendererComponent {
     }
   }
 
+  /** `if(c, a, b)` as a cases block; the parser's chained comparison `a<b<c` as `a < b < c`. */
+  private renderIf(node: import('../../engine/parser').FunctionCallMultiArg): string {
+    const links = ifChain(node);
+    if (links) {
+      const [first, ...rest] = links;
+      return rest.reduce(
+        (acc, l) => `${acc} ${OP_TEXT[l.operator]} ${this.renderNode(l.right)}`,
+        this.renderBinary(first),
+      );
+    }
+    const rows: string[] = [];
+    let cur: ExpressionNode = node;
+    while (cur.type === 'FunctionCallMultiArg' && cur.name === 'if' && !ifChain(cur)) {
+      rows.push(this.casesRow(cur.args[1], this.renderNode(cur.args[0])));
+      if (cur.args.length < 3) break;
+      cur = cur.args[2];
+    }
+    if (cur.type !== 'FunctionCallMultiArg' || cur.name !== 'if' || ifChain(cur)) {
+      rows.push(this.casesRow(cur, 'otherwise'));
+    }
+    return `<span class="cases"><span class="cases-brace">{</span><span class="cases-rows">${rows.join('')}</span></span>`;
+  }
+
+  private casesRow(value: ExpressionNode, cond: string): string {
+    return `<span class="cases-row"><span>${this.renderNode(value)}</span><span class="cases-cond">${cond}</span></span>`;
+  }
+
   private renderMultiArg(node: import('../../engine/parser').FunctionCallMultiArg): string {
+    if (node.name === 'if') return this.renderIf(node);
     const args = node.args.map((a) => this.renderNode(a)).join('<span class="operator">,</span> ');
     return `<span class="function">${node.name}</span><span class="paren">(</span>${args}<span class="paren">)</span>`;
   }

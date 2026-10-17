@@ -111,7 +111,15 @@ import {
             <span class="key-hint">mod</span><span>Modulo (2 args)</span>
             <span class="key-hint">^</span><span>Power (e.g. x^2)</span>
             <span class="key-hint">()</span><span>Grouping</span>
+            <span class="key-hint">if(c, a, b)</span><span>a where c holds, else b</span>
+            <span class="key-hint">if(c, a)</span><span>a where c holds, gap elsewhere</span>
+            <span class="key-hint">cases key</span
+            ><span>Piecewise block in the "x y" keyboard tab</span>
           </div>
+          <p class="help-note">
+            Conditions use &lt; &lt;= &gt; &gt;= == != and may be chained: if(0 &lt;= x &lt; 1, x^2,
+            1) means 0 &lt;= x and x &lt; 1. A cases block ends with "otherwise" for the else value.
+          </p>
           <p class="help-note">
             x = g(y): switch a row's mode to "x" to plot a curve as x in terms of y (e.g. x=y^2);
             integral/area/solid tools don't support these rows yet.

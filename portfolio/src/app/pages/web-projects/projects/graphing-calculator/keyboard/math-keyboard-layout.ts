@@ -73,7 +73,20 @@ const FUNCTIONS: Key[][] = [
 
 const VARIABLES: Key[][] = [
   ['x', 'y', 't', 'r', sym('\\theta'), sym('\\pi')],
-  ['e', '=', '<', '>', sym('\\le'), sym('\\ge')],
+  [
+    'e',
+    '=',
+    '<',
+    '>',
+    sym('\\le'),
+    sym('\\ge'),
+    {
+      latex: '\\scriptstyle\\begin{cases}a\\\\b\\end{cases}',
+      insert: '\\begin{cases}#0 & #? \\\\ #? & \\text{otherwise}\\end{cases}',
+      tooltip: 'Piecewise (cases)',
+      class: 'small',
+    },
+  ],
   [',', '[(]', '[)]', ...ACTIONS],
 ];
 

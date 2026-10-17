@@ -566,4 +566,23 @@ describe('GraphingCalculatorComponent', () => {
       expect(afterReplace.every((p) => Math.abs(p.x) < 1.01)).toBe(true);
     });
   });
+
+  describe('piecewise rows (if) keep their top-level split points', () => {
+    it.each<[string, string, string | undefined]>([
+      ['y = if(x<0, -x, x)', 'explicit', undefined],
+      ['if(x != 2, 3/(x-2), 4)', 'explicit', undefined],
+      ['y < if(x<0, 1, 2)', 'implicit', '<'],
+      ['(if(t<0, t, 0), t)', 'parametric', undefined],
+      ['r = if(t<pi, 1, 2)', 'polar', undefined],
+      ['1 < x^2+y^2 < 4', 'implicit', '>'],
+    ])('%s', (raw, mode, op) => {
+      const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+      comp.updateExpression(0, raw);
+      const fn = comp.functions()[0];
+      expect(fn.error).toBeNull();
+      expect(fn.mode).toBe(mode);
+      expect(fn.inequalityOp).toBe(op);
+      expect(mode === 'parametric' ? fn.paramX && fn.paramY : fn.ast).toBeTruthy();
+    });
+  });
 });
