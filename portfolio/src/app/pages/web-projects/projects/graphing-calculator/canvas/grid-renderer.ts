@@ -14,6 +14,8 @@ const MINOR_SUBDIVISIONS = 5;
 const MIN_MINOR_SPACING_PX = 8;
 /** Hard cap on lines/labels per axis pass, so no viewport can stall the render loop. */
 const MAX_GRID_LINES = 500;
+/** Minimum free space between two x labels, in px. */
+const LABEL_GAP_PX = 8;
 
 function niceStep(range: number): number {
   const rough = range / 8;
@@ -23,6 +25,12 @@ function niceStep(range: number): number {
   if (norm <= 3.5) return 2 * pow;
   if (norm <= 7.5) return 5 * pow;
   return 10 * pow;
+}
+
+/** As many decimals as the step needs (a 1-2-5 step has one significant digit), so labels stay
+ *  distinct at any zoom or offset; Number() drops the trailing zeros. */
+function gridLabel(v: number, step: number): string {
+  return Number(v.toFixed(Math.min(100, Math.max(0, -Math.floor(Math.log10(step)))))).toString();
 }
 
 function drawVerticalLines(
@@ -110,14 +118,17 @@ export function drawGrid(
   ctx.strokeStyle = COLOR_AXIS;
   ctx.lineWidth = 1.5;
 
+  // An off-screen axis is drawn 1 px past the edge (invisible) instead of at a huge px coordinate.
+  const axisX = Math.min(width + 1, Math.max(-1, ox));
+  const axisY = Math.min(height + 1, Math.max(-1, oy));
   ctx.beginPath();
-  ctx.moveTo(0, oy);
-  ctx.lineTo(width, oy);
+  ctx.moveTo(0, axisY);
+  ctx.lineTo(width, axisY);
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(ox, 0);
-  ctx.lineTo(ox, height);
+  ctx.moveTo(axisX, 0);
+  ctx.lineTo(axisX, height);
   ctx.stroke();
 
   // When an axis line is scrolled off-screen, pin its tick labels to the nearest
@@ -154,12 +165,17 @@ export function drawGrid(
   ctx.textAlign = 'center';
   ctx.textBaseline = xBaseline;
 
+  // Long labels (x = 1e12 on a phone) would overlap: skip one that would touch the last one drawn.
+  let lastRight = -Infinity;
   for (let x = startX, n = 0; x <= viewport.xMax && n < MAX_GRID_LINES; x += stepX, n++) {
     if (x + stepX === x) break;
     if (Math.abs(x) < stepX * 0.01) continue;
     const [sx] = viewport.worldToScreen(x, 0, width, height);
-    const label = Math.abs(x) < 0.001 ? '0' : Number(x.toPrecision(4)).toString();
+    const label = gridLabel(x, stepX);
+    const half = ctx.measureText(label).width / 2;
+    if (sx - half < lastRight + LABEL_GAP_PX) continue;
     ctx.fillText(label, sx, labelY);
+    lastRight = sx + half;
   }
 
   ctx.textAlign = yAlign;
@@ -168,7 +184,7 @@ export function drawGrid(
     if (y + stepY === y) break;
     if (Math.abs(y) < stepY * 0.01) continue;
     const [, sy] = viewport.worldToScreen(0, y, width, height);
-    const label = Math.abs(y) < 0.001 ? '0' : Number(y.toPrecision(4)).toString();
+    const label = gridLabel(y, stepY);
     ctx.fillText(label, labelX, sy);
   }
 }
