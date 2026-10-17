@@ -42,7 +42,7 @@ const NUMBERS: Key[][] = [
     '[6]',
     sym('\\times'),
     { latex: 'x^y', insert: '#@^{#?}' },
-    { latex: '|x|', insert: '\left|#0\right|' },
+    { latex: '|x|', insert: '\\left|#0\\right|' },
   ],
   ['[1]', '[2]', '[3]', '[-]', '[(]', '[)]'],
   ['[0]', '[.]', '[+]', ...ACTIONS],
@@ -80,7 +80,15 @@ const LIMIT: Key[][] = [
   ['[7]', '[8]', '[9]', sym('\\div'), '\\frac{#@}{#?}', '\\sqrt{#0}', '[backspace]'],
   ['[4]', '[5]', '[6]', sym('\\times'), '[^]', '[(]', '[)]'],
   ['[1]', '[2]', '[3]', '[-]', '[+]', sym('\\pi'), 'e'],
-  ['[0]', '[.]', '[left]', '[right]', HIDE],
+  ['[0]', '[.]', sym('\\infty'), '[left]', '[right]', HIDE],
+];
+
+/** Letters for touch devices (typed function names, other variables). */
+const LETTERS: Key[][] = [
+  ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+  ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+  ['z', 'x', 'c', 'v', 'b', 'n', 'm', '[backspace]'],
+  ['[(]', '[)]', ',', '[left]', '[right]', HIDE],
 ];
 
 const layout = (
@@ -100,10 +108,12 @@ export const EXPRESSION_LAYOUTS: VirtualKeyboardLayout[] = [
   layout('calc-numbers', '123', 'Numbers and operators', NUMBERS),
   layout('calc-functions', 'f(x)', 'Functions', FUNCTIONS),
   layout('calc-variables', 'x y', 'Variables and constants', VARIABLES),
+  layout('calc-letters', 'abc', 'Letters', LETTERS),
 ];
 
 export const LIMIT_LAYOUTS: VirtualKeyboardLayout[] = [
-  layout('calc-limit', '123', 'Numbers', LIMIT),
+  layout('calc-limit', '123', 'Numbers and infinity', LIMIT),
+  layout('calc-limit-letters', 'abc', 'Letters', LETTERS),
 ];
 
 /**
@@ -128,6 +138,19 @@ export const SAFE_INLINE_SHORTCUTS: Record<string, string> = {
   exp: '\\exp',
   pi: '\\pi',
   theta: '\\theta',
+  asin: '\\arcsin',
+  acos: '\\arccos',
+  atan: '\\arctan',
+  inf: '\\infty',
+  abs: '\\operatorname{abs}',
+  floor: '\\operatorname{floor}',
+  ceil: '\\operatorname{ceil}',
+  round: '\\operatorname{round}',
+  sign: '\\operatorname{sign}',
+  min: '\\operatorname{min}',
+  max: '\\operatorname{max}',
+  mod: '\\operatorname{mod}',
+  root: '\\operatorname{root}',
   sqrt: '\\sqrt{#0}',
   '<=': '\\le',
   '>=': '\\ge',

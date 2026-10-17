@@ -1,4 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import { latexToRaw } from '../../engine/latex-bridge/latex-bridge';
+import {
+  EXPRESSION_LAYOUTS,
+  LIMIT_LAYOUTS,
+  SAFE_INLINE_SHORTCUTS,
+} from '../../keyboard/math-keyboard-layout';
 import { MathInput } from './math-input';
 
 /*
@@ -126,4 +132,56 @@ describe('MathInput', () => {
   });
   // The <math-field> branch is not covered here: the loader cannot be mocked under the Angular
   // unit-test runner and jsdom cannot run MathLive. It is verified in a real browser.
+});
+
+describe('math keyboard and inline shortcuts', () => {
+  type Layers = { layers: { rows: unknown[][] }[] };
+  const keyLatex = (layouts: typeof LIMIT_LAYOUTS) =>
+    layouts.flatMap((l) =>
+      (l as unknown as Layers).layers.flatMap((layer) =>
+        layer.rows
+          .flat()
+          .map((k) => (typeof k === 'string' ? k : (k as { insert?: string }).insert)),
+      ),
+    );
+
+  it('limit keyboard has an infinity key that the bridge reads as `inf`', () => {
+    expect(keyLatex(LIMIT_LAYOUTS)).toContain('\\infty');
+    expect(latexToRaw('\\infty').raw).toBe('inf');
+    expect(latexToRaw('-\\infty').raw).toBe('-inf');
+  });
+
+  it('both keyboards reach an alphabetic layer', () => {
+    for (const layouts of [EXPRESSION_LAYOUTS, LIMIT_LAYOUTS]) {
+      const keys = keyLatex(layouts);
+      for (const c of 'abcdefghijklmnopqrstuvwxyz') expect(keys).toContain(c);
+    }
+  });
+
+  it('every typed function name becomes that function call', () => {
+    const names = [
+      'abs',
+      'floor',
+      'ceil',
+      'round',
+      'sign',
+      'min',
+      'max',
+      'mod',
+      'root',
+      'sinh',
+      'ln',
+    ];
+    for (const name of names) {
+      const latex = `${SAFE_INLINE_SHORTCUTS[name]}\\left(x\\right)`;
+      expect(latexToRaw(latex).raw, name).toBe(`${name}(x)`);
+    }
+    for (const [typed, fn] of [
+      ['asin', 'asin'],
+      ['acos', 'acos'],
+      ['atan', 'atan'],
+    ]) {
+      expect(latexToRaw(`${SAFE_INLINE_SHORTCUTS[typed]}\\left(x\\right)`).raw).toBe(`${fn}(x)`);
+    }
+  });
 });

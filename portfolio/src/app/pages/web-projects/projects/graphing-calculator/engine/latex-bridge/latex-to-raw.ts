@@ -70,6 +70,7 @@ const UNICODE_COMMANDS: Record<string, string> = {
   '≥': 'ge',
   '≠': 'ne',
   '√': 'sqrt',
+  '∞': 'infty',
 };
 
 function readBalanced(src: string, start: number): { body: string; end: number } {
@@ -117,7 +118,9 @@ function tokenize(src: string): Tok[] {
         while (j < src.length && /\s/.test(src[j])) j++;
         if (src[j] === '{') {
           const { body, end } = readBalanced(src, j);
-          toks.push({ k: 't', n: name, v: body });
+          // MathLive nests a typed operator name: `\operatorname{\mathrm{abs}}`.
+          const inner = /^\s*\\(?:mathrm|text|textrm)\{([^{}]*)\}\s*$/.exec(body);
+          toks.push({ k: 't', n: name, v: inner ? inner[1] : body });
           i = end;
           continue;
         }
@@ -607,8 +610,10 @@ class LatexParser {
     switch (t.k) {
       case 'd':
         return this.number(t);
-      case 'l':
-        return atom(t.v);
+      case 'l': {
+        const fn = this.letterRunFunction(t);
+        return fn === null ? atom(t.v) : this.func(fn);
+      }
       case 't':
         return this.textToken(t);
       case 's':
@@ -650,6 +655,28 @@ class LatexParser {
     return atom(s);
   }
 
+  /**
+   * Letters typed or pasted as plain text (`asin(`, `abs(`) arrive as one token per letter.
+   * When the run starting at `first` spells a known function and an opening parenthesis follows,
+   * consumes the rest of the run and returns the function name.
+   */
+  private letterRunFunction(first: Tok): string | null {
+    let name = first.v;
+    let best: { fn: string; k: number } | null = null;
+    for (let k = 1; k < 8 && this.peek(k - 1).k === 'l'; k++) {
+      name += this.peek(k - 1).v;
+      const fn = resolveFunctionName(name);
+      const nx = this.peek(k);
+      const open =
+        this.isSym(nx, '(') ||
+        (nx.k === 'c' && nx.n === 'left' && this.isSym(this.peek(k + 1), '('));
+      if (fn !== null && open) best = { fn, k };
+    }
+    if (!best) return null;
+    this.pos += best.k;
+    return best.fn;
+  }
+
   private textToken(t: Tok): N {
     const text = decodeText(t.v);
     const name = text.trim();
@@ -676,6 +703,8 @@ class LatexParser {
         return atom('t');
       case 'exponentialE':
         return atom('e');
+      case 'infty':
+        return atom('inf');
       case 'frac':
       case 'dfrac':
       case 'tfrac': {

@@ -78,6 +78,7 @@ function textFallback(text: string): string {
 function variable(name: string): string {
   if (name === 'pi' || name === 'π') return '\\pi';
   if (name === 'theta') return '\\theta';
+  if (name === 'inf') return '\\infty';
   if (/^[A-Za-z]$/.test(name)) return name;
   return textFallback(name);
 }
