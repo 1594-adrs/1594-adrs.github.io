@@ -50,20 +50,24 @@ function sampleCurve(fn: (t: number) => number, a: number, b: number, n: number)
   return values;
 }
 
+type ShellSide = 'both' | 'left' | 'right' | 'partial';
+
 /**
- * Whether a shell spec whose axis lies strictly inside (a, b) revolves two overlapping sides onto
- * each other: at distance r from the axis the region occupies the y-interval of t = k - r and the
- * one of t = k + r, and where those intervals intersect the solid is only one layer thick while the
- * shell sum 2*pi*|t - k|*(U - L) counts both. The disk/washer method models that union; for shells
- * there is no single-integral formula, so such specs are rejected (see computeSolid) instead of
- * returning a volume that is too large. Sides that never overlap (e.g. one above and one below
- * the x-axis) sum correctly and stay valid.
+ * How a shell spec whose axis lies strictly inside (a, b) revolves its two sides onto each other:
+ * at distance r from the axis the region occupies the y-interval of t = k - r and the one of
+ * t = k + r. The solid is their union, but the shell sum 2*pi*|t - k|*(U - L) counts both, so:
+ * - null: the sides never overlap (e.g. one above and one below the x-axis); the plain sum is right.
+ * - intervals: for every r one side's interval contains the other's (always true for one curve),
+ *   so revolving only the returned t-intervals of [a, b] gives the union, e.g. 3+2x-x^2 on [-1, 3]
+ *   about x = 1 keeps [1, 3]. Ties keep the right side.
+ * - 'partial': the intervals overlap without nesting (two or more curves); no shell formula
+ *   describes the union, so computeSolid rejects it instead of returning a volume that is too large.
  */
-export function shellAxisOverlap(spec: SolidSpec): boolean {
-  if (spec.method !== 'shell' || !spec.axis || spec.curves.length === 0) return false;
+export function shellAxisSplit(spec: SolidSpec): Array<[number, number]> | 'partial' | null {
+  if (spec.method !== 'shell' || !spec.axis || spec.curves.length === 0) return null;
   const k = spec.axis.value;
   const rMax = Math.min(k - spec.a, spec.b - k);
-  if (!(rMax > 0)) return false;
+  if (!(rMax > 0)) return null;
 
   const interval = (t: number): [number, number] | null => {
     let lo = spec.curves.length === 1 ? 0 : Infinity;
@@ -84,20 +88,64 @@ export function shellAxisOverlap(spec: SolidSpec): boolean {
     return any ? [lo, hi] : null;
   };
 
-  for (let i = 1; i <= SAMPLE_COUNT; i++) {
-    const r = (rMax * i) / SAMPLE_COUNT;
+  const side = (r: number): ShellSide => {
     const left = interval(k - r);
     const right = interval(k + r);
-    if (!left || !right) continue;
-    const overlap = Math.min(left[1], right[1]) - Math.max(left[0], right[0]);
+    if (!left || !right) return 'both';
     const scale = Math.max(1, Math.abs(left[1] - left[0]), Math.abs(right[1] - right[0]));
-    if (overlap > 1e-9 * scale) return true;
+    const tol = 1e-9 * scale;
+    // Containment first: a side that shrinks to a point on the other's edge is still nested.
+    if (right[0] <= left[0] + tol && right[1] >= left[1] - tol) return 'right';
+    if (left[0] <= right[0] + tol && left[1] >= right[1] - tol) return 'left';
+    if (Math.min(left[1], right[1]) - Math.max(left[0], right[0]) <= tol) return 'both';
+    return 'partial';
+  };
+
+  // sides[i] is the side at r = rMax * (i + 1) / SAMPLE_COUNT.
+  const sides: ShellSide[] = [];
+  for (let i = 1; i <= SAMPLE_COUNT; i++) {
+    const s = side((rMax * i) / SAMPLE_COUNT);
+    if (s === 'partial') return 'partial';
+    sides.push(s);
   }
-  return false;
+  if (sides.every((s) => s === 'both')) return null;
+
+  const kept: Array<[number, number]> = [];
+  const keep = (s: ShellSide, r0: number, r1: number) => {
+    if (s !== 'left') kept.push([k + r0, k + r1]);
+    if (s !== 'right') kept.push([k - r1, k - r0]);
+  };
+  let start = 0;
+  for (let i = 1; i < sides.length; i++) {
+    if (sides[i] === sides[i - 1]) continue;
+    // Bisect the switch so the formula bounds are exact enough for recognizeExact.
+    let lo = (rMax * i) / SAMPLE_COUNT;
+    let hi = (rMax * (i + 1)) / SAMPLE_COUNT;
+    for (let j = 0; j < 60; j++) {
+      const mid = 0.5 * (lo + hi);
+      if (side(mid) === sides[i - 1]) lo = mid;
+      else hi = mid;
+    }
+    keep(sides[i - 1], start, lo);
+    start = lo;
+  }
+  keep(sides[sides.length - 1], start, rMax);
+  // Beyond rMax only the longer side exists.
+  if (spec.a < k - rMax) kept.push([spec.a, k - rMax]);
+  if (spec.b > k + rMax) kept.push([k + rMax, spec.b]);
+
+  kept.sort((p, q) => p[0] - q[0]);
+  const merged: Array<[number, number]> = [];
+  for (const [lo, hi] of kept) {
+    const last = merged[merged.length - 1];
+    if (last && lo <= last[1]) last[1] = Math.max(last[1], hi);
+    else merged.push([lo, hi]);
+  }
+  return merged;
 }
 
 export const SHELL_AXIS_OVERLAP_MESSAGE =
-  'The axis passes through the region and both sides overlap when revolved, so the shell method would count the overlap twice. Use the disk/washer method or move the axis outside the interval.';
+  'The axis passes through the region and the two sides partly overlap when revolved, so no shell formula describes the solid. Use the disk/washer method or move the axis outside the interval.';
 
 /**
  * Validates a solid-of-revolution / cross-section spec, producing English,
@@ -322,8 +370,8 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
     }
 
     if (axisInside) {
-      // Shell + overlapping sides cannot be computed correctly (see shellAxisOverlap): block it.
-      const blocking = spec.method === 'shell' && shellAxisOverlap(spec);
+      // Shell + partly overlapping sides cannot be computed correctly (see shellAxisSplit): block it.
+      const blocking = spec.method === 'shell' && shellAxisSplit(spec) === 'partial';
       issues.push({
         code: 'axis-inside-region',
         severity: blocking ? 'error' : 'warning',

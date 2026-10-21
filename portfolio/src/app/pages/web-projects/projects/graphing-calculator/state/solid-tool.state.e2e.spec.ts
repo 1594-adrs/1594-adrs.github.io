@@ -300,7 +300,7 @@ describe('SolidToolState E2E', () => {
     expect(issues.some((i) => i.code === 'undefined-domain')).toBe(true);
   });
 
-  it('15d: shell y=x^2 [0,1] k=0.5 -> blocking axis-inside-region error (sides overlap), no volume', () => {
+  it('15d: shell y=x^2 [0,1] k=0.5 -> overlap counted once, warning only: 17pi/96', () => {
     state.connect(signal<MathExpression[]>([explicitFn('x^2')]));
     state.toggleCurve(0);
     state.setMethod('shell');
@@ -308,10 +308,10 @@ describe('SolidToolState E2E', () => {
     state.setB('1');
     state.setAxisValue('0.5');
     const issues = state.issues();
-    expect(issues.some((i) => i.code === 'axis-inside-region' && i.severity === 'error')).toBe(
+    expect(issues.some((i) => i.code === 'axis-inside-region' && i.severity === 'warning')).toBe(
       true,
     );
-    expect(state.result()?.volume ?? null).toBeNull();
+    expect(state.result()?.volume).toBeCloseTo((17 * Math.PI) / 96, 9);
   });
 
   it('16a: envelope x, x^2, x^3 on [0,1], disk-washer, k=0 -> 4pi/21 (upper x, lower x^3)', () => {
