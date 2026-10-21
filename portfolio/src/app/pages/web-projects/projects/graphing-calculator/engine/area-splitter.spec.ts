@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeAreaRegions } from './area-splitter';
-import type { IntersectionPoint } from './intersection-finder';
+import { findIntersections, type IntersectionPoint } from './intersection-finder';
 
 const PI = Math.PI;
 const at = (x: number): IntersectionPoint[] => [{ x, y: 0, functionIndices: [0, 1] }];
@@ -148,5 +148,29 @@ describe('computeAreaRegions wave-1 (H4, H26)', () => {
     const fns = [() => 2, () => 1, () => 0];
     const rs = computeAreaRegions(fns, [], 0, 1);
     expect(rs[0].area).toBeCloseTo(2, 12);
+  });
+
+  it('a curve undefined in part of [a, b] yields an undefined region, not area 0 ok (sqrt, 0 on [-1, 1])', () => {
+    const fns = [Math.sqrt, () => 0];
+    for (const inter of [findIntersections(fns, -1, 1), at(0)]) {
+      const rs = computeAreaRegions(fns, inter, -1, 1);
+      const left = rs.filter((r) => r.a < 0);
+      expect(left.length).toBeGreaterThan(0);
+      for (const r of left) {
+        expect(r.status).toBe('undefined');
+        expect(r.area).toBeNaN();
+        expect(r.badPoint).toBeDefined();
+      }
+      expect(rs.some((r) => r.area === 0 && r.status === 'ok')).toBe(false);
+    }
+  });
+
+  it('a removable hole at the midpoint does not zero the region (sin(x)/x vs 0 on [-1, 1] → 1.892)', () => {
+    const rs = computeAreaRegions([(x) => Math.sin(x) / x, () => 0], [], -1, 1);
+    expect(rs.length).toBe(1);
+    expect(rs[0].topFunctionIndex).toBe(0);
+    expect(rs[0].bottomFunctionIndex).toBe(1);
+    expect(rs[0].status).toBe('ok');
+    expect(rs[0].area).toBeCloseTo(1.892166140734366, 9);
   });
 });

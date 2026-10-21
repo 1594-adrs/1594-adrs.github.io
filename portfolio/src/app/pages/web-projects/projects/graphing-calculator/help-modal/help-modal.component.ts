@@ -26,12 +26,11 @@ import {
       <div
         class="modal-content"
         aria-labelledby="modal-title"
+        tabindex="-1"
         (click)="$event.stopPropagation()"
         #modalContent
       >
-        <button class="modal-close" (click)="close.emit()" aria-label="Close help" autofocus>
-          &times;
-        </button>
+        <button class="modal-close" (click)="close.emit()" aria-label="Close help">&times;</button>
         <h2 class="modal-title" id="modal-title">&gt; help</h2>
 
         <div class="help-section">
@@ -131,6 +130,15 @@ import {
         </div>
 
         <div class="help-section">
+          <h3>CONICS TAB</h3>
+          <p class="help-note">
+            Pick circle, ellipse, parabola or hyperbola, set its parameters and add it to the graph
+            as an implicit row. A typed conic equation such as x^2/4 + y^2 = 1 is detected
+            automatically and unlocks exact area and solid-of-revolution results.
+          </p>
+        </div>
+
+        <div class="help-section">
           <h3>TOOLS</h3>
           <div class="help-grid">
             <span class="key-hint">∫ integral</span><span>Compute definite integral</span>
@@ -181,10 +189,13 @@ import {
         position: relative;
         font-family: var(--font-family, monospace);
       }
+      .modal-content:focus {
+        outline: none;
+      }
       .modal-close {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.8rem;
+        position: sticky;
+        float: right;
+        top: 0;
         background: none;
         border: none;
         color: var(--color-text-muted, #666680);
@@ -243,8 +254,7 @@ export class HelpModalComponent implements AfterViewInit {
   ngAfterViewInit(): void {
     const modal = this.modalContent()?.nativeElement;
     if (modal) {
-      const closeBtn = modal.querySelector('.modal-close') as HTMLElement | null;
-      closeBtn?.focus();
+      modal.focus();
     }
   }
 

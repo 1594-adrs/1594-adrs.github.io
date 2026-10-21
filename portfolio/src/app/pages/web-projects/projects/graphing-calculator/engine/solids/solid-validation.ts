@@ -148,6 +148,34 @@ export const SHELL_AXIS_OVERLAP_MESSAGE =
   'The axis passes through the region and the two sides partly overlap when revolved, so no shell formula describes the solid. Use the disk/washer method or move the axis outside the interval.';
 
 /**
+ * Whether the axis of revolution cuts the region: strictly inside (a, b) for shell, strictly
+ * between the lower and upper boundary at some sample for disk-washer. `samplesByCurve` (SAMPLE_COUNT
+ * uniform samples per curve) is computed when not given.
+ */
+export function axisInsideRegion(spec: SolidSpec, samplesByCurve?: number[][]): boolean {
+  if (!spec.axis || (spec.method !== 'disk-washer' && spec.method !== 'shell')) return false;
+  const { a, b } = spec;
+  const axisValue = spec.axis.value;
+
+  if (spec.method === 'shell') {
+    const endpointEps = Math.max(1e-9, (b - a) * ENDPOINT_EPS_FRACTION);
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    return axisValue > lo + endpointEps && axisValue < hi - endpointEps;
+  }
+
+  const samples = samplesByCurve ?? spec.curves.map((c) => sampleCurve(c.fn, a, b, SAMPLE_COUNT));
+  for (let i = 0; i < SAMPLE_COUNT; i++) {
+    const vals = samples.map((s) => s[i]).filter((v) => Number.isFinite(v));
+    if (vals.length === 0) continue;
+    const lower = spec.curves.length >= 2 ? Math.min(...vals) : Math.min(vals[0], axisValue);
+    const upper = spec.curves.length >= 2 ? Math.max(...vals) : Math.max(vals[0], axisValue);
+    if (axisValue > lower + 1e-9 && axisValue < upper - 1e-9) return true;
+  }
+  return false;
+}
+
+/**
  * Validates a solid-of-revolution / cross-section spec, producing English,
  * user-facing issues. Static (structural) checks run first; sampling-based
  * checks (domain, divergence, crossings, axis placement) only run when there
@@ -349,38 +377,17 @@ export function validateSolidSpec(spec: SolidSpec): SolidIssue[] {
     }
   }
 
-  if (spec.axis && (spec.method === 'disk-washer' || spec.method === 'shell')) {
-    const axisValue = spec.axis.value;
-    let axisInside = false;
-
-    if (spec.method === 'shell') {
-      const lo = Math.min(a, b);
-      const hi = Math.max(a, b);
-      axisInside = axisValue > lo + endpointEps && axisValue < hi - endpointEps;
-    } else {
-      for (let i = 0; i < SAMPLE_COUNT && !axisInside; i++) {
-        const vals = samplesByCurve.map((s) => s[i]).filter((v) => Number.isFinite(v));
-        if (vals.length === 0) continue;
-        const lower = spec.curves.length >= 2 ? Math.min(...vals) : Math.min(vals[0], axisValue);
-        const upper = spec.curves.length >= 2 ? Math.max(...vals) : Math.max(vals[0], axisValue);
-        if (axisValue > lower + 1e-9 && axisValue < upper - 1e-9) {
-          axisInside = true;
-        }
-      }
-    }
-
-    if (axisInside) {
-      // Shell + partly overlapping sides cannot be computed correctly (see shellAxisSplit): block it.
-      const blocking = spec.method === 'shell' && shellAxisSplit(spec) === 'partial';
-      issues.push({
-        code: 'axis-inside-region',
-        severity: blocking ? 'error' : 'warning',
-        message: blocking
-          ? SHELL_AXIS_OVERLAP_MESSAGE
-          : 'The axis passes through the region — the solid may overlap itself.',
-        field: 'axis',
-      });
-    }
+  if (axisInsideRegion(spec, samplesByCurve)) {
+    // Shell + partly overlapping sides cannot be computed correctly (see shellAxisSplit): block it.
+    const blocking = spec.method === 'shell' && shellAxisSplit(spec) === 'partial';
+    issues.push({
+      code: 'axis-inside-region',
+      severity: blocking ? 'error' : 'warning',
+      message: blocking
+        ? SHELL_AXIS_OVERLAP_MESSAGE
+        : 'The axis passes through the region — the solid may overlap itself.',
+      field: 'axis',
+    });
   }
 
   return issues;

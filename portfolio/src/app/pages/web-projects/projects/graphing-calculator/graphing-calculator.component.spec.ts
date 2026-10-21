@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { GraphingCalculatorComponent } from './graphing-calculator.component';
-import { evalExpression } from './engine/evaluator';
+import { evalExpression, evaluate } from './engine/evaluator';
 import { buildShareHash, extractShareFragment, parseShareState } from './state/share-state';
 import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from './models/calculator.models';
 import { FUNCTION_COLORS } from './utils/color';
@@ -145,6 +145,38 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.functions().length).toBe(2);
     comp.removeFunction(0);
     expect(comp.functions().length).toBe(1);
+  });
+
+  it('draws a non-conic implicit curve that uses a slider parameter', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    comp.addFunction();
+    comp.addFunction();
+    comp.updateExpression(1, 'a = 2');
+    comp.updateExpression(2, 'x^3+y^3=a');
+    const diff = (comp as any).getImplicitDiffAst(comp.functions()[2]);
+    expect(diff).not.toBeNull();
+    // x^3 + y^3 - a at (1, 1) with a = 2
+    expect(evaluate(diff, { x: 1, y: 1 })).toBeCloseTo(0, 10);
+  });
+
+  it('keeps the integral and value table on the same row when an earlier row is removed or moved', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    comp.addFunction();
+    comp.addFunction();
+    comp.updateExpression(0, 'x');
+    comp.updateExpression(1, 'x^2');
+    comp.updateExpression(2, 'x^3');
+    comp.activeIntegral.set({ fnIndex: 1, a: 0, b: 1 });
+    comp.tableOpenIndex.set(1);
+    (comp as any).reorderFunction(0, 2);
+    expect(comp.functions().map((f) => f.raw)).toEqual(['x^2', 'x^3', 'x']);
+    expect(comp.activeIntegral()!.fnIndex).toBe(0);
+    expect(comp.tableOpenIndex()).toBe(0);
+    comp.removeFunction(2);
+    expect(comp.activeIntegral()!.fnIndex).toBe(0);
+    comp.removeFunction(0);
+    expect(comp.activeIntegral()).toBeNull();
+    expect(comp.tableOpenIndex()).toBeNull();
   });
 
   it('should toggle visibility', () => {
@@ -726,6 +758,97 @@ describe('GraphingCalculatorComponent', () => {
       const parsed = parseShareState(extractShareFragment(buildShareHash(shared as never))!);
       expect(parsed?.functions[1].slider).toEqual({ min: 0, max: 5, step: 0.5 });
       expect(parsed?.functions[0].slider).toBeUndefined();
+    });
+  });
+
+  describe('row parsing (parseRow)', () => {
+    function row(raw: string, extra: string[] = []) {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      fixture.detectChanges();
+      const comp = fixture.componentInstance;
+      extra.forEach((r, i) => {
+        comp.addFunction();
+        comp.updateExpression(i + 1, r);
+      });
+      const idx = extra.length + 1;
+      comp.addFunction();
+      comp.updateExpression(idx, raw);
+      return comp.functions()[idx];
+    }
+
+    it('reads explicit rows with or without a leading y=', () => {
+      for (const raw of ['x^2', 'y = x^2']) {
+        const fn = row(raw);
+        expect(fn.mode).toBe('explicit');
+        expect(fn.error).toBeNull();
+        expect(evalExpression(fn.ast!, 3)).toBe(9);
+      }
+    });
+
+    it('reads x = g(y) rows as explicit-y', () => {
+      const fn = row('x = y^2');
+      expect(fn.mode).toBe('explicit-y');
+      expect(fn.error).toBeNull();
+      expect(evaluate(fn.ast!, { y: 3 })).toBe(9);
+    });
+
+    it('reads polar rows (r = …)', () => {
+      const fn = row('r = 2');
+      expect(fn.mode).toBe('polar');
+      expect(fn.error).toBeNull();
+      expect(evaluate(fn.ast!, { x: 1, t: 1 })).toBe(2);
+    });
+
+    it('reads a parametric pair into paramX / paramY', () => {
+      const fn = row('(cos(t), sin(t))');
+      expect(fn.mode).toBe('parametric');
+      expect(fn.error).toBeNull();
+      expect(fn.paramX).not.toBeNull();
+      expect(fn.paramY).not.toBeNull();
+      expect(evaluate(fn.paramX!, { t: 0 })).toBeCloseTo(1, 12);
+    });
+
+    it('reads an implicit equation as an "=" node', () => {
+      const fn = row('x^2 + y^2 = 4');
+      expect(fn.mode).toBe('implicit');
+      expect(fn.error).toBeNull();
+      expect(fn.ast).toMatchObject({ type: 'BinaryOp', operator: '=' });
+    });
+
+    it('keeps the operator of a y-inequality and of an implicit one', () => {
+      const a = row('y < x^2');
+      expect(a.inequalityOp).toBe('<');
+      expect(a.error).toBeNull();
+      const b = row('x^2 + y^2 >= 1');
+      expect(b.inequalityOp).toBe('>=');
+      expect(b.error).toBeNull();
+    });
+
+    it('draws a chained inequality as an indicator (> 0)', () => {
+      const fn = row('1 < x^2 + y^2 < 4');
+      expect(fn.inequalityOp).toBe('>');
+      expect(fn.error).toBeNull();
+      expect(evaluate(fn.ast!, { x: 1.5, y: 0 })).toBeGreaterThan(0);
+      expect(evaluate(fn.ast!, { x: 3, y: 0 })).toBe(0);
+    });
+
+    it('substitutes slider values into the row', () => {
+      const fn = row('a*x', ['a = 3']);
+      expect(fn.error).toBeNull();
+      expect(evalExpression(fn.ast!, 2)).toBe(6);
+    });
+
+    it('substitutes slider values into an implicit equation', () => {
+      const fn = row('x^3 + y^3 = a', ['a = 2']);
+      expect(fn.error).toBeNull();
+      expect(fn.ast).toMatchObject({ type: 'BinaryOp', operator: '=' });
+    });
+
+    it('reports an error and no AST for malformed rows', () => {
+      for (const raw of ['x +', 'x^2 + y^2 = (', '(1, 2, 3)']) {
+        const fn = row(raw);
+        expect(fn.error ?? (fn.ast === null && fn.paramX === null ? 'empty' : null)).not.toBeNull();
+      }
     });
   });
 });

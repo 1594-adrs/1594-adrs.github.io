@@ -73,6 +73,12 @@ describe('detectCurveMode', () => {
   it('does not confuse exp(y) rhs with a bare x (word boundary)', () => {
     expect(detectCurveMode('x=exp(y)')).toBe('explicit-y');
   });
+
+  it('reads x/y letter runs like the parser: 2y and 3yy are y, xy mentions x', () => {
+    expect(detectCurveMode('x = 2y')).toBe('explicit-y');
+    expect(detectCurveMode('x = 3yy')).toBe('explicit-y');
+    expect(detectCurveMode('x = y^2 + xy')).toBe('implicit');
+  });
 });
 
 describe('relations nested in if() do not change the mode', () => {

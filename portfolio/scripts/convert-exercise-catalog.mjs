@@ -74,7 +74,10 @@ const PATCHES = {
   // Test interval [1, 2] contains the pole of sec² at π/2.
   'thomas12-8.1-13': (r) => Object.assign(r.op, { a: '0', b: '1' }),
   // √(1−cos2x) = √2·|sin x| and ∫₀^π x|sin x| dx = π, so the answer is π√2 (transcribed √2).
-  'thomas12-8.2-31': (r) => (r.expected = { values: ['pi*sqrt(2)'], from: 'derived' }),
+  'thomas12-8.2-31': (r) => {
+    r.uncertain = false; // the filter below drops `expected` from uncertain rows
+    r.expected = { values: ['pi*sqrt(2)'], from: 'derived' };
+  },
   // Test interval [0, 0.3] contains the pole of sec(2x+1)·tan(2x+1) at x = (π/2 − 1)/2.
   'thomas12-5.5-31': (r) => Object.assign(r.op, { a: '-0.5', b: '0' }),
   // op is roots of y″, which include the double zero at 0 (the book lists inflection points).
@@ -327,6 +330,12 @@ for (const file of files) {
     if (!chunks.has(chunk)) chunks.set(chunk, []);
     chunks.get(chunk).push(ex);
   }
+}
+
+// The catalog is gitignored: without it `files` is empty and the cleanup below would wipe every chunk.
+if (!files.length) {
+  console.error(`No .jsonl files under ${catalog}; refusing to delete the generated chunks.`);
+  process.exit(1);
 }
 
 // Remove previously generated chunks (all but the hand-written smoke set).

@@ -189,6 +189,16 @@ describe('detectAsymptotes memoization', () => {
     const tight = detectAsymptotes(fn, 500, 501, ast);
     expect(tight.some((a) => a.type === 'vertical' && Math.abs(a.value - c) < 0.01)).toBe(true);
   });
+
+  it('keys the cache by variant: the same tan(x) ast in rad vs deg gives different poles', () => {
+    const ast = parse('tan(x)');
+    const vertical = (unit: 'rad' | 'deg') =>
+      detectAsymptotes((x) => evaluate(ast, { x }, unit), -10, 10, ast, unit)
+        .filter((a) => a.type === 'vertical')
+        .map((a) => a.value);
+    expect(vertical('rad')).toHaveLength(6);
+    expect(vertical('deg')).toEqual([]);
+  });
 });
 
 describe('asymptote-detector: piecewise if()', () => {

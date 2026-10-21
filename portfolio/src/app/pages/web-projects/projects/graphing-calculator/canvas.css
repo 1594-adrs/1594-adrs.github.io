@@ -18,9 +18,6 @@
   width: 100%;
   height: 100%;
 }
-.canvas-container:focus-visible {
-  outline: none;
-}
 .solid-3d-container {
   position: absolute;
   inset: 0;

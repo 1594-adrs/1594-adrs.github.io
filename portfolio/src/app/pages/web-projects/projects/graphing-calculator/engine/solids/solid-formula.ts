@@ -1,4 +1,5 @@
 import type { ExpressionNode } from '../parser';
+import { safeEval } from './solid-integrand';
 import type { CrossSectionShape, SolidIntegralTerm, SolidPiece, SolidSpec } from './solid.types';
 
 /**
@@ -70,18 +71,6 @@ function variableNode(spec: SolidSpec): ExpressionNode {
   return { type: 'Variable', name: spec.variable };
 }
 
-function baselineFor(spec: SolidSpec): number {
-  return spec.method === 'disk-washer' ? (spec.axis?.value ?? 0) : 0;
-}
-
-function safeEval(fn: (t: number) => number, t: number): number {
-  try {
-    return fn(t);
-  } catch {
-    return NaN;
-  }
-}
-
 function buildDiskWasherTerm(spec: SolidSpec, piece: SolidPiece): SolidIntegralTerm {
   const k = spec.axis?.value ?? 0;
   const kNode = numberNode(k);
@@ -101,8 +90,12 @@ function buildDiskWasherTerm(spec: SolidSpec, piece: SolidPiece): SolidIntegralT
   // The baseline (null) is exactly the axis value k, so (baseline − k) is
   // structurally zero, not merely numerically close - omit the r² term
   // entirely rather than relying on sub()'s literal-zero detection.
+  // An axis inside [L, U] also has r = 0 (the union, see sliceArea).
+  const axisInside = Math.min(upperVal, lowerVal) <= k && k <= Math.max(upperVal, lowerVal);
   const integrand =
-    nearIndex === null ? farTerm : sub(farTerm, squared(sub(curveNode(spec, nearIndex, k), kNode)));
+    nearIndex === null || axisInside
+      ? farTerm
+      : sub(farTerm, squared(sub(curveNode(spec, nearIndex, k), kNode)));
 
   return {
     coefficient: piNode(),

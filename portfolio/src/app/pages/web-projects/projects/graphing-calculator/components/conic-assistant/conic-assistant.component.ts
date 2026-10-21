@@ -10,6 +10,19 @@ interface ConicParams {
   orientation: 'horizontal' | 'vertical';
 }
 
+/** Surface of the ellipsoid made by revolving x²/rx² + y²/ry² = 1 about the x-axis. */
+export function ellipseRevolutionSurface(rx: number, ry: number): number {
+  const PI = Math.PI;
+  if (Math.abs(rx - ry) < 1e-10 * Math.max(rx, ry)) return 4 * PI * rx * rx;
+  if (rx > ry) {
+    const e = Math.sqrt(1 - (ry * ry) / (rx * rx));
+    return 2 * PI * ry * ry + ((2 * PI * rx * ry) / e) * Math.asin(e);
+  }
+  // oblate: ln((1+e)/(1-e)) = 2·atanh(e)
+  const e = Math.sqrt(1 - (rx * rx) / (ry * ry));
+  return 2 * PI * ry * ry + ((2 * PI * rx * rx) / e) * Math.atanh(e);
+}
+
 @Component({
   selector: 'app-conic-assistant',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,25 +55,31 @@ export class ConicAssistantComponent {
     this.activeTab.set(tab);
   }
 
+  /** Applies a numeric field; a rejected value (empty, NaN, or non-positive when `positive`)
+   *  resets the input to the last accepted one so the field never disagrees with the plot. */
+  private setNumber(e: Event, key: 'h' | 'k' | 'a' | 'b' | 'p', positive = false): void {
+    const input = e.target as HTMLInputElement;
+    const v = parseFloat(input.value);
+    if (isNaN(v) || (positive && v <= 0)) {
+      input.value = String(this.params()[key]);
+      return;
+    }
+    this.params.update((p) => ({ ...p, [key]: v }));
+  }
   updateParamH(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v)) this.params.update((p) => ({ ...p, h: v }));
+    this.setNumber(e, 'h');
   }
   updateParamK(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v)) this.params.update((p) => ({ ...p, k: v }));
+    this.setNumber(e, 'k');
   }
   updateParamA(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v) && v > 0) this.params.update((p) => ({ ...p, a: v }));
+    this.setNumber(e, 'a', true);
   }
   updateParamB(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v) && v > 0) this.params.update((p) => ({ ...p, b: v }));
+    this.setNumber(e, 'b', true);
   }
   updateParamP(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v)) this.params.update((p) => ({ ...p, p: v }));
+    this.setNumber(e, 'p');
   }
   updateOrientation(e: Event): void {
     const v = (e.target as HTMLSelectElement).value as 'horizontal' | 'vertical';
@@ -123,15 +142,7 @@ export class ConicAssistantComponent {
         const rx = p.a;
         const ry = p.b;
         const revVol = (4 / 3) * PI * rx * ry * ry;
-        let revSA: string;
-        if (Math.abs(ecc) < 1e-10) {
-          revSA = `${(4 * PI * rx * rx).toFixed(4)}`;
-        } else if (rx > ry) {
-          revSA = `${(2 * PI * ry * ry + ((2 * PI * rx * ry) / ecc) * Math.asin(ecc)).toFixed(4)}`;
-        } else {
-          const e2 = Math.sqrt(1 - (rx * rx) / (ry * ry));
-          revSA = `${(2 * PI * rx * rx + ((2 * PI * ry * ry) / e2) * Math.asin(e2)).toFixed(4)}`;
-        }
+        const revSA = ellipseRevolutionSurface(rx, ry).toFixed(4);
         return [
           { label: 'Center', value: `(${h}, ${k})` },
           { label: 'Semi-axes', value: `a=${p.a}, b=${p.b}` },

@@ -1,5 +1,5 @@
 import { integrateAdaptive } from '../quadrature';
-import { computePieces, sliceArea } from './solid-integrand';
+import { computePieces, pieceOrderMatchesEnvelope, sliceArea } from './solid-integrand';
 import { buildTerms } from './solid-formula';
 import { recognizeExact } from './solid-exact';
 import { computeSurfaceArea } from './solid-surface';
@@ -146,13 +146,25 @@ export function computeSolid(spec: SolidSpec): SolidResult {
       });
     }
 
-    const surfaceArea = failed || inaccurate ? null : computeSurfaceArea(spec, pieces);
+    // The volume is right (envelope), but the formula and surface follow the piece order: hide them.
+    const staleOrder = !failed && !pieceOrderMatchesEnvelope(spec, pieces);
+    if (staleOrder) {
+      issues.push({
+        code: 'inaccurate',
+        severity: 'warning',
+        message:
+          'Some curve crossings were missed (too many oscillations): the volume is valid, but the formula and surface area are not shown.',
+      });
+    }
+
+    const surfaceArea =
+      failed || inaccurate || staleOrder ? null : computeSurfaceArea(spec, pieces);
 
     return {
       volume: failed ? null : volume,
       errorEstimate,
       exact: failed || inaccurate ? null : recognizeExact(volume),
-      terms,
+      terms: staleOrder ? [] : terms,
       pieces,
       sliceArea: area,
       issues,

@@ -19,10 +19,6 @@ import { ICON_SVGS } from './icon-data';
         width: 1em;
         height: 1em;
       }
-      .icon-container :global(svg) {
-        width: 100%;
-        height: 100%;
-      }
     `,
   ],
 })

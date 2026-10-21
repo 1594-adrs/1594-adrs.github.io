@@ -21,6 +21,7 @@ const HEAT_DECAY_MS = 550;
 const HEAT_EPSILON = 0.02;
 /** Base layer tick cadence while the user is actively scrolling/pointing (≤5fps). */
 const BASE_REFRESH_MS = 200;
+const RESIZE_DEBOUNCE_MS = 150;
 /** Base layer tick cadence once idle — the drift is still visible but far cheaper. */
 const IDLE_BASE_REFRESH_MS = 1000;
 /** How long since the last pointer/scroll activity before we drop to the idle cadence. */
@@ -162,7 +163,12 @@ export class PhosphorField {
   private lastActivityAt = 0;
   private disposed = false;
 
-  private onResize = () => this.handleResize();
+  private resizeTimer?: ReturnType<typeof setTimeout>;
+  /** Debounced: a window drag fires dozens of resizes and each rebuilds the canvas. */
+  private onResize = () => {
+    clearTimeout(this.resizeTimer);
+    this.resizeTimer = setTimeout(() => this.handleResize(), RESIZE_DEBOUNCE_MS);
+  };
   private onPointerMove = (e: PointerEvent) => this.handlePointer(e.clientX, e.clientY);
   private onScroll = () => this.handleScroll();
   private onVisibilityChange = () => this.syncRunningState();
@@ -537,6 +543,7 @@ export class PhosphorField {
 
   private teardown(): void {
     this.disposed = true;
+    clearTimeout(this.resizeTimer);
     this.stopRaf();
     this.stopBaseInterval();
     window.removeEventListener('resize', this.onResize);

@@ -6,7 +6,7 @@ export type SheetSnap = 'peek' | 'half' | 'full';
 /** Fraction of the canvas height the bottom sheet covers at each snap. Mirrors the `.panel.snap-*`
  *  heights in the component CSS; `full` is capped at half because the user is then editing
  *  expressions and the plot only needs to stay roughly centred in what remains. */
-export const SHEET_COVER_FRACTION: Record<SheetSnap, number> = {
+const SHEET_COVER_FRACTION: Record<SheetSnap, number> = {
   peek: 0.16,
   half: 0.5,
   full: 0.5,

@@ -10,7 +10,7 @@ import type { SolidPiece, SolidSpec } from './solid.types';
 
 const EPS = 1e-9;
 
-function safeEval(fn: (t: number) => number, t: number): number {
+export function safeEval(fn: (t: number) => number, t: number): number {
   try {
     return fn(t);
   } catch {
@@ -19,7 +19,7 @@ function safeEval(fn: (t: number) => number, t: number): number {
 }
 
 /** Baseline value the missing boundary takes when a spec has a single curve. */
-function baselineValue(spec: SolidSpec): number {
+export function baselineValue(spec: SolidSpec): number {
   return spec.method === 'disk-washer' ? (spec.axis?.value ?? 0) : 0;
 }
 
@@ -43,9 +43,14 @@ function interiorBreakpoints(spec: SolidSpec): number[] {
   const points: number[] = [];
 
   if (curves.length >= 2) {
-    const fns = curves.map((c) => c.fn);
-    for (const p of findIntersections(fns, a, b)) {
-      if (p.x > a + span * EPS && p.x < b - span * EPS) points.push(p.x);
+    // Pair by pair: one joint call merges crossings of different pairs closer than 2h, which loses
+    // a breakpoint and makes the formula terms drift from the computed volume.
+    for (let i = 0; i < curves.length; i++) {
+      for (let j = i + 1; j < curves.length; j++) {
+        for (const p of findIntersections([curves[i].fn, curves[j].fn], a, b)) {
+          if (p.x > a + span * EPS && p.x < b - span * EPS) points.push(p.x);
+        }
+      }
     }
   }
 
@@ -186,6 +191,46 @@ function boundaryValue(spec: SolidSpec, index: number | null, t: number, baselin
   return safeEval(spec.curves[index].fn, t);
 }
 
+/** [max, min] of the curves defined at t (a curve undefined there is skipped); NaN if fewer than 2. */
+function envelopeValues(spec: SolidSpec, t: number): [number, number] {
+  let U = -Infinity;
+  let L = Infinity;
+  let count = 0;
+  for (const c of spec.curves) {
+    const v = safeEval(c.fn, t);
+    if (!Number.isFinite(v)) continue;
+    count++;
+    U = Math.max(U, v);
+    L = Math.min(L, v);
+  }
+  return count >= 2 ? [U, L] : [NaN, NaN];
+}
+
+/**
+ * With 3+ curves the volume uses the pointwise envelope, but the displayed formula and the 3D
+ * rings follow each piece's fixed upper/lower order. False when, at sample points, that order is
+ * not the real max/min (fast-oscillating curves lose crossings in findIntersections' fixed steps).
+ */
+export function pieceOrderMatchesEnvelope(spec: SolidSpec, pieces: SolidPiece[]): boolean {
+  if (spec.curves.length < 3) return true;
+  const baseline = baselineValue(spec);
+  for (const p of pieces) {
+    for (let i = 1; i <= 16; i++) {
+      const t = p.a + ((p.b - p.a) * i) / 17;
+      const [U, L] = envelopeValues(spec, t);
+      if (!Number.isFinite(U)) continue;
+      const tol = 1e-9 * Math.max(1, Math.abs(U), Math.abs(L));
+      if (
+        Math.abs(boundaryValue(spec, p.upperIndex, t, baseline) - U) > tol ||
+        Math.abs(boundaryValue(spec, p.lowerIndex, t, baseline) - L) > tol
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 /**
  * Builds A(t): the cross-sectional area (disk/washer/cross-section) or the
  * shell's lateral area 2π·|t−k|·(U−L), valid across the whole [a, b] domain
@@ -196,6 +241,10 @@ function boundaryValue(spec: SolidSpec, index: number | null, t: number, baselin
  * overlaps itself (the swept solid is the union of the two half-solids), so
  * r is taken as 0 rather than double-subtracting - this is a deliberate
  * modelling choice, not a limitation of the quadrature.
+ *
+ * With 3+ curves U/L are the pointwise envelope: pieces come from findIntersections' fixed
+ * sampling and miss crossings of fast-oscillating curves, so their upper/lower order can be wrong.
+ * With 1-2 curves every formula below is symmetric in U and L, so the piece order is enough.
  */
 export function sliceArea(spec: SolidSpec, pieces: SolidPiece[]): (t: number) => number {
   const { method, shape, heightRatio } = spec;
@@ -206,11 +255,16 @@ export function sliceArea(spec: SolidSpec, pieces: SolidPiece[]): (t: number) =>
     const idx = findPieceIndex(pieces, t);
     if (idx < 0) return NaN;
     const piece = pieces[idx];
+    const [U, L] =
+      spec.curves.length >= 3
+        ? envelopeValues(spec, t)
+        : [
+            boundaryValue(spec, piece.upperIndex, t, baseline),
+            boundaryValue(spec, piece.lowerIndex, t, baseline),
+          ];
+    if (!Number.isFinite(U) || !Number.isFinite(L)) return NaN;
 
     if (method === 'disk-washer') {
-      const U = boundaryValue(spec, piece.upperIndex, t, baseline);
-      const L = boundaryValue(spec, piece.lowerIndex, t, baseline);
-      if (!Number.isFinite(U) || !Number.isFinite(L)) return NaN;
       const dU = Math.abs(U - k);
       const dL = Math.abs(L - k);
       const R = Math.max(dU, dL);
@@ -220,9 +274,6 @@ export function sliceArea(spec: SolidSpec, pieces: SolidPiece[]): (t: number) =>
     }
 
     if (method === 'shell') {
-      const U = boundaryValue(spec, piece.upperIndex, t, 0);
-      const L = boundaryValue(spec, piece.lowerIndex, t, 0);
-      if (!Number.isFinite(U) || !Number.isFinite(L)) return NaN;
       // |U - L|: a piece's upper/lower order is fixed at its midpoint, so far from it (or on a
       // piece whose single curve crosses the baseline) U - L can go negative; a shell's lateral
       // area is never negative.
@@ -230,9 +281,6 @@ export function sliceArea(spec: SolidSpec, pieces: SolidPiece[]): (t: number) =>
     }
 
     // cross-section
-    const U = boundaryValue(spec, piece.upperIndex, t, 0);
-    const L = boundaryValue(spec, piece.lowerIndex, t, 0);
-    if (!Number.isFinite(U) || !Number.isFinite(L)) return NaN;
     // Every shape's area is a multiple of s^2, so the sign of U - L cannot matter here.
     const s = U - L;
     switch (shape) {

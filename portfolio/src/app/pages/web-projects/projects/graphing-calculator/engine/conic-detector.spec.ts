@@ -311,4 +311,40 @@ describe('conic-detector', () => {
       expect(domain).toBeNull();
     });
   });
+
+  describe('constants and unrecognised terms', () => {
+    it('x^2+y^2=pi is a circle of radius sqrt(pi), not 1', () => {
+      const r = detectConic(parseEquation('x^2+y^2=pi'));
+      expect(r?.type).toBe('circle');
+      expect(r!.radius).toBeCloseTo(Math.sqrt(Math.PI), 10);
+    });
+
+    it('x^2+y^2=e is a circle of radius sqrt(e)', () => {
+      const r = detectConic(parseEquation('x^2+y^2=e'));
+      expect(r?.type).toBe('circle');
+      expect(r!.radius).toBeCloseTo(Math.sqrt(Math.E), 10);
+    });
+
+    it.each(['x^2+y^2+x^3=4', 'x^2+y^2+sin(x)=4', '(x+1/2)^2+y^2=1', '(2x)^2+y^2=4'])(
+      '%s is not reported as a (wrong) conic',
+      (eq) => {
+        expect(detectConic(parseEquation(eq))).toBeNull();
+      },
+    );
+
+    it('still detects y^2=4x, a shifted hyperbola and x^2+y^2=4x', () => {
+      const p = detectConic(parseEquation('y^2=4x'));
+      expect(p?.type).toBe('parabola');
+      expect(p!.a).toBeCloseTo(1, 10);
+      const h = detectConic(parseEquation('(x-1)^2/4-(y+2)^2/9=1'));
+      expect(h?.type).toBe('hyperbola');
+      expect(h!.center).toEqual({ x: 1, y: -2 });
+      expect(h!.a).toBeCloseTo(2, 10);
+      expect(h!.b).toBeCloseTo(3, 10);
+      const c = detectConic(parseEquation('x^2+y^2=4x'));
+      expect(c?.type).toBe('circle');
+      expect(c!.center).toEqual({ x: 2, y: 0 });
+      expect(c!.radius).toBeCloseTo(2, 10);
+    });
+  });
 });

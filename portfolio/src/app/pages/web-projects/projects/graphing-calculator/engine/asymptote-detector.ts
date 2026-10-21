@@ -25,7 +25,7 @@ interface CacheEntry {
 // padded window around the first requested range, and a pan/zoom that stays inside
 // that padding reuses it — filtered back down to the currently-visible bounds —
 // instead of re-running vertical/horizontal/oblique detection every frame.
-const cache = new Map<number, CacheEntry>();
+const cache = new Map<string, CacheEntry>();
 /** Padded window is (1 + 2*PAD_FACTOR) times the requested range, centered on it. */
 const PAD_FACTOR = 1.5;
 const PAD_MULTIPLIER = 1 + 2 * PAD_FACTOR;
@@ -69,8 +69,10 @@ export function detectAsymptotes(
   xMin: number,
   xMax: number,
   ast?: ExpressionNode,
+  // Anything that changes fn for the same ast (e.g. the angle unit): part of the cache key.
+  variant = '',
 ): Asymptote[] {
-  const id = identityKey(ast ?? fn);
+  const id = `${identityKey(ast ?? fn)}|${variant}`;
   const range = xMax - xMin;
   const cached = cache.get(id);
   if (

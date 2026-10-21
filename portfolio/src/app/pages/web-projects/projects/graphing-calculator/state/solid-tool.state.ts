@@ -24,6 +24,7 @@ import type {
   SolidSpec,
 } from '../engine/solids/solid.types';
 import type { DetectedCurveMode } from '../engine/mode-detector';
+import { remapIndex, type RowOp } from '../engine/row-index';
 import type { MathExpression } from '../models/calculator.models';
 
 type SolidFieldKey = 'curves' | 'a' | 'b' | 'axis' | 'shape' | 'ratio';
@@ -263,21 +264,21 @@ export class SolidToolState implements OnDestroy {
     this.heightRatioText.set(text);
   }
 
-  /** Keeps curveIndices consistent when a function row is deleted elsewhere in the calculator. */
+  /** Keeps curveIndices pointing at the same rows after a row is removed. */
   handleFunctionRemoved(index: number): void {
-    this.curveIndices.update((idxs) =>
-      idxs.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i)),
-    );
+    this.remapCurves({ remove: index });
   }
 
-  /** Keeps curveIndices consistent when function rows are reordered via drag-and-drop. */
+  /** Keeps curveIndices pointing at the same rows after a row is moved. */
   handleFunctionMoved(sourceIndex: number, targetIndex: number): void {
+    this.remapCurves({ from: sourceIndex, to: targetIndex });
+  }
+
+  private remapCurves(op: RowOp): void {
     this.curveIndices.update((idxs) =>
-      idxs.map((i) => {
-        if (i === sourceIndex) return targetIndex;
-        if (sourceIndex < targetIndex && i > sourceIndex && i <= targetIndex) return i - 1;
-        if (sourceIndex > targetIndex && i >= targetIndex && i < sourceIndex) return i + 1;
-        return i;
+      idxs.flatMap((i) => {
+        const n = remapIndex(i, op);
+        return n === null ? [] : [n];
       }),
     );
   }

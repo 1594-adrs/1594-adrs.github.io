@@ -14,7 +14,7 @@ const SEG_HALF_PX = 8;
 /** Screen px between targets handed to the adaptive solver. */
 const TARGET_STEP_PX = 2;
 /** Fixed-step polylines stop after this many steps per side. */
-export const MAX_POLYLINE_STEPS = 2000;
+const MAX_POLYLINE_STEPS = 2000;
 
 type Pt = [number, number];
 

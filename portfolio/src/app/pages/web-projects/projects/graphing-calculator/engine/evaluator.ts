@@ -459,6 +459,14 @@ function compileNode(node: ExpressionNode, angleUnit: 'rad' | 'deg'): CompiledEx
       if (mfn) {
         const argFns = node.args.map((arg) => compileNode(arg, angleUnit));
         const isAtan2Deg = node.name === 'atan2' && angleUnit === 'deg';
+        // Two-argument calls (min, max, mod, logb, root, atan2) skip the per-sample array and spread.
+        if (argFns.length === 2) {
+          const [f0, f1] = argFns;
+          return (a, b) => {
+            const result = mfn(f0(a, b), f1(a, b));
+            return isAtan2Deg ? (result * 180) / Math.PI : result;
+          };
+        }
         return (a, b) => {
           const result = mfn(...argFns.map((f) => f(a, b)));
           return isAtan2Deg ? (result * 180) / Math.PI : result;

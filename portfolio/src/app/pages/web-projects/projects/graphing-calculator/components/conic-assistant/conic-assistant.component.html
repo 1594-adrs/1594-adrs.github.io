@@ -13,7 +13,13 @@
 
   <div class="conic-tabs">
     @for (tab of tabs; track tab.key) {
-      <button class="conic-tab" [class.active]="activeTab() === tab.key" (click)="setTab(tab.key)">
+      <button
+        type="button"
+        class="conic-tab"
+        [class.active]="activeTab() === tab.key"
+        [attr.aria-pressed]="activeTab() === tab.key"
+        (click)="setTab(tab.key)"
+      >
         {{ tab.label }}
       </button>
     }
@@ -59,7 +65,11 @@
         <input type="number" [value]="params().p" (change)="updateParamP($event)" step="0.5" />
       </label>
       <label class="param-field">
-        <select [value]="params().orientation" (change)="updateOrientation($event)">
+        <select
+          aria-label="Parabola orientation"
+          [value]="params().orientation"
+          (change)="updateOrientation($event)"
+        >
           <option value="vertical">Vertical</option>
           <option value="horizontal">Horizontal</option>
         </select>

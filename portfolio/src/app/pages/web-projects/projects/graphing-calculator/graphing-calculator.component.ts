@@ -69,6 +69,7 @@ import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode, maskNested, unwrapParametricPair } from './engine/mode-detector';
 import { substituteParams } from './engine/params';
+import { remapIndex, type RowOp } from './engine/row-index';
 import { FUNCTION_COLORS } from './utils/color';
 import { MathInput } from './components/math-input/math-input';
 import {
@@ -522,6 +523,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
    *  the underlying activate/toggle methods remain the single source of truth. */
   selectTool(tab: ToolTab): void {
     const target = tab === this.uiLayout.activeTool() ? 'none' : tab;
+    this.limitErrors.set({});
     if (this.activeIntegral() && target !== 'integral') this.activeIntegral.set(null);
     if (this.showSolidTool() && target !== 'solids') this.toggleSolidTool();
     if (this.activeMultiArea() && target !== 'area') this.activeMultiArea.set(null);
@@ -847,7 +849,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.functions();
       this.poiKey = null;
       if (!this.isBrowser) return;
-      if (this.interactionState.showPointsOfInterest()) this.schedulePoiRecompute();
+      // untracked: the recompute reads many signals; only a row change should re-run this effect
+      if (this.interactionState.showPointsOfInterest()) {
+        untracked(() => this.schedulePoiRecompute());
+      }
       this.requestRender();
     });
   }
@@ -892,6 +897,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.keyboardUnsub?.();
     this.keyboardGeoUnsub?.();
     if (this.showKeyboard()) hideMathKeyboard();
@@ -947,6 +953,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     }
     this.solidToolState.handleFunctionRemoved(index);
     this.calculusState.handleFunctionRemoved(index);
+    this.remapRowRefs({ remove: index });
     this.derivHintIndex.set(null);
     // The removed row may have defined (or duplicated) a slider other rows use.
     this.paramSliders.resolveAll();
@@ -1379,7 +1386,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (has) {
         return { ...cfg, functionIndices: cfg.functionIndices.filter((i) => i !== index) };
       }
-      return { ...cfg, functionIndices: [...cfg.functionIndices, index].sort() };
+      return { ...cfg, functionIndices: [...cfg.functionIndices, index].sort((p, q) => p - q) };
     });
     this.requestRender();
   }
@@ -1997,13 +2004,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return false;
   }
 
+  /** Set in `ngOnDestroy` so an in-flight lazy load doesn't open the keyboard afterwards. */
+  private destroyed = false;
+
   async toggleKeyboard(): Promise<void> {
     if (this.showKeyboard()) {
       hideMathKeyboard();
       this.showKeyboard.set(false);
       return;
     }
-    if (!(await loadMathlive())) return;
+    if (!(await loadMathlive()) || this.destroyed) return;
     this.watchKeyboard();
     showMathKeyboard();
     this.showKeyboard.set(true);
@@ -2104,28 +2114,27 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.calculusState.handleFunctionMoved(sourceIndex, targetIndex);
     this.derivHintIndex.set(null);
 
-    if (this.activeIntegral()) {
-      this.activeIntegral.update((intg) => {
-        if (!intg) return null;
-        let newIdx = intg.fnIndex;
-        if (intg.fnIndex === sourceIndex) newIdx = targetIndex;
-        else if (
-          sourceIndex < targetIndex &&
-          intg.fnIndex > sourceIndex &&
-          intg.fnIndex <= targetIndex
-        )
-          newIdx = intg.fnIndex - 1;
-        else if (
-          sourceIndex > targetIndex &&
-          intg.fnIndex >= targetIndex &&
-          intg.fnIndex < sourceIndex
-        )
-          newIdx = intg.fnIndex + 1;
-        return { ...intg, fnIndex: newIdx };
-      });
-    }
+    this.remapRowRefs({ from: sourceIndex, to: targetIndex });
 
     this.requestRender();
+  }
+
+  /** Re-points the integral, multi-area and value-table selections at the same rows after
+   *  `op`; a selection whose row was removed is dropped. */
+  private remapRowRefs(op: RowOp): void {
+    this.activeIntegral.update((intg) => {
+      const n = intg && remapIndex(intg.fnIndex, op);
+      return intg && n !== null ? { ...intg, fnIndex: n } : null;
+    });
+    this.activeMultiArea.update((cfg) => {
+      if (!cfg) return null;
+      const functionIndices = cfg.functionIndices.flatMap((i) => {
+        const n = remapIndex(i, op);
+        return n === null ? [] : [n];
+      });
+      return functionIndices.length < 2 ? null : { ...cfg, functionIndices };
+    });
+    this.tableOpenIndex.update((i) => (i === null ? null : remapIndex(i, op)));
   }
 
   /** Label used in the aria-live announcement and aria-labels for the move up/down controls. */
@@ -2302,7 +2311,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const fnsKey = this.functions()
       .map((f) => `${f.mode}:${f.visible}:${f.ast ? '1' : '0'}:${f.raw}`)
       .join('|');
-    return `${v.xMin.toFixed(4)},${v.xMax.toFixed(4)}|${fnsKey}`;
+    return `${v.xMin.toFixed(4)},${v.xMax.toFixed(4)}|${this.angleUnit()}|${fnsKey}`;
   }
 
   /** Recomputes points of interest at once on the first change after an idle spell (a fresh
@@ -2358,16 +2367,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private getImplicitDiffAst(fn: MathExpression): ExpressionNode | null {
     const cached = this.implicitDiffAstCache.get(fn);
     if (cached) return cached;
-    const top = maskNested(fn.raw);
-    const eq = top.indexOf('=');
-    if (eq < 0 || top.indexOf('=', eq + 1) >= 0) return null;
-    try {
-      const expr = parse(`(${fn.raw.slice(0, eq).trim()})-(${fn.raw.slice(eq + 1).trim()})`);
-      this.implicitDiffAstCache.set(fn, expr);
-      return expr;
-    } catch {
-      return null;
-    }
+    // Built from `fn.ast` (slider values already substituted), not by re-parsing `fn.raw`.
+    const eq = fn.ast;
+    if (eq?.type !== 'BinaryOp' || eq.operator !== '=') return null;
+    const diff: ExpressionNode = {
+      type: 'BinaryOp',
+      operator: '-',
+      left: eq.left,
+      right: eq.right,
+    };
+    this.implicitDiffAstCache.set(fn, diff);
+    return diff;
   }
 
   private render(): void {
@@ -2408,7 +2418,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           const isExplicit = /^\s*y\s*(>=|<=|>|<)/i.test(fn.raw);
           if (isExplicit) {
             const evalFn = (x: number) => compiled(x, 0);
-            drawInequality(ctx, this.viewport, evalFn, fn.inequalityOp, fn.color, w, h);
+            drawInequality(ctx, this.viewport, evalFn, fn.inequalityOp, fn.color, w, h, fn.ast, au);
           } else {
             drawImplicitInequality(
               ctx,
@@ -2460,8 +2470,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (!fn.ast) continue;
         const compiled = compileExpression(fn.ast, au);
         const evalFn = (x: number) => compiled(x, 0);
-        drawFunction(ctx, this.viewport, evalFn, fn.color, w, h, fn.ast);
-        const asymptotes = detectAsymptotes(evalFn, this.viewport.xMin, this.viewport.xMax, fn.ast);
+        drawFunction(ctx, this.viewport, evalFn, fn.color, w, h, fn.ast, au);
+        const asymptotes = detectAsymptotes(
+          evalFn,
+          this.viewport.xMin,
+          this.viewport.xMax,
+          fn.ast,
+          au,
+        );
         for (const a of asymptotes) {
           drawAsymptote(ctx, this.viewport, a, w, h);
         }
@@ -2473,9 +2489,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const d = derivatives[i]?.ast;
       if (!fn.visible || !fn.showDerivative || !d) return;
       const compiled = compileExpression(d, au);
+      const base = fn.ast ? compileExpression(fn.ast, au) : null;
+      // f' is only drawn where f itself is defined (e.g. ln(x) has no derivative curve for x < 0)
+      const evalD = (x: number) => (base && Number.isNaN(base(x, 0)) ? NaN : compiled(x, 0));
       ctx.save();
       ctx.setLineDash([6, 4]);
-      drawFunction(ctx, this.viewport, (x: number) => compiled(x, 0), fn.color, w, h, d);
+      drawFunction(ctx, this.viewport, evalD, fn.color, w, h, d, au);
       ctx.restore();
     });
 

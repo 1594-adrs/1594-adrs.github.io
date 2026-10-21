@@ -57,6 +57,7 @@ function classifyExtremum(
 ): { kind: CriticalPointKind; lo: number; hi: number } | null {
   const yc = safeEval(fn, c);
   if (yc === null) return null;
+  // shortcut: the max(1, |y|) floor makes this absolute (1e-12) for |y| < 1, so extrema of curves scaled below ~1e-12 are dropped; scale by the view's y-range if that matters.
   const tol = NOISE_REL * Math.max(1, Math.abs(yc));
   const side = (x: number): number => {
     const y = safeEval(fn, x);
@@ -115,7 +116,8 @@ export function findExtrema(fn: (x: number) => number, a: number, b: number): Cr
   const [xMin, xMax] = a < b ? [a, b] : [b, a];
   // f' divided by max(1, 1e-4|f|) (positive: same zeros and signs) so its rounding noise, ~1e-12|f|,
   // stays under the root residual tolerance on large-valued curves.
-  const df = (x: number) => derivative(fn, x) / Math.max(1, 1e-4 * Math.abs(fn(x)));
+  // The difference step shrinks with the view: a fixed 1e-4 blurs every extremum of a zoomed-in curve.
+  const df = (x: number) => derivative(fn, x, Math.min(1e-4, h)) / Math.max(1, 1e-4 * Math.abs(fn(x)));
   const candidates = findAxisCrossings(df, xMin, xMax, 0, STEPS);
   const points: CriticalPoint[] = [];
   candidates.forEach((c, i) => {

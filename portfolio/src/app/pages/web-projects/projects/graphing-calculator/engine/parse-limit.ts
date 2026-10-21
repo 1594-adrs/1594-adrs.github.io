@@ -16,7 +16,8 @@ export function parseLimitText(raw: string): ParsedLimit {
   if (!trimmed) return { value: null, invalid: false };
   // Strict: parseFloat would read `2*pi` as 2 and `1/3` as 1.
   const num = Number(trimmed);
-  if (!isNaN(num)) return { value: num, invalid: false };
+  // Number() also reads Infinity, 1E999 and 0x/0b/0o literals, which the expression grammar rejects.
+  if (Number.isFinite(num) && !/[xXbBoO]/.test(trimmed)) return { value: num, invalid: false };
   try {
     return { value: evalConstantExpression(trimmed), invalid: false };
   } catch {

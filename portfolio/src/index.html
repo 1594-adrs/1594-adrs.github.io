@@ -129,7 +129,13 @@
     </script>
   </head>
   <body>
-    <a href="#main-content" class="skip-link">Skip to content</a>
+    <!-- <base href="/"> would turn a plain #fragment into a full navigation to / on sub-routes -->
+    <a
+      href="#main-content"
+      class="skip-link"
+      onclick="var m=document.getElementById('main-content');if(m){event.preventDefault();m.focus();m.scrollIntoView()}"
+      >Skip to content</a
+    >
     <app-root></app-root>
   </body>
 </html>

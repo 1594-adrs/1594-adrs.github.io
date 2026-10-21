@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePieces, sliceArea } from './solid-integrand';
+import { computePieces, pieceOrderMatchesEnvelope, sliceArea } from './solid-integrand';
 import type { SolidCurve, SolidSpec } from './solid.types';
 
 function curve(fn: (t: number) => number, label = 'f'): SolidCurve {
@@ -273,5 +273,98 @@ describe('shell sliceArea sign (H1)', () => {
       [1, 2],
     ]);
     expect(pieces.map((p) => p.lowerIndex === 0)).toEqual([false, true, false]);
+  });
+});
+
+describe('sliceArea envelope with 3+ curves', () => {
+  // findIntersections samples 200 steps: sin(1000x) crosses 0 ~318 times on [0, 1], so pieces miss
+  // crossings and their fixed upper/lower order is wrong between them.
+  const W = 1000;
+  const spec = (method: SolidSpec['method']): SolidSpec => ({
+    method,
+    variable: 'x',
+    shape: 'square',
+    curves: [curve((x) => Math.sin(W * x), 'f1'), curve(() => 0, 'f2'), curve(() => -2, 'f3')],
+    a: 0,
+    b: 1,
+    axis: { orientation: method === 'shell' ? 'vertical' : 'horizontal', value: -3 },
+  });
+
+  it('uses the pointwise max/min of the curves, not the piece order', () => {
+    const cases: Array<[SolidSpec['method'], (t: number, U: number, L: number) => number]> = [
+      ['cross-section', (_t, U, L) => (U - L) ** 2],
+      ['disk-washer', (_t, U, L) => Math.PI * ((U + 3) ** 2 - (L + 3) ** 2)],
+      ['shell', (t, U, L) => 2 * Math.PI * (t + 3) * (U - L)],
+    ];
+    for (const [method, expected] of cases) {
+      const sp = spec(method);
+      const area = sliceArea(sp, computePieces(sp));
+      for (let i = 1; i < 2000; i++) {
+        const t = i / 2000;
+        expect(area(t)).toBeCloseTo(expected(t, Math.max(Math.sin(W * t), 0), -2), 9);
+      }
+    }
+  });
+
+  it('drops a curve that is undefined at t instead of returning NaN', () => {
+    const sp: SolidSpec = {
+      ...spec('cross-section'),
+      curves: [curve(() => 1), curve((x) => (x < 0.5 ? NaN : 0.5)), curve(() => -1)],
+    };
+    const area = sliceArea(sp, computePieces(sp));
+    expect(area(0.25)).toBeCloseTo(4, 12);
+    expect(area(0.75)).toBeCloseTo(4, 12);
+  });
+});
+
+describe('computePieces with close crossings of different curve pairs', () => {
+  const breaks = (fns: Array<(x: number) => number>, a: number, b: number): number[] =>
+    computePieces({
+      method: 'disk-washer',
+      variable: 'x',
+      curves: fns.map((f) => curve(f)),
+      a,
+      b,
+      axis: { orientation: 'horizontal', value: -50 },
+    })
+      .map((p) => p.b)
+      .slice(0, -1);
+
+  it('keeps both crossings of y = x with y = 0 and y = x - 0.15 (closer than 2h)', () => {
+    const found = breaks([(x) => x, () => 0, (x) => x - 0.15], -10, 10);
+    expect(found.some((x) => Math.abs(x) < 1e-6)).toBe(true);
+    expect(found.some((x) => Math.abs(x - 0.15) < 1e-6)).toBe(true);
+  });
+
+  it('keeps the crossings of x² with y = 1 and y = 1.02', () => {
+    const found = breaks([(x) => x * x, () => 1, () => 1.02], 0, 2);
+    expect(found.some((x) => Math.abs(x - 1) < 1e-6)).toBe(true);
+    expect(found.some((x) => Math.abs(x - Math.sqrt(1.02)) < 1e-6)).toBe(true);
+  });
+
+  it('collapses a triple point into one breakpoint', () => {
+    const found = breaks([(x) => x, (x) => x * x, (x) => 2 - x], 0, 3);
+    expect(found.filter((x) => Math.abs(x - 1) < 1e-6)).toHaveLength(1);
+  });
+});
+
+describe('pieceOrderMatchesEnvelope', () => {
+  const base = (curves: SolidCurve[], a: number, b: number): SolidSpec => ({
+    method: 'cross-section',
+    variable: 'x',
+    shape: 'square',
+    curves,
+    a,
+    b,
+  });
+
+  it('holds for ordinary 3-curve regions', () => {
+    const sp = base([curve((x) => x), curve((x) => x * x), curve((x) => 2 - x)], 0, 2);
+    expect(pieceOrderMatchesEnvelope(sp, computePieces(sp))).toBe(true);
+  });
+
+  it('fails when fast oscillations make findIntersections miss crossings', () => {
+    const sp = base([curve((x) => Math.sin(1000 * x)), curve(() => 0), curve(() => -2)], 0, 1);
+    expect(pieceOrderMatchesEnvelope(sp, computePieces(sp))).toBe(false);
   });
 });

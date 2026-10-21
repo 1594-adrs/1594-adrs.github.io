@@ -5,6 +5,7 @@ import { newton, type NewtonStatus } from '../engine/differential';
 import { parseLimitText } from '../engine/parse-limit';
 import type { MathExpression } from '../models/calculator.models';
 import { formatValue } from '../utils/format-value';
+import { remapIndex } from '../engine/row-index';
 import { dependsOn } from '../engine/symbolic-diff';
 import {
   buildOdeView,
@@ -185,9 +186,9 @@ export class CalculusToolState {
 
   /** Keeps the selection on the same row when a row is removed; says so if it was the one removed. */
   handleFunctionRemoved(index: number): void {
-    const cur = this.fnIndex();
-    if (cur > index) this.fnIndex.set(cur - 1);
-    else if (cur === index) {
+    const next = remapIndex(this.fnIndex(), { remove: index });
+    if (next !== null) this.fnIndex.set(next);
+    else {
       this.fnIndex.set(Math.max(0, index - 1));
       this.removedNotice.set(`f${index + 1} was removed.`);
     }
@@ -195,10 +196,7 @@ export class CalculusToolState {
 
   /** Keeps the selection on the same row when rows are reordered. */
   handleFunctionMoved(source: number, target: number): void {
-    const i = this.fnIndex();
-    if (i === source) this.fnIndex.set(target);
-    else if (source < target && i > source && i <= target) this.fnIndex.set(i - 1);
-    else if (source > target && i >= target && i < source) this.fnIndex.set(i + 1);
+    this.fnIndex.set(remapIndex(this.fnIndex(), { from: source, to: target }) ?? target);
   }
 
   limitX0 = computed(() => parseLimitPoint(this.limitX0Text()));

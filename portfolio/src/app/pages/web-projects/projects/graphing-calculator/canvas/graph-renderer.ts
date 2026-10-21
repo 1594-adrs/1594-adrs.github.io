@@ -1,12 +1,11 @@
 import { Viewport } from './viewport';
 import { tryEval, findAxisCrossings } from './utils';
+import { drawLabelBlock } from './calculus-renderer';
 import { detectAsymptotes } from '../engine/asymptote-detector';
 import type { Asymptote } from '../engine/asymptote-detector';
 import type { ExpressionNode } from '../engine/parser';
 
 // Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
-const COLOR_LABEL_BG = '#0a0a0f';
-const COLOR_LABEL_BORDER = '#333355';
 
 /** A sample interval is halved at most this many times while refining (~ the double mantissa). */
 const MAX_REFINE_DEPTH = 64;
@@ -144,8 +143,9 @@ function getVerticalAsymptotes(
   viewport: Viewport,
   eps: number,
   ast?: ExpressionNode,
+  variant?: string,
 ): number[] {
-  const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax, ast);
+  const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax, ast, variant);
   return asymptotes
     .filter((a) => a.type === 'vertical')
     .map((a) => a.value)
@@ -180,12 +180,14 @@ export function drawFunction(
   width: number,
   height: number,
   ast?: ExpressionNode,
+  /** Cache key for what fn depends on besides ast (the angle unit), see detectAsymptotes. */
+  variant?: string,
 ): void {
   // Gap left at each side of a vertical asymptote, relative to the view so it works at any zoom.
   const eps = (viewport.xMax - viewport.xMin) * 1e-9;
   setStroke(ctx, color);
   let start = viewport.xMin;
-  for (const ax of getVerticalAsymptotes(fn, viewport, eps, ast)) {
+  for (const ax of getVerticalAsymptotes(fn, viewport, eps, ast, variant)) {
     if (ax > start + eps) drawFunctionSegment(ctx, viewport, fn, start, ax - eps, width, height);
     start = ax + eps;
   }
@@ -460,21 +462,7 @@ export function drawCrosshair(
     }
   }
 
-  ctx.fillStyle = COLOR_LABEL_BG;
-  ctx.strokeStyle = COLOR_LABEL_BORDER;
-  ctx.lineWidth = 1;
-  ctx.font = '11px "JetBrains Mono", monospace';
-  const metrics = ctx.measureText(label);
-  const pad = 4;
-  const lx = mouseX + 12;
-  const ly = mouseY - 20;
-
-  ctx.fillRect(lx - pad, ly - 11, metrics.width + pad * 2, 15);
-  ctx.strokeRect(lx - pad, ly - 11, metrics.width + pad * 2, 15);
-  ctx.fillStyle = color;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, lx, ly - 3);
+  drawLabelBlock(ctx, mouseX, mouseY, [label], color, width, height);
 }
 
 export function drawParametric(
@@ -522,8 +510,10 @@ export function drawInequality(
   color: string,
   width: number,
   height: number,
+  ast?: ExpressionNode,
+  variant?: string,
 ): void {
-  drawFunction(ctx, viewport, fn, color, width, height);
+  drawFunction(ctx, viewport, fn, color, width, height, ast, variant);
 
   const maxY = viewport.yMax + (viewport.yMax - viewport.yMin) * 0.1;
   const minY = viewport.yMin - (viewport.yMax - viewport.yMin) * 0.1;

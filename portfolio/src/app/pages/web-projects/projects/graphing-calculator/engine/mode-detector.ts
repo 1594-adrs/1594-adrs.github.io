@@ -83,10 +83,13 @@ export function maskNested(raw: string): string {
   return out;
 }
 
-/** Whether `name` appears in `expr` as a standalone identifier (not e.g. the 'x' inside 'exp'). */
+/** Whether curve variable `name` (x/y/t) appears in `expr` under the parser's split rule: `2y`,
+ *  `xy` mention it, the 'x' inside 'exp' does not. */
 function containsVariable(expr: string, name: string): boolean {
-  const re = new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`);
-  return re.test(expr);
+  for (const [run] of expr.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
+    if (/^[xyt]+$/.test(run) && run.includes(name)) return true;
+  }
+  return false;
 }
 
 /**

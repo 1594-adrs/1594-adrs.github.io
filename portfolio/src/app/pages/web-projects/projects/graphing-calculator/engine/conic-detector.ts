@@ -1,3 +1,4 @@
+import { compileExpression } from './evaluator';
 import type { ExpressionNode } from './parser';
 import type { ConicType } from './types';
 
@@ -29,7 +30,32 @@ interface Coefficients {
 function getCoefficients(ast: ExpressionNode): Coefficients | null {
   if (ast.type !== 'BinaryOp' || ast.operator !== '=') return null;
   const diff = subtractASTs(ast.left, ast.right);
-  return extractCoeffs(diff);
+  const coeffs = extractCoeffs(diff);
+  return matchesQuadric(diff, coeffs) ? coeffs : null;
+}
+
+const PROBES = [
+  [0.37, 0.71],
+  [1.3, -0.4],
+  [-0.8, 1.1],
+  [2.1, 0.9],
+  [-1.7, -1.2],
+];
+
+/** collectTerms skips terms it can't read (x^3, sin(x), (2x)^2...), so check the extracted
+ *  quadric against the real expression; an evaluation error (e.g. unsubstituted slider) is not
+ *  evidence against it. */
+function matchesQuadric(diff: ExpressionNode, c: Coefficients): boolean {
+  try {
+    const f = compileExpression(diff);
+    return PROBES.every(([x, y]) => {
+      const q = c.x2 * x * x + c.y2 * y * y + c.xy * x * y + c.x * x + c.y * y + c.constant;
+      const v = f(x, y);
+      return Math.abs(q - v) <= 1e-9 * Math.max(1, Math.abs(q), Math.abs(v));
+    });
+  } catch {
+    return true;
+  }
 }
 
 function subtractASTs(a: ExpressionNode, b: ExpressionNode): ExpressionNode {
@@ -64,9 +90,8 @@ function collectTerms(node: ExpressionNode, coeffs: Coefficients, sign: number):
   if (node.type === 'Variable') {
     if (node.name === 'x') coeffs.x += sign;
     else if (node.name === 'y') coeffs.y += sign;
-    else if (node.name === 'pi' || node.name === 'π' || node.name === 'e') {
-      coeffs.constant += sign;
-    }
+    else if (node.name === 'pi' || node.name === 'π') coeffs.constant += sign * Math.PI;
+    else if (node.name === 'e') coeffs.constant += sign * Math.E;
     return;
   }
 

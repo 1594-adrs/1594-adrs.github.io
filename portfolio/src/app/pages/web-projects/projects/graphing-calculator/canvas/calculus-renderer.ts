@@ -13,7 +13,7 @@ export const COLOR_SEQ_TERM = '#00e5ff';
 export const COLOR_SEQ_PARTIAL = '#ffb300';
 export const COLOR_SEQ_SUM = '#ff6bd6';
 /** Most sequence points drawn per series. */
-export const SEQ_MAX_POINTS = 500;
+const SEQ_MAX_POINTS = 500;
 /** Screen px between samples of the Taylor polynomial. */
 const TAYLOR_STEP_PX = 2;
 const FONT = '11px "JetBrains Mono", monospace';
@@ -26,7 +26,7 @@ const NEWTON_LABEL_GAP_PX = 18;
 /** Keeps right-edge labels clear of the zoom/tool button column overlaid on the canvas. */
 const CONTROLS_CLEARANCE = 60;
 
-export const NEWTON_MAX_DRAWN = 20;
+const NEWTON_MAX_DRAWN = 20;
 
 /** "x₀", "x₁₂". */
 export function subscriptX(n: number): string {

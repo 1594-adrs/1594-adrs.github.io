@@ -472,63 +472,57 @@
         }}</span>
       </button>
 
-      <div class="tool-tabs" role="tablist" aria-label="Graph tools">
+      <div class="tool-tabs" role="group" aria-label="Graph tools">
         <button
           type="button"
-          role="tab"
           class="tool-tab"
           [class.active]="uiLayout.activeTool() === 'none'"
-          [attr.aria-selected]="uiLayout.activeTool() === 'none'"
+          [attr.aria-pressed]="uiLayout.activeTool() === 'none'"
           (click)="selectTool('none')"
         >
           Graph
         </button>
         <button
           type="button"
-          role="tab"
           class="tool-tab"
           [class.active]="uiLayout.activeTool() === 'integral'"
-          [attr.aria-selected]="uiLayout.activeTool() === 'integral'"
+          [attr.aria-pressed]="uiLayout.activeTool() === 'integral'"
           (click)="selectTool('integral')"
         >
           Integral
         </button>
         <button
           type="button"
-          role="tab"
           class="tool-tab"
           [class.active]="uiLayout.activeTool() === 'area'"
-          [attr.aria-selected]="uiLayout.activeTool() === 'area'"
+          [attr.aria-pressed]="uiLayout.activeTool() === 'area'"
           (click)="selectTool('area')"
         >
           Area
         </button>
         <button
           type="button"
-          role="tab"
           class="tool-tab"
           [class.active]="uiLayout.activeTool() === 'solids'"
-          [attr.aria-selected]="uiLayout.activeTool() === 'solids'"
+          [attr.aria-pressed]="uiLayout.activeTool() === 'solids'"
           (click)="selectTool('solids')"
         >
           Solids
         </button>
         <button
           type="button"
-          role="tab"
           class="tool-tab"
           [class.active]="uiLayout.activeTool() === 'conics'"
-          [attr.aria-selected]="uiLayout.activeTool() === 'conics'"
+          [attr.aria-pressed]="uiLayout.activeTool() === 'conics'"
           (click)="selectTool('conics')"
         >
           Conics
         </button>
         <button
           type="button"
-          role="tab"
           class="tool-tab"
           [class.active]="uiLayout.activeTool() === 'calculus'"
-          [attr.aria-selected]="uiLayout.activeTool() === 'calculus'"
+          [attr.aria-pressed]="uiLayout.activeTool() === 'calculus'"
           (click)="selectTool('calculus')"
         >
           Calculus
@@ -592,24 +586,26 @@
         <app-solid-panel />
         <div class="range-section">
           <div class="solid-view-toggle">
-            <button class="t-btn" [class.active]="!show3DSolid()" (click)="show3DSolid.set(false)">
+            <button
+              type="button"
+              class="t-btn"
+              [class.active]="!show3DSolid()"
+              [attr.aria-pressed]="!show3DSolid()"
+              (click)="show3DSolid.set(false)"
+            >
               2D cross-section
             </button>
             <button
+              type="button"
               class="t-btn"
               [class.active]="show3DSolid()"
+              [attr.aria-pressed]="show3DSolid()"
               [disabled]="!hasSolidResult()"
               (click)="show3DSolid.set(true)"
             >
               3D view
             </button>
           </div>
-          @if (limitError('multiA'); as msg) {
-            <p id="multi-a-error" class="fn-error" role="alert">{{ msg }}</p>
-          }
-          @if (limitError('multiB'); as msg) {
-            <p id="multi-b-error" class="fn-error" role="alert">{{ msg }}</p>
-          }
           @if (areaHint(); as hint) {
             <p class="tool-note" role="status">{{ hint }}</p>
           }
@@ -661,6 +657,12 @@
               />
             </label>
           </div>
+          @if (limitError('multiA'); as msg) {
+            <p id="multi-a-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (limitError('multiB'); as msg) {
+            <p id="multi-b-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
         </div>
       }
 
@@ -687,23 +689,25 @@
         }
       </div>
 
-      @if (results().length > 0) {
-        <div class="results-panel">
-          @for (r of results(); track r.label) {
-            <div class="result-row">
-              <span class="result-label">{{ r.label }}</span>
-              <span class="result-eq">=</span>
-              <span class="result-value">{{ r.approx ? '≈ ' : '' }}{{ r.value }}</span>
-              @if (r.error) {
-                <span class="result-err">{{ r.error }}</span>
+      <div class="live-region" aria-live="polite">
+        @if (results().length > 0) {
+          <div class="results-panel">
+            @for (r of results(); track r.label) {
+              <div class="result-row">
+                <span class="result-label">{{ r.label }}</span>
+                <span class="result-eq">=</span>
+                <span class="result-value">{{ r.approx ? '≈ ' : '' }}{{ r.value }}</span>
+                @if (r.error) {
+                  <span class="result-err">{{ r.error }}</span>
+                }
+              </div>
+              @for (note of r.notes ?? []; track $index) {
+                <p class="result-note">{{ note }}</p>
               }
-            </div>
-            @if (r.notes?.length) {
-              <p class="result-note" role="status">{{ r.notes![0] }}</p>
             }
-          }
-        </div>
-      }
+          </div>
+        }
+      </div>
 
       @if (areaBreakdown(); as bd) {
         <details class="breakdown">
@@ -753,6 +757,7 @@
                 <button
                   type="button"
                   class="t-btn poi-pin"
+                  [attr.aria-pressed]="interactionState.isPinned(p)"
                   (click)="interactionState.togglePin(p)"
                   [attr.aria-label]="'Pin or unpin ' + p.label"
                 >

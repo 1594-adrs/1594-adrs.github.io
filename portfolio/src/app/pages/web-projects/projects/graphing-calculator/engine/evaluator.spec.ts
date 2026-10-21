@@ -145,6 +145,12 @@ describe('evalConstantExpression', () => {
       expect(evalExpression('sign(5)', 0)).toBe(1);
     });
 
+    it('keeps variadic and degree-converted multi-arg calls correct after the 2-arg fast path', () => {
+      expect(compileExpression(parse('min(3, 1, 2)'))(0, 0)).toBe(1);
+      expect(compileExpression(parse('mod(-1, 3)'))(0, 0)).toBe(2);
+      expect(compileExpression(parse('atan2(1, 1)'), 'deg')(0, 0)).toBeCloseTo(45, 10);
+    });
+
     it('min(3, 1) = 1', () => {
       expect(evalExpression('min(3, 1)', 0)).toBe(1);
     });
@@ -243,7 +249,7 @@ describe('evalConstantExpression', () => {
     });
 
     it('mod(-1, 3) should be 2', () => {
-      expect(evalExpression('mod(-1, 3)', 0)).toBe(2);
+      expect(compileExpression(parse('mod(-1, 3)'))(0, 0)).toBe(2);
     });
 
     it('mod(5, 3) should be 2', () => {

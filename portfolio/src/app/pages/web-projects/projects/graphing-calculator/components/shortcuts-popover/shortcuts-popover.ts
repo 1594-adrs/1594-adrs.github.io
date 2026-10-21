@@ -13,11 +13,17 @@ import { IconComponent } from '../../../../../../shared/icons/icon.component';
   host: {
     role: 'dialog',
     'aria-label': 'Keyboard shortcuts',
-    '(keydown.escape)': 'close.emit()',
+    '(keydown.escape)': 'onEscape($event)',
   },
 })
 export class ShortcutsPopover {
   close = output<void>();
+
+  /** Stops Esc here so it doesn't also clear the canvas's pinned labels. */
+  onEscape(event: Event): void {
+    event.stopPropagation();
+    this.close.emit();
+  }
 
   shortcuts = [
     { keys: '+ / −', action: 'Zoom in / out' },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSolidSpec, curveModeMatchesVariable } from './solid-validation';
+import { axisInsideRegion, validateSolidSpec, curveModeMatchesVariable } from './solid-validation';
 import type { SolidCurve, SolidSpec } from './solid.types';
 
 function curve(fn: (t: number) => number, label = 'f₁'): SolidCurve {
@@ -290,6 +290,27 @@ describe('validateSolidSpec', () => {
     });
     const issues = validateSolidSpec(s);
     expect(issues.some((i) => i.code === 'axis-orientation')).toBe(true);
+  });
+});
+
+describe('axisInsideRegion', () => {
+  const band = [curve(() => 1), curve(() => -1, 'f₂')];
+  it('is true for a disk-washer axis strictly between the curves', () => {
+    expect(axisInsideRegion(spec({ curves: band }))).toBe(true);
+  });
+  it('is false for a disk-washer axis outside the region or on the baseline of a single curve', () => {
+    expect(axisInsideRegion(spec({ curves: band, axis: { orientation: 'horizontal', value: 2 } }))).toBe(false);
+    expect(axisInsideRegion(spec({}))).toBe(false);
+  });
+  it('is true for a shell axis strictly inside (a, b) and false at an endpoint', () => {
+    const shell = (value: number) =>
+      spec({ method: 'shell', a: 0, b: 2, axis: { orientation: 'vertical', value } });
+    expect(axisInsideRegion(shell(1))).toBe(true);
+    expect(axisInsideRegion(shell(0))).toBe(false);
+  });
+  it('is false without an axis or for cross-sections', () => {
+    expect(axisInsideRegion(spec({ curves: band, axis: undefined }))).toBe(false);
+    expect(axisInsideRegion(spec({ curves: band, method: 'cross-section', shape: 'square' }))).toBe(false);
   });
 });
 
