@@ -13,3 +13,7 @@ cv/__pycache__/
 
 # Personal brand assets (profile pictures), kept out of git
 branding/
+
+# Private reference material (copyrighted book + exercise catalog with prose)
+docs/*.pdf
+docs/exercise-catalog/

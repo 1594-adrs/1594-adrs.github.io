@@ -260,3 +260,94 @@
     justify-content: flex-end;
   }
 }
+.action-btn.deriv-btn {
+  width: 22px;
+  font-size: 11px;
+}
+.action-btn.deriv-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-glow-10);
+}
+.action-btn.deriv-btn[aria-disabled='true'] {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.action-btn.deriv-btn[aria-disabled='true']:hover {
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+/* f' formula under its row; the dashed swatch mirrors the dashed curve on the canvas. */
+.deriv-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0.75rem 4px 2.6rem;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  min-width: 0;
+  overflow-x: auto;
+}
+.deriv-line::before {
+  content: '';
+  width: 14px;
+  border-top: 2px dashed var(--dot-color);
+}
+.deriv-reason {
+  color: var(--color-warning);
+  font-size: 11px;
+}
+.deriv-hint {
+  margin: 0 0.75rem 4px 2.6rem;
+}
+.deriv-note {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.add-sliders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0.75rem 4px 2.6rem;
+}
+.add-slider-btn {
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--color-primary);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.add-slider-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+.add-slider-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+.add-slider-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+@media (pointer: coarse) {
+  .add-slider-btn {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+}
+
+/* Desktop sidebar: with up to 10 rows the list scrolls on its own so the tool tabs stay in view.
+   The mobile sheet (<= 768px) keeps scrolling as a whole. */
+@media (min-width: 769px) {
+  .functions-list {
+    max-height: 42vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+}

@@ -1,0 +1,565 @@
+<div class="calc-panel">
+  <div class="seg" role="group" aria-label="Calculus tool">
+    @for (m of modes; track m.value) {
+      <button
+        type="button"
+        class="seg-btn"
+        [class.active]="state.mode() === m.value"
+        [attr.aria-pressed]="state.mode() === m.value"
+        [attr.aria-label]="m.aria === m.label ? null : m.aria"
+        [attr.title]="m.aria === m.label ? null : m.aria"
+        (click)="state.mode.set(m.value)"
+      >
+        {{ m.label }}
+      </button>
+    }
+  </div>
+
+  @switch (state.mode()) {
+    @case ('ode') {
+      <div class="group">
+        <label class="field">
+          <span class="field-name">y′ =</span>
+          <app-math-input
+            class="field-math"
+            inputId="calc-ode-f"
+            [value]="state.odeSlopeText()"
+            label="Slope y′ as a function of x and y"
+            placeholder="x - y"
+            [invalid]="!!odeErrors().slope"
+            [describedBy]="
+              odeErrors().slope ? 'calc-ode-f-hint calc-ode-f-error' : 'calc-ode-f-hint'
+            "
+            (valueChange)="state.odeSlopeText.set($event)"
+          />
+        </label>
+        <p id="calc-ode-f-hint" class="hint">Write it in x and y, for example x - y or y·cos(x).</p>
+        @if (odeErrors().slope; as err) {
+          <p id="calc-ode-f-error" class="hint error">{{ err }}</p>
+        }
+      </div>
+
+      <div class="group">
+        <div class="fields">
+          <label class="field">
+            <span class="field-name">x₀ =</span>
+            <app-math-input
+              kind="limit"
+              class="field-math"
+              inputId="calc-ode-x0"
+              [value]="state.odeX0Text()"
+              label="Initial x0"
+              placeholder="0"
+              [invalid]="!!odeErrors().x0"
+              [describedBy]="odeErrors().x0 ? 'calc-ode-x0-error' : null"
+              (valueChange)="state.odeX0Text.set($event)"
+            />
+          </label>
+          <label class="field">
+            <span class="field-name">y₀ =</span>
+            <app-math-input
+              kind="limit"
+              class="field-math"
+              inputId="calc-ode-y0"
+              [value]="state.odeY0Text()"
+              label="Initial y0"
+              placeholder="1"
+              [invalid]="!!odeErrors().y0"
+              [describedBy]="odeErrors().y0 ? 'calc-ode-y0-error' : null"
+              (valueChange)="state.odeY0Text.set($event)"
+            />
+          </label>
+        </div>
+        @if (odeErrors().x0; as err) {
+          <p id="calc-ode-x0-error" class="hint error">{{ err }}</p>
+        }
+        @if (odeErrors().y0; as err) {
+          <p id="calc-ode-y0-error" class="hint error">{{ err }}</p>
+        }
+      </div>
+
+      <fieldset class="group">
+        <legend class="label">method</legend>
+        <div class="chips">
+          @for (m of methods; track m.value) {
+            <label class="chip" [class.selected]="state.odeMethod() === m.value">
+              <input
+                type="radio"
+                name="calc-ode-method"
+                [checked]="state.odeMethod() === m.value"
+                [attr.aria-label]="m.aria"
+                (change)="state.odeMethod.set(m.value)"
+              />
+              {{ m.label }}
+            </label>
+          }
+        </div>
+      </fieldset>
+
+      <div class="group">
+        <div class="fields" [class.one]="!fixedStep()">
+          @if (fixedStep()) {
+            <label class="field">
+              <span class="field-name">h =</span>
+              <app-math-input
+                kind="limit"
+                class="field-math"
+                inputId="calc-ode-h"
+                [value]="state.odeStepText()"
+                label="Step size h"
+                placeholder="0.5"
+                [invalid]="!!odeErrors().step"
+                [describedBy]="odeErrors().step ? 'calc-ode-h-error' : null"
+                (valueChange)="state.odeStepText.set($event)"
+              />
+            </label>
+          }
+          <label class="field">
+            <span class="field-name">to x =</span>
+            <app-math-input
+              kind="limit"
+              class="field-math"
+              inputId="calc-ode-end"
+              [value]="state.odeXEndText()"
+              label="Target x, optional"
+              placeholder="none"
+              [invalid]="!!odeErrors().end"
+              [describedBy]="
+                odeErrors().end ? 'calc-ode-end-hint calc-ode-end-error' : 'calc-ode-end-hint'
+              "
+              (valueChange)="state.odeXEndText.set($event)"
+            />
+          </label>
+        </div>
+        @if (odeErrors().step; as err) {
+          <p id="calc-ode-h-error" class="hint error">{{ err }}</p>
+        }
+        <p id="calc-ode-end-hint" class="hint">Leave the target empty to only draw the solution.</p>
+        @if (odeErrors().end; as err) {
+          <p id="calc-ode-end-error" class="hint error">{{ err }}</p>
+        }
+      </div>
+
+      @if (state.ode(); as v) {
+        <div class="result" aria-hidden="true">
+          @if (odeOtherError(); as err) {
+            <span class="result-detail warn">{{ err }}</span>
+          } @else if (!v.error) {
+            @if (v.end?.status === 'ok' && v.xEnd !== null) {
+              <span class="result-caption"
+                >y({{ format(v.xEnd) }}) by {{ odeMethodLabel()
+                }}{{ fixedStep() ? ', h = ' + format(v.h ?? 0) : '' }}</span
+              >
+              <span class="result-value">{{ format(v.end!.value) }}</span>
+            } @else if (v.end) {
+              <span class="result-detail warn">{{ v.text }}</span>
+            } @else {
+              <span class="result-caption"
+                >Solution through ({{ format(v.x0) }}, {{ format(v.y0) }})</span
+              >
+              <span class="result-detail"
+                >Enter a target x to read y there{{
+                  fixedStep() ? ' and list the steps' : ''
+                }}.</span
+              >
+            }
+          }
+        </div>
+
+        @if (!v.error) {
+          <ul class="legend" aria-label="On the graph">
+            <li><span class="mark tick" [style.--c]="colors.field"></span>slope field</li>
+            <li><span class="mark line" [style.--c]="colors.solution"></span>solution</li>
+            <li><span class="mark dot" [style.--c]="colors.solution"></span>(x₀, y₀)</li>
+            @if (v.end?.status === 'ok' && v.xEnd !== null) {
+              <li>
+                <span class="mark ring" [style.--c]="colors.solution"></span>y({{ format(v.xEnd) }})
+              </li>
+            }
+          </ul>
+        }
+
+        @if (!v.error && v.rows.length) {
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Solver steps">
+            <table class="iter-table">
+              <caption class="sr-only">
+                {{
+                  odeMethodLabel()
+                }}
+                steps from x₀ to the target x
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">n</th>
+                  <th scope="col">xₙ</th>
+                  <th scope="col">yₙ</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of v.rows; track r.n) {
+                  <tr>
+                    <td>{{ r.n }}</td>
+                    <td>{{ format(r.x) }}</td>
+                    <td>{{ format(r.y) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (v.rows.length >= maxOdeRows) {
+            <p class="hint">The table lists the first {{ maxOdeRows }} steps.</p>
+          }
+        }
+      }
+    }
+
+    @case ('series') {
+      <div class="group">
+        <div class="fields term">
+          <label class="field">
+            <span class="field-name">aₙ =</span>
+            <app-math-input
+              kind="sequence"
+              class="field-math"
+              inputId="calc-series-term"
+              [value]="state.seriesTermText()"
+              label="Term a sub n, written in n"
+              placeholder="1/n^2"
+              [invalid]="!!seriesErrors().term"
+              [describedBy]="
+                seriesErrors().term ? 'calc-series-hint calc-series-error' : 'calc-series-hint'
+              "
+              (valueChange)="state.seriesTermText.set($event)"
+            />
+          </label>
+          <label class="field">
+            <span class="field-name">n ≥</span>
+            <input
+              type="text"
+              class="text-input start"
+              inputmode="numeric"
+              placeholder="1"
+              aria-label="First index n"
+              [value]="state.seriesStartText()"
+              [attr.aria-invalid]="!!seriesErrors().start || null"
+              [attr.aria-describedby]="seriesErrors().start ? 'calc-series-start-error' : null"
+              (input)="state.seriesStartText.set($any($event.target).value)"
+            />
+          </label>
+        </div>
+        <p id="calc-series-hint" class="hint">
+          Write the term in n, for example 1/n^2 or (-1)^n/n.
+        </p>
+        @if (seriesErrors().term; as err) {
+          <p id="calc-series-error" class="hint error">{{ err }}</p>
+        }
+        @if (seriesErrors().start; as err) {
+          <p id="calc-series-start-error" class="hint error">{{ err }}</p>
+        }
+      </div>
+
+      @if (state.series(); as v) {
+        @if (!v.error) {
+          <div class="result" aria-hidden="true">
+            @if (v.message) {
+              <span class="result-detail warn">{{ v.message }}</span>
+            } @else {
+              <span class="result-caption">Σ aₙ for n ≥ {{ v.n0 }}</span>
+              <span class="result-value" [class.muted]="v.sum.status !== 'finite'">{{
+                sumHeadline(v)
+              }}</span>
+              <span class="result-detail">{{ sumDetail(v) }}</span>
+            }
+          </div>
+
+          @if (!v.message) {
+            <ul class="legend" aria-label="On the graph">
+              <li><span class="mark dot" [style.--c]="colors.term"></span>(n, aₙ)</li>
+              <li><span class="mark ring" [style.--c]="colors.partial"></span>(n, Sₙ)</li>
+              @if (v.sum.status === 'finite') {
+                <li><span class="mark dash" [style.--c]="colors.sum"></span>sum</li>
+              }
+            </ul>
+
+            <div
+              class="table-scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Terms and partial sums"
+            >
+              <table class="iter-table">
+                <caption class="sr-only">
+                  First terms aₙ and partial sums Sₙ
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">n</th>
+                    <th scope="col">aₙ</th>
+                    <th scope="col">Sₙ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of v.rows; track r.n) {
+                    <tr>
+                      <td>{{ r.n }}</td>
+                      <td>{{ format(r.a) }}</td>
+                      <td>{{ format(r.s) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+      }
+    }
+
+    @default {
+      @if (state.choices().length === 0) {
+        <p class="note" role="status">Add a visible y = f(x) expression to use this tool.</p>
+      } @else {
+        <fieldset class="group">
+          <legend class="label">function</legend>
+          <div class="chips">
+            @for (c of state.choices(); track c.index) {
+              <label class="chip" [class.selected]="state.selected()?.index === c.index">
+                <input
+                  type="radio"
+                  name="calc-fn"
+                  [checked]="state.selected()?.index === c.index"
+                  (change)="state.select(c.index)"
+                />
+                <span class="swatch" [style.background]="c.color"></span>
+                {{ c.label }}
+              </label>
+            }
+          </div>
+          @if (state.selectionNote(); as note) {
+            <p class="hint" role="status">{{ note }}</p>
+          }
+        </fieldset>
+
+        @if (state.mode() === 'limit') {
+          <div class="group">
+            <label class="field">
+              <span class="field-name">x →</span>
+              <app-math-input
+                kind="limit"
+                class="field-math"
+                inputId="calc-limit-x0"
+                [value]="state.limitX0Text()"
+                label="Point the limit approaches"
+                placeholder="0"
+                [invalid]="state.limitX0().invalid"
+                [describedBy]="
+                  state.limitX0().invalid ? 'calc-limit-hint calc-limit-error' : 'calc-limit-hint'
+                "
+                (valueChange)="state.limitX0Text.set($event)"
+              />
+            </label>
+            <p id="calc-limit-hint" class="hint">Numbers, pi/2, inf or -inf.</p>
+            @if (state.limitX0().invalid) {
+              <p id="calc-limit-error" class="hint error" role="alert">
+                Enter a number, pi/2, inf or -inf.
+              </p>
+            }
+          </div>
+
+          <fieldset class="group">
+            <legend class="label">side</legend>
+            <div class="chips">
+              @for (s of sides; track s.value) {
+                <label class="chip" [class.selected]="state.side() === s.value">
+                  <input
+                    type="radio"
+                    name="calc-side"
+                    [checked]="state.side() === s.value"
+                    [attr.aria-label]="s.aria"
+                    (change)="state.side.set(s.value)"
+                  />
+                  {{ s.label }}
+                </label>
+              }
+            </div>
+          </fieldset>
+
+          <div class="result" aria-hidden="true">
+            @if (state.limit(); as lim) {
+              <span class="result-caption">lim {{ approach() }} of f{{ lim.fnIndex + 1 }}(x)</span>
+              <span
+                class="result-value"
+                [class.muted]="lim.result.status === 'dne' || lim.result.status === 'unknown'"
+                >{{ lim.text }}</span
+              >
+              @if (lim.detail) {
+                <span class="result-detail">{{ lim.detail }}</span>
+              }
+            } @else {
+              <span class="result-caption">Enter the point x approaches.</span>
+            }
+          </div>
+        } @else if (state.mode() === 'newton') {
+          <div class="group">
+            <div class="fields">
+              <label class="field">
+                <span class="field-name">x₀ =</span>
+                <app-math-input
+                  kind="limit"
+                  class="field-math"
+                  inputId="calc-newton-x0"
+                  [value]="state.newtonX0Text()"
+                  label="Newton starting point x0"
+                  placeholder="1"
+                  [invalid]="state.newtonX0().invalid"
+                  [describedBy]="state.newtonX0().invalid ? 'calc-x0-error' : null"
+                  (valueChange)="state.newtonX0Text.set($event)"
+                />
+              </label>
+              <label class="field">
+                <span class="field-name">steps</span>
+                <input
+                  type="text"
+                  class="text-input"
+                  inputmode="numeric"
+                  placeholder="auto"
+                  [value]="state.stepsText()"
+                  [attr.aria-invalid]="state.steps().invalid || null"
+                  [attr.aria-describedby]="
+                    state.steps().invalid ? 'calc-steps-hint calc-steps-error' : 'calc-steps-hint'
+                  "
+                  (input)="state.stepsText.set($any($event.target).value)"
+                />
+              </label>
+            </div>
+            @if (state.newtonX0().invalid) {
+              <p id="calc-x0-error" class="hint error" role="alert">x₀ must be a finite number.</p>
+            }
+            <p id="calc-steps-hint" class="hint">Leave steps empty to run until it converges.</p>
+            @if (state.steps().invalid) {
+              <p id="calc-steps-error" class="hint error" role="alert">
+                Steps must be a whole number from 1 to {{ maxSteps }}.
+              </p>
+            }
+          </div>
+
+          <div class="result" aria-hidden="true">
+            @if (state.newtonBlocked(); as reason) {
+              <span class="result-detail">{{ reason }}</span>
+            } @else if (state.newton(); as run) {
+              @if (run.status === 'converged' || run.status === 'steps') {
+                <span class="result-caption"
+                  >{{ run.status === 'converged' ? 'root of' : 'iterate of' }} f{{
+                    run.fnIndex + 1
+                  }}</span
+                >
+                <span class="result-value">{{ format(run.value) }}</span>
+              }
+              <span
+                class="result-detail"
+                [class.warn]="!(run.status === 'converged' || run.status === 'steps')"
+                >{{ run.message }}</span
+              >
+            }
+          </div>
+
+          @if (!state.newtonBlocked() && state.newton(); as run) {
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Newton iterates">
+              <table class="iter-table">
+                <caption class="sr-only">
+                  Newton's method iterates for f{{
+                    run.fnIndex + 1
+                  }}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">n</th>
+                    <th scope="col">xₙ</th>
+                    <th scope="col">f(xₙ)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of run.rows; track r.n) {
+                    <tr>
+                      <td>{{ r.n }}</td>
+                      <td>{{ format(r.x) }}</td>
+                      <td>{{ format(r.fx) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        } @else {
+          <div class="group">
+            <div class="fields">
+              <label class="field">
+                <span class="field-name">a =</span>
+                <app-math-input
+                  kind="limit"
+                  class="field-math"
+                  inputId="calc-taylor-a"
+                  [value]="state.taylorCenterText()"
+                  label="Center a of the Taylor polynomial"
+                  placeholder="0"
+                  [invalid]="state.taylorCenter().invalid"
+                  [describedBy]="state.taylorCenter().invalid ? 'calc-taylor-a-error' : null"
+                  (valueChange)="state.taylorCenterText.set($event)"
+                />
+              </label>
+              <label class="field">
+                <span class="field-name">order</span>
+                <input
+                  type="text"
+                  class="text-input"
+                  inputmode="numeric"
+                  placeholder="3"
+                  [value]="state.taylorOrderText()"
+                  [attr.aria-invalid]="state.taylorOrder().invalid || null"
+                  [attr.aria-describedby]="
+                    state.taylorOrder().invalid ? 'calc-taylor-n-error' : null
+                  "
+                  (input)="state.taylorOrderText.set($any($event.target).value)"
+                />
+              </label>
+            </div>
+            @if (state.taylorCenter().invalid) {
+              <p id="calc-taylor-a-error" class="hint error">a must be a finite number.</p>
+            }
+            @if (state.taylorOrder().invalid) {
+              <p id="calc-taylor-n-error" class="hint error">
+                The order must be a whole number from 0 to {{ maxOrder }}.
+              </p>
+            }
+          </div>
+
+          <div class="result" aria-hidden="true">
+            @if (state.taylorBlocked(); as reason) {
+              <span class="result-detail">{{ reason }}</span>
+            } @else if (state.taylor(); as t) {
+              <span class="result-caption"
+                >P{{ sub(t.order) }}(x) of f{{ t.fnIndex + 1 }} about x =
+                {{ format(t.center) }}</span
+              >
+              @if (t.message) {
+                <span class="result-detail warn">{{ t.message }}</span>
+              } @else if (t.polynomial) {
+                <span class="poly"><app-math-renderer [ast]="t.polynomial" [fontSize]="15" /></span>
+              }
+            }
+          </div>
+
+          @if (!state.taylorBlocked() && state.taylor(); as t) {
+            @if (!t.message) {
+              <ul class="legend" aria-label="On the graph">
+                <li><span class="mark dash" [style.--c]="t.color"></span>P{{ sub(t.order) }}(x)</li>
+                <li><span class="mark ring" [style.--c]="t.color"></span>(a, f(a))</li>
+              </ul>
+            }
+          }
+        }
+      }
+    }
+  }
+
+  <p class="sr-only" role="status" aria-live="polite">{{ announced() }}</p>
+</div>

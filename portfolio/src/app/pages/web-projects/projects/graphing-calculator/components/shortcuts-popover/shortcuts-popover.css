@@ -70,3 +70,21 @@
     height: 44px;
   }
 }
+
+/* Phones: the bottom sheet covers the space below the control stack, so the card sits at the top. */
+@media (max-width: 768px) {
+  .shortcuts-card {
+    position: fixed;
+    top: 8px;
+    right: 64px;
+    max-height: calc(50dvh - 16px);
+    overflow-y: auto;
+  }
+}
+
+@media (min-width: 769px) {
+  .shortcuts-card {
+    max-height: calc(100dvh - 310px);
+    overflow-y: auto;
+  }
+}

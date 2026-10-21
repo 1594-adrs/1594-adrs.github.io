@@ -16,7 +16,18 @@ import {
 import type { MathfieldElement } from 'mathlive';
 import { latexToRaw, rawToLatex } from '../../engine/latex-bridge/latex-bridge';
 import { SAFE_INLINE_SHORTCUTS } from '../../keyboard/math-keyboard-layout';
-import { loadMathlive, setMathKeyboardKind } from './mathlive-loader';
+import { loadMathlive, setMathKeyboardKind, type MathFieldKind } from './mathlive-loader';
+
+/** Keys that end a typed exponent (`x^10+1`): with smartSuperscript off, MathLive keeps them inside. */
+const EXPONENT_TERMINATORS = new Set(['+', '-', '*', '/', '=', '<', '>', ',']);
+
+/** Caret sits directly in a non-empty superscript. Uses MathLive's model (no public API for it). */
+function inNonEmptySuperscript(mf: MathfieldElement): boolean {
+  const model = (mf as unknown as { _mathfield?: { model?: { at(i: number): unknown } } })
+    ._mathfield?.model;
+  const atom = model?.at(mf.position) as { parentBranch?: unknown; type?: string } | undefined;
+  return mf.selectionIsCollapsed && atom?.parentBranch === 'superscript' && atom.type !== 'first';
+}
 
 /** Placeholder is LaTeX in MathLive: wrap plain text safely. */
 function placeholderLatex(text: string): string {
@@ -32,7 +43,8 @@ function placeholderLatex(text: string): string {
 })
 export class MathInput {
   readonly value = input.required<string>();
-  readonly kind = input<'expression' | 'limit'>('expression');
+  /** Keyboard layout shown while focused; `sequence` swaps `y` for `n` (the text is not validated). */
+  readonly kind = input<MathFieldKind>('expression');
   readonly label = input.required<string>();
   readonly placeholder = input('');
   readonly invalid = input(false);
@@ -109,6 +121,7 @@ export class MathInput {
     this.configured = mf;
     mf.mathVirtualKeyboardPolicy = 'manual';
     mf.smartFence = true;
+    mf.smartSuperscript = false; // digits stay in the exponent (`x^10`); operators leave it (onKey)
     mf.removeExtraneousParentheses = true;
     mf.menuItems = [];
     mf.inlineShortcuts = SAFE_INLINE_SHORTCUTS;
@@ -128,16 +141,35 @@ export class MathInput {
     };
     const onBlur = () => this.blurred.emit();
     const onKey = (e: Event) => this.keyDown.emit(e as KeyboardEvent);
+    const onExponentKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || !EXPONENT_TERMINATORS.has(e.key)) return;
+      if (inNonEmptySuperscript(mf)) mf.executeCommand('moveAfterParent');
+    };
+    // Plain-text math (`sin(x)+cos(x)`, `x^(1/3)`) is not LaTeX: convert it with the raw bridge.
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text/plain') ?? '';
+      if (!text || text.includes('\\')) return;
+      const latex = rawToLatex(text);
+      if (!latex || latex.includes('\\mathrm{')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      mf.insert(latex, { format: 'latex' });
+      onInput();
+    };
 
     mf.addEventListener('input', onInput);
     mf.addEventListener('focusin', onFocus);
     mf.addEventListener('focusout', onBlur);
     mf.addEventListener('keydown', onKey);
+    mf.addEventListener('keydown', onExponentKey, true);
+    mf.addEventListener('paste', onPaste, true);
     this.teardown = () => {
       mf.removeEventListener('input', onInput);
       mf.removeEventListener('focusin', onFocus);
       mf.removeEventListener('focusout', onBlur);
       mf.removeEventListener('keydown', onKey);
+      mf.removeEventListener('keydown', onExponentKey, true);
+      mf.removeEventListener('paste', onPaste, true);
     };
 
     if (this.pendingFocus) {

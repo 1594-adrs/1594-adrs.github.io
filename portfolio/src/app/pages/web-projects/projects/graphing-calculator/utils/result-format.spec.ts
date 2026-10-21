@@ -50,6 +50,13 @@ describe('describeIntegral', () => {
     expect(div[0].value).toBe('divergent');
     expect(div.length).toBe(1);
   });
+  it('says where the tail diverges when badPoint is infinite', () => {
+    const r = { value: Infinity, error: 0, status: 'divergent' as const, badPoint: Infinity };
+    expect(describeIntegral('1/x', 1, Infinity, r)[0].notes?.[0]).toContain('diverges at ∞');
+    expect(
+      describeIntegral('1/x', -Infinity, 1, { ...r, badPoint: -Infinity })[0].notes?.[0],
+    ).toContain('-∞');
+  });
   it('adds a total-area row when given', () => {
     expect(describeIntegral('x', 0, 1, ok, 4).map((r) => r.value)).toEqual(['2', '4']);
   });

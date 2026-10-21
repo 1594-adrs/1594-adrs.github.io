@@ -48,6 +48,18 @@ describe('share-state', () => {
     expect(parseShareState(encoded)?.functions[0].raw).toBe('r=cos(3*θ)');
   });
 
+  it('round-trips 10 curves + 2 sliders and loads an old 5-row link', () => {
+    const rows = (n: number, raw: (i: number) => string) =>
+      Array.from({ length: n }, (_, i) => ({ raw: raw(i), color: '#00ff88', visible: true }));
+    const big = makeState();
+    big.functions = [...rows(10, (i) => `x+${i}`), ...rows(2, (i) => `${'ab'[i]} = 1`)];
+    big.tool = { active: 'integral', integral: { fnIndex: 9, a: 0, b: 1 } };
+    expect(parseShareState(serializeShareState(big))).toEqual(big);
+    const old = makeState();
+    old.functions = rows(5, (i) => `x+${i}`);
+    expect(parseShareState(serializeShareState(old))).toEqual(old);
+  });
+
   it('rejects invalid base64', () => {
     expect(parseShareState('not-valid-base64!!!')).toBeNull();
   });
@@ -79,6 +91,55 @@ describe('share-state', () => {
     expect(parseShareState(encoded)).toBeNull();
   });
 
+  it('reads a v1 link (no derivative/tangent fields) and upgrades it to v2', () => {
+    const v1 = { ...makeState(), v: 1 };
+    const parsed = parseShareState(serializeShareState(v1));
+    expect(parsed).toEqual({ ...makeState(), v: SHARE_STATE_VERSION });
+    expect(SHARE_STATE_VERSION).toBe(2);
+    expect(parsed?.tangent).toBeUndefined();
+    expect(parsed?.functions[0].derivative).toBeUndefined();
+  });
+
+  it('round-trips slider bounds and drops invalid ones, keeping the link', () => {
+    const state = makeState();
+    state.functions.push({
+      raw: 'a = 2',
+      color: '#00ccff',
+      visible: true,
+      slider: { min: -5, max: 20, step: 0.5 },
+    });
+    expect(parseShareState(serializeShareState(state))).toEqual(state);
+    for (const slider of [
+      { min: 3, max: 1, step: 0.1 },
+      { min: 0, max: 1, step: 0 },
+      { min: 0, max: 1e9, step: 1 },
+      { min: 0, max: 1, step: 2 },
+      'x',
+    ]) {
+      const junk = {
+        ...makeState(),
+        functions: [{ raw: 'a = 1', color: '#00ff88', visible: true, slider }],
+      };
+      const parsed = parseShareState(serializeShareState(junk as unknown as ShareState));
+      expect(parsed?.functions[0]).toEqual({ raw: 'a = 1', color: '#00ff88', visible: true });
+    }
+  });
+
+  it('round-trips the v2 f′ and tangent toggles, dropping non-true values', () => {
+    const state = makeState();
+    state.functions[0].derivative = true;
+    state.tangent = true;
+    expect(parseShareState(serializeShareState(state))).toEqual(state);
+    const junk = {
+      ...makeState(),
+      tangent: 'yes',
+      functions: [{ raw: 'x', color: '#00ff88', visible: true, derivative: 1 }],
+    };
+    const parsed = parseShareState(serializeShareState(junk as unknown as ShareState));
+    expect(parsed?.tangent).toBeUndefined();
+    expect(parsed?.functions[0]).toEqual({ raw: 'x', color: '#00ff88', visible: true });
+  });
+
   it('extracts nothing when there is no #s= fragment', () => {
     expect(extractShareFragment('#foo=bar')).toBeNull();
   });
@@ -99,9 +160,12 @@ describe('share-state', () => {
       }
     });
 
-    it('rejects more than 5 functions and over-long raw (2MB style)', () => {
+    it('rejects more than 10 curves, more than 10 sliders and over-long raw (2MB style)', () => {
       const f = { raw: 'x', color: '#00ff88', visible: true };
-      expect(parseShareState(enc({ ...base(), functions: Array(6).fill(f) }))).toBeNull();
+      const sl = { raw: 'a = 1', color: '#00ff88', visible: true };
+      expect(parseShareState(enc({ ...base(), functions: Array(11).fill(f) }))).toBeNull();
+      expect(parseShareState(enc({ ...base(), functions: Array(11).fill(sl) }))).toBeNull();
+      expect(parseShareState(enc({ ...base(), functions: Array(10).fill(f) }))).not.toBeNull();
       const huge = { ...f, raw: 'x'.repeat(2_000_000) };
       expect(parseShareState(enc({ ...base(), functions: [huge] }))).toBeNull();
     });
@@ -137,7 +201,7 @@ describe('share-state', () => {
       expect(
         parseShareState(enc({ ...base(), tool: { active: 'area', area } }))?.tool.active,
       ).toBeNull();
-      const area2 = { functionIndices: [0, 7], a: 0, b: 1, overlapMode: 'all' };
+      const area2 = { functionIndices: [0, 25], a: 0, b: 1, overlapMode: 'all' };
       expect(
         parseShareState(enc({ ...base(), tool: { active: 'area', area: area2 } }))?.tool.active,
       ).toBeNull();
@@ -160,5 +224,20 @@ describe('share-state', () => {
       const parsed = parseShareState(enc({ ...base(), tool: { active: 'solid', solid } }));
       expect(parsed?.tool.solid).toEqual(solid);
     });
+  });
+
+  describe('infinite integral bounds', () => {
+    for (const [a, b] of [
+      [0, Infinity],
+      [-Infinity, 1],
+    ]) {
+      it(`round-trips a=${a}, b=${b}`, () => {
+        const state = makeState();
+        state.tool.integral = { fnIndex: 0, a, b };
+        const parsed = parseShareState(serializeShareState(state));
+        expect(parsed?.tool.active).toBe('integral');
+        expect(parsed?.tool.integral).toEqual({ fnIndex: 0, a, b });
+      });
+    }
   });
 });

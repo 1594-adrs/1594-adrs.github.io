@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { GraphingCalculatorComponent } from './graphing-calculator.component';
-import { buildShareHash } from './state/share-state';
+import { evalExpression } from './engine/evaluator';
+import { buildShareHash, extractShareFragment, parseShareState } from './state/share-state';
+import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from './models/calculator.models';
+import { FUNCTION_COLORS } from './utils/color';
 
 describe('GraphingCalculatorComponent', () => {
   beforeEach(async () => {
@@ -108,13 +111,31 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.functions().length).toBe(2);
   });
 
-  it('should not exceed 5 functions', () => {
+  it('caps curve rows at 10; slider rows do not count and have their own cap of 10', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     const comp = fixture.componentInstance;
-    for (let i = 0; i < 5; i++) comp.addFunction();
-    expect(comp.functions().length).toBe(5);
+    for (let i = 0; i < 12; i++) comp.addFunction();
+    expect(comp.functions().length).toBe(MAX_CURVE_ROWS);
+    // Turning a row into a slider frees a curve slot.
+    comp.updateExpression(1, 'a = 1');
+    expect(comp.functions()[1].mode).toBe('slider');
     comp.addFunction();
-    expect(comp.functions().length).toBe(5);
+    expect(comp.functions().length).toBe(MAX_CURVE_ROWS + 1);
+    comp.addFunction();
+    expect(comp.functions().length).toBe(MAX_CURVE_ROWS + 1);
+    // Slider chips ignore the curve cap and stop at the slider cap.
+    const names = 'bcdefghijk';
+    for (const n of names) comp.paramSliders.addSlider(n);
+    const sliders = comp.functions().filter((f) => f.mode === 'slider').length;
+    expect(sliders).toBe(MAX_SLIDER_ROWS);
+    expect(comp.paramSliders.addSlider('z')).toBe(false);
+  });
+
+  it('assigns palette colours 6-10 to new rows', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    for (let i = 0; i < 9; i++) comp.addFunction();
+    expect(comp.functions().map((f) => f.color)).toEqual(FUNCTION_COLORS);
+    expect(new Set(FUNCTION_COLORS).size).toBe(10);
   });
 
   it('should remove a function', () => {
@@ -502,6 +523,9 @@ describe('GraphingCalculatorComponent', () => {
   });
 
   describe('reactive canvas redraw', () => {
+    /** Outlasts POI_RECOMPUTE_DELAY_MS (150 ms), the points-of-interest debounce. */
+    const settlePoi = () => new Promise((resolve) => setTimeout(resolve, 200));
+
     it('schedules a render when the solid tool state changes (e.g. axis value)', async () => {
       const fixture = TestBed.createComponent(GraphingCalculatorComponent);
       const comp = fixture.componentInstance;
@@ -538,8 +562,30 @@ describe('GraphingCalculatorComponent', () => {
       comp.updateExpression(0, 'x^2-1');
       fixture.detectChanges();
       await fixture.whenStable();
+      await settlePoi();
 
       expect(spy).toHaveBeenCalled();
+    });
+
+    it('a slider drag recomputes points of interest on its first tick and once it settles', async () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      const comp = fixture.componentInstance;
+      fixture.detectChanges();
+      comp.updateExpression(0, 'y = a*sin(x)');
+      comp.addFunction();
+      comp.updateExpression(1, 'a = 1');
+      fixture.detectChanges();
+      await settlePoi();
+
+      const spy = vi.spyOn(comp.interactionState, 'setPoints');
+      for (let i = 1; i <= 10; i++) {
+        comp.paramSliders.setSliderValue(1, 1 + i / 10);
+        comp.paramSliders.flush();
+        fixture.detectChanges();
+      }
+      expect(spy).toHaveBeenCalledTimes(1);
+      await settlePoi();
+      expect(spy).toHaveBeenCalledTimes(2);
     });
 
     it('clears stale points of interest after replacing the function that produced them', async () => {
@@ -551,12 +597,14 @@ describe('GraphingCalculatorComponent', () => {
       comp.updateExpression(0, 'sin(x)');
       fixture.detectChanges();
       await fixture.whenStable();
+      await settlePoi();
       const withSin = comp.interactionState.pointsOfInterest();
       expect(withSin.length).toBeGreaterThan(0);
 
       comp.updateExpression(0, 'sqrt(1-x^2)');
       fixture.detectChanges();
       await fixture.whenStable();
+      await settlePoi();
 
       const afterReplace = comp.interactionState.pointsOfInterest();
       // sin(x) has a root near x = pi (~3.14) within the default viewport; that
@@ -564,6 +612,120 @@ describe('GraphingCalculatorComponent', () => {
       // domain (and every one of its critical points) is confined to [-1, 1].
       expect(afterReplace.some((p) => Math.abs(p.x - Math.PI) < 0.1)).toBe(false);
       expect(afterReplace.every((p) => Math.abs(p.x) < 1.01)).toBe(true);
+    });
+  });
+
+  describe('piecewise rows (if) keep their top-level split points', () => {
+    it.each<[string, string, string | undefined]>([
+      ['y = if(x<0, -x, x)', 'explicit', undefined],
+      ['if(x != 2, 3/(x-2), 4)', 'explicit', undefined],
+      ['y < if(x<0, 1, 2)', 'implicit', '<'],
+      ['(if(t<0, t, 0), t)', 'parametric', undefined],
+      ['r = if(t<pi, 1, 2)', 'polar', undefined],
+      ['1 < x^2+y^2 < 4', 'implicit', '>'],
+    ])('%s', (raw, mode, op) => {
+      const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+      comp.updateExpression(0, raw);
+      const fn = comp.functions()[0];
+      expect(fn.error).toBeNull();
+      expect(fn.mode).toBe(mode);
+      expect(fn.inequalityOp).toBe(op);
+      expect(mode === 'parametric' ? fn.paramX && fn.paramY : fn.ast).toBeTruthy();
+    });
+  });
+  describe('free parameters (sliders)', () => {
+    function setup(...rows: string[]) {
+      const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+      rows.forEach((raw, i) => {
+        if (i > 0) comp.addFunction();
+        comp.updateExpression(i, raw);
+      });
+      return comp;
+    }
+
+    it('y = a*x^2 with a = 2 evaluates to 2x², and moving a updates it', () => {
+      const comp = setup('y = a*x^2', 'a = 2');
+      const fn = () => comp.functions()[0];
+      expect(fn().error).toBeNull();
+      expect(evalExpression(fn().ast!, 3)).toBe(18);
+      comp.paramSliders.setSliderValue(1, -0.5);
+      comp.paramSliders.flush();
+      expect(comp.functions()[1].raw).toBe('a = -0.5');
+      expect(evalExpression(fn().ast!, 2)).toBe(-2);
+      expect(comp.paramSliders.sliders()[1]).toEqual({
+        name: 'a',
+        value: -0.5,
+        min: -10,
+        max: 10,
+        step: 0.1,
+      });
+    });
+
+    it('a row without its slider gets missingParams and an add-slider error', () => {
+      const comp = setup('y = a*x + b');
+      expect(comp.functions()[0].missingParams).toEqual(['a', 'b']);
+      expect(comp.functions()[0].error).toBe('Add sliders for a, b');
+      expect(comp.functions()[0].ast).toBeNull();
+      expect(comp.paramSliders.addSlider('a')).toBe(true);
+      expect(comp.functions()[1].raw).toBe('a = 1');
+      expect(comp.paramSliders.missing()[0]).toEqual(['b']);
+      expect(comp.paramSliders.addSlider('a')).toBe(false);
+    });
+
+    it('a slider row is never drawn nor offered by the tools', () => {
+      const comp = setup('a = 1', 'y = a*x');
+      const slider = comp.functions()[0];
+      expect(slider.mode).toBe('slider');
+      expect(slider.ast).toBeNull();
+      expect(comp.canUseWithTools(slider)).toBe(false);
+      expect(comp.derivatives()[0].applicable).toBe(false);
+      expect(comp.solidToolState.curveOptions().map((o) => o.index)).toEqual([1]);
+      expect(comp.canvasDescription()).not.toContain('a = 1');
+      comp.activateIntegral();
+      expect(comp.activeIntegral()?.fnIndex).toBe(1);
+      comp.activateIntegral();
+      comp.activateMultiArea();
+      expect(comp.activeMultiArea()?.functionIndices).toEqual([1]);
+      comp.toggleMultiAreaFunction(0);
+      expect(comp.activeMultiArea()?.functionIndices).toEqual([1]);
+    });
+
+    it('a second definition is an error and the first one wins', () => {
+      const comp = setup('a = 2', 'a = 3', 'y = a');
+      expect(comp.functions()[1].error).toBe('a is already defined');
+      expect(evalExpression(comp.functions()[2].ast!, 0)).toBe(2);
+      comp.removeFunction(0);
+      expect(comp.functions()[0].error).toBeNull();
+      expect(evalExpression(comp.functions()[1].ast!, 0)).toBe(3);
+    });
+
+    it('a typed value outside the range widens it; bounds edits clamp the value', () => {
+      const comp = setup('k = 25');
+      expect(comp.functions()[0].slider).toEqual({ min: -10, max: 25, step: 0.1 });
+      expect(comp.paramSliders.setSliderBounds(0, { min: 5, max: 3 })).toBe(false);
+      expect(comp.paramSliders.setSliderBounds(0, { max: 20, step: 0.5 })).toBe(true);
+      expect(comp.functions()[0].raw).toBe('k = 20');
+    });
+
+    it('slider bounds round-trip through a share link', () => {
+      window.location.hash = buildShareHash({
+        v: 2,
+        functions: [
+          { raw: 'y = a*x', color: '#00ff88', visible: true },
+          { raw: 'a = 3', color: '#ff6b35', visible: true, slider: { min: 0, max: 5, step: 0.5 } },
+        ],
+        viewport: { xMin: -5, xMax: 5, yMin: -5, yMax: 5 },
+        tool: { active: null },
+      });
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      fixture.detectChanges();
+      const comp = fixture.componentInstance;
+      expect(evalExpression(comp.functions()[0].ast!, 2)).toBe(6);
+      expect(comp.functions()[1].slider).toEqual({ min: 0, max: 5, step: 0.5 });
+      const shared = (comp as unknown as { buildShareState(): unknown }).buildShareState();
+      const parsed = parseShareState(extractShareFragment(buildShareHash(shared as never))!);
+      expect(parsed?.functions[1].slider).toEqual({ min: 0, max: 5, step: 0.5 });
+      expect(parsed?.functions[0].slider).toBeUndefined();
     });
   });
 });

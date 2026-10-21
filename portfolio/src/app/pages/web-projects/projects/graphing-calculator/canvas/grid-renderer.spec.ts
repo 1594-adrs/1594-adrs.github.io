@@ -62,6 +62,7 @@ function createMockContext(): CanvasRenderingContext2D & MockContext {
     fillText: function (text: string, x: number, y: number) {
       calls.push({ method: 'fillText', args: [text, x, y] });
     },
+    measureText: (text: string) => ({ width: text.length * 7 }),
   } as unknown as CanvasRenderingContext2D & MockContext;
 }
 

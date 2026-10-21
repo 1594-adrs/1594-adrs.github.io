@@ -173,7 +173,8 @@ export function drawImplicitCurve(
   const stepsX = Math.max(MIN_STEPS, Math.min(MAX_STEPS, Math.round(width / cellPx)));
   const stepsY = Math.max(MIN_STEPS, Math.min(MAX_STEPS, Math.round(height / cellPx)));
 
-  const key = `${viewport.xMin.toFixed(6)}:${viewport.xMax.toFixed(6)}:${viewport.yMin.toFixed(6)}:${viewport.yMax.toFixed(6)}:${width}:${height}:${stepsX}:${stepsY}`;
+  // Exact bounds: a rounded key would reuse stale segments after a sub-rounding pan at deep zoom.
+  const key = `${viewport.xMin}:${viewport.xMax}:${viewport.yMin}:${viewport.yMax}:${width}:${height}:${stepsX}:${stepsY}`;
 
   let entry = contourCache.get(fn);
   if (!entry || entry.key !== key) {

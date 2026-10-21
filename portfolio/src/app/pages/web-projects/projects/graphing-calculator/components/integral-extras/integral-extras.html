@@ -1,0 +1,83 @@
+<div class="extras">
+  <fieldset class="group">
+    <legend class="label">Riemann sum</legend>
+    <div class="seg">
+      @for (r of rules; track r.label) {
+        <button
+          type="button"
+          class="seg-btn"
+          [class.active]="state.riemannRule() === r.value"
+          [attr.aria-pressed]="state.riemannRule() === r.value"
+          [attr.aria-label]="r.aria"
+          [attr.title]="r.aria"
+          (click)="state.riemannRule.set(r.value)"
+        >
+          {{ r.label }}
+        </button>
+      }
+    </div>
+  </fieldset>
+
+  @if (state.riemannRule()) {
+    @let v = state.riemann();
+    <div>
+      <div class="fields">
+        <label class="field">
+          <span class="field-name">n =</span>
+          <input
+            type="text"
+            class="text-input"
+            inputmode="numeric"
+            autocomplete="off"
+            aria-label="Number of subintervals n"
+            [value]="state.riemannNText()"
+            [attr.aria-invalid]="v?.invalidN ? true : null"
+            [attr.aria-describedby]="v?.message ? 'riemann-msg' : null"
+            (input)="onN($event)"
+          />
+        </label>
+        @if (v && !v.invalidN) {
+          <span class="dx">Δx = {{ fmt(v.dx) }}</span>
+        }
+      </div>
+      <!-- Always mounted so a new message is announced (a freshly inserted alert can be missed). -->
+      <p id="riemann-msg" class="hint error" role="alert">{{ v?.message }}</p>
+    </div>
+    @if (v && !v.message) {
+      <dl class="result">
+        <div>
+          <dt>Sum</dt>
+          <dd class="sum">{{ fmt(v.value) }}</dd>
+        </div>
+        <div>
+          <dt>Exact</dt>
+          <dd>{{ v.exactText }}</dd>
+        </div>
+        @if (v.error !== null) {
+          <div>
+            <dt>Error</dt>
+            <dd>
+              {{ fmt(v.error) }}
+              @if (v.relError !== null) {
+                <span class="rel">({{ percent(v.relError) }})</span>
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+      @if (v.note) {
+        <p class="hint">{{ v.note }}</p>
+      }
+    }
+  }
+
+  @if (state.arcLength(); as arc) {
+    @if (arc.standalone) {
+      <p class="note">{{ arc.text }}</p>
+    } @else {
+      <p class="note">
+        Arc length on [a, b] = <strong>{{ arc.text }}</strong>
+      </p>
+    }
+  }
+</div>

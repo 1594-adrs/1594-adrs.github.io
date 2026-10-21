@@ -36,6 +36,9 @@ const PAD_MULTIPLIER = 1 + 2 * PAD_FACTOR;
 const MIN_REUSE_RANGE_RATIO = 1 / 3;
 /** Vertical detection's sample count at the (unpadded) baseline range. */
 const BASE_VERTICAL_STEPS = 2000;
+/** Bisection stops at adjacent doubles; log2(MAX_VALUE / MIN_VALUE) ~ 2098 halvings reach them
+ *  anywhere, subnormals included, so a pole at 0 converges to ~0 and is labelled x = 0. */
+const MAX_BISECT = 2100;
 
 function filterToRange(all: Asymptote[], xMin: number, xMax: number): Asymptote[] {
   const filtered = all.filter((a) => a.type !== 'vertical' || (a.value > xMin && a.value < xMax));
@@ -133,6 +136,12 @@ function categorizeFunction(ast?: ExpressionNode): FunctionCategory {
     'sinh',
     'cosh',
     'tanh',
+    'asinh',
+    'acosh',
+    'atanh',
+    'sech',
+    'csch',
+    'coth',
   ]);
 
   const logExpFunctions = new Set(['log', 'ln', 'exp', 'logb']);
@@ -172,6 +181,12 @@ function categorizeFunction(ast?: ExpressionNode): FunctionCategory {
       'sinh',
       'cosh',
       'tanh',
+      'asinh',
+      'acosh',
+      'atanh',
+      'sech',
+      'csch',
+      'coth',
     ];
     const logExpNames = ['log', 'ln', 'exp', 'logb'];
     const names = collectFunctionNames(ast);
@@ -273,30 +288,24 @@ function detectVertical(
     const x = xMin + i * dx;
     const y = safeEval(fn, x);
 
-    if ((prevY === null) !== (y === null)) {
-      const left = prevY === null ? x : x - dx;
-      const right = y === null ? x : x;
-      const vx = binarySearchAsymptote(fn, left, right);
-      if (vx !== null && vx > xMin && vx < xMax) {
-        const eq = `x = ${fmtVal(vx)}`;
-        if (!result.some((a) => Math.abs(a.value - vx) < 1e-6)) {
-          result.push({ type: 'vertical', equation: eq, value: vx });
-        }
-      }
-    } else if (
-      prevY !== null &&
-      y !== null &&
-      Math.sign(prevY) !== Math.sign(y) &&
-      Math.sign(prevY) !== 0 &&
-      Math.sign(y) !== 0 &&
-      (Math.abs(prevY) > 100 || Math.abs(y) > 100)
-    ) {
-      const vx = binarySearchAsymptote(fn, x - dx, x);
-      if (vx !== null && vx > xMin && vx < xMax) {
-        const eq = `x = ${fmtVal(vx)}`;
-        if (!result.some((a) => Math.abs(a.value - vx) < 1e-6)) {
-          result.push({ type: 'vertical', equation: eq, value: vx });
-        }
+    const crosses =
+      (prevY === null) !== (y === null) ||
+      (prevY !== null &&
+        y !== null &&
+        Math.sign(prevY) !== Math.sign(y) &&
+        Math.sign(prevY) !== 0 &&
+        Math.sign(y) !== 0 &&
+        (Math.abs(prevY) > 100 || Math.abs(y) > 100));
+    if (crosses) {
+      const vx = binarySearchAsymptote(fn, x - dx, x, dx);
+      // One sample step is the resolution: a pole found again from its other side is the same pole.
+      if (
+        vx !== null &&
+        vx > xMin &&
+        vx < xMax &&
+        !result.some((a) => Math.abs(a.value - vx) < dx)
+      ) {
+        result.push({ type: 'vertical', equation: `x = ${fmtVal(vx)}`, value: vx });
       }
     }
 
@@ -304,27 +313,34 @@ function detectVertical(
   }
 }
 
+/**
+ * Bisects [left, right] down to adjacent doubles: onto the edge of the domain when exactly one
+ * end is undefined (either end), otherwise onto the sign change.
+ */
 function binarySearchAsymptote(
   fn: (x: number) => number,
   left: number,
   right: number,
+  dx: number,
 ): number | null {
-  for (let i = 0; i < 50; i++) {
+  const yLeft = safeEval(fn, left);
+  const edge = (yLeft === null) !== (safeEval(fn, right) === null);
+  for (let i = 0; i < MAX_BISECT; i++) {
     const mid = (left + right) / 2;
+    if (mid === left || mid === right) break;
     const yMid = safeEval(fn, mid);
-    if (yMid === null || !isFinite(yMid)) {
-      right = mid;
-      continue;
+    if (!edge && yMid === null) {
+      left = right = mid; // landed on the pole itself
+      break;
     }
-    const yLeft = safeEval(fn, left);
-    if (yLeft !== null && Math.abs(yLeft) > Math.abs(yMid)) {
-      right = mid;
-    } else {
-      left = mid;
-    }
+    const likeLeft = edge
+      ? (yMid === null) === (yLeft === null)
+      : Math.sign(yMid as number) === Math.sign(yLeft as number);
+    if (likeLeft) left = mid;
+    else right = mid;
   }
   const vx = (left + right) / 2;
-  return isGenuineVerticalAsymptote(fn, vx) ? vx : null;
+  return isGenuineVerticalAsymptote(fn, vx, dx) ? vx : null;
 }
 
 /**
@@ -334,9 +350,11 @@ function binarySearchAsymptote(
  * mistaken for divergence). Samples both sides at several shrinking scales
  * and requires |f| to actually grow — not just be undefined or noisy at the
  * exact candidate point — as x approaches it.
+ * The scales start at the sample step `dx` (no other pole is that close, e.g. tan at x = 1e9)
+ * and the smallest stays ~100 ULPs away from vx, so x + offset never rounds back to vx.
  */
-function isGenuineVerticalAsymptote(fn: (x: number) => number, vx: number): boolean {
-  const base = Math.max(1e-3, Math.abs(vx) * 1e-3);
+function isGenuineVerticalAsymptote(fn: (x: number) => number, vx: number, dx: number): boolean {
+  const base = Math.max(dx, Math.abs(vx) * Number.EPSILON * 1e5);
   const offsets = [base, base / 10, base / 100, base / 1000];
 
   for (const dir of [-1, 1] as const) {
@@ -450,7 +468,15 @@ function analyzeHorizontalTail(
     drift < tolBase * 0.02 &&
     (totalDrift < 1e-9 || drift <= totalDrift);
 
-  return converges ? limit : null;
+  if (!converges) return null;
+  // The limit is only known to ~2x the last drift: report the shortest decimal within that error,
+  // so the two tails of 1/x give y = 0 instead of y = 0.0002 and y = -0.0002.
+  const err = 2 * drift;
+  for (let q = 1; err > 0 && q >= err; q /= 10) {
+    const snapped = Math.round(limit / q) * q;
+    if (Math.abs(snapped - limit) <= err) return snapped;
+  }
+  return limit;
 }
 
 function detectHorizontal(

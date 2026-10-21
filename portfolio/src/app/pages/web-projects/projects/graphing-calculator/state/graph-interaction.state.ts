@@ -18,12 +18,27 @@ export class GraphInteractionState {
   pointsOfInterest = signal<PointOfInterest[]>([]);
   pinnedPoints = signal<PinnedPoint[]>([]);
   activeIndex = signal<number | null>(null);
+  /** Tangent line (and optional normal) at the traced curve point. */
+  showTangent = signal(false);
+  showNormal = signal(false);
 
   toggle(): void {
     this.showPointsOfInterest.update((v) => !v);
     if (!this.showPointsOfInterest()) {
       this.activeIndex.set(null);
     }
+  }
+
+  toggleTangent(): void {
+    this.showTangent.update((v) => !v);
+    if (!this.showTangent()) this.showNormal.set(false);
+  }
+
+  /** The normal is drawn with the tangent, so turning it on also turns the tangent on. */
+  toggleNormal(): void {
+    const next = !this.showNormal();
+    this.showNormal.set(next);
+    if (next) this.showTangent.set(true);
   }
 
   setPoints(points: PointOfInterest[]): void {

@@ -20,6 +20,45 @@ export interface AreaRegion {
 
 const EPS = 1e-12;
 
+function valuesAt(functions: Array<(x: number) => number>, x: number): number[] | null {
+  const out: number[] = [];
+  for (const f of functions) {
+    let v: number;
+    try {
+      v = f(x);
+    } catch {
+      return null;
+    }
+    if (!isFinite(v)) return null;
+    out.push(v);
+  }
+  return out;
+}
+
+/**
+ * With 3+ curves, the region "bounded by" all of them (e, e^x, e^-x on [-1, 1]) is the band
+ * between the k-th and (k+1)-th curve by height that closes at both a and b, not the envelope
+ * between the highest and the lowest. Returns that k, or null (no unique closing band) to keep
+ * the envelope.
+ */
+function closedBand(functions: Array<(x: number) => number>, a: number, b: number): number | null {
+  if (functions.length < 3) return null;
+  const at = [valuesAt(functions, a), valuesAt(functions, b)];
+  let band: number | null = null;
+  for (const vals of at) if (!vals) return null;
+  for (let k = 0; k < functions.length - 1; k++) {
+    const closes = at.every((vals) => {
+      const s = [...vals!].sort((p, q) => p - q);
+      const scale = Math.max(1, Math.abs(s[k]), Math.abs(s[k + 1]));
+      return s[k + 1] - s[k] <= 1e-6 * scale;
+    });
+    if (!closes) continue;
+    if (band !== null) return null;
+    band = k;
+  }
+  return band;
+}
+
 /**
  * Splits [a, b] at the given intersections and integrates |top - bottom| over each region with
  * the adaptive Gauss-Kronrod quadrature (the single integration path of the app). Intersections
@@ -48,6 +87,7 @@ export function computeAreaRegions(
   boundaries.push(hi);
 
   const regions: AreaRegion[] = [];
+  const band = closedBand(functions, lo, hi);
 
   for (let i = 0; i < boundaries.length - 1; i++) {
     const ra = boundaries[i];
@@ -79,6 +119,12 @@ export function computeAreaRegions(
     }
 
     if (topVal === -Infinity || bottomVal === Infinity) continue;
+    const midVals = band === null ? null : valuesAt(functions, mid);
+    if (band !== null && midVals) {
+      const order = midVals.map((_, i) => i).sort((p, q) => midVals[p] - midVals[q]);
+      bottomIdx = order[band];
+      topIdx = order[band + 1];
+    }
 
     const top = functions[topIdx];
     const bottom = functions[bottomIdx];

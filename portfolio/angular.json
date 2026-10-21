@@ -24,11 +24,6 @@
               {
                 "glob": "**/*",
                 "input": "public"
-              },
-              {
-                "glob": "*.woff2",
-                "input": "node_modules/mathlive/fonts",
-                "output": "assets/mathlive/fonts"
               }
             ],
             "styles": [
