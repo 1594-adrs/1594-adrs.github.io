@@ -13,7 +13,7 @@ npx ng test --include='src/path/x.spec.ts'  # single spec
 npm run format                              # Prettier: single quotes, 100 cols, angular parser for HTML
 ```
 
-No lint script. Before finishing any code change run `typecheck` + tests. CI (`.github/workflows/deploy.yml`, push to `main`) runs typecheck → test → build → Pages deploy. Budgets: initial bundle 500 kB warn / 1 MB error; component CSS 8 kB warn / 10 kB error (per stylesheet, minified).
+No lint script. Before finishing any code change run `typecheck` + tests. CI (`.github/workflows/deploy.yml`) runs typecheck → test → build on PRs and pushes to `main`; only `main` deploys to Pages. Generated SEO files (`public/{robots.txt,sitemap.xml,llms*.txt}`) are gitignored and rebuilt by `prebuild`; never commit them. Budgets: initial bundle 500 kB warn / 1 MB error; component CSS 8 kB warn / 10 kB error (per stylesheet, minified).
 
 ## Git
 
@@ -21,7 +21,7 @@ Work on `develop`; `main` receives PRs from `develop` and deploys. Conventional 
 
 ## Architecture
 
-- **Routes** (`src/app/app.routes.ts`): portfolio at `''` loaded eagerly (not a redirect — GitHub Pages); `web-projects`, `web-projects/calculator`, `**` (404) lazy. All prerendered (`app.routes.server.ts`). Section nav uses `scrollIntoView` + `href="#section"`, not router fragments.
+- **Routes** (`src/app/app.routes.ts`): every route is `loadComponent` lazy; portfolio lives at `''` (not a redirect — GitHub Pages). All prerendered (`app.routes.server.ts`). Section nav uses `scrollIntoView` + `href="#section"`, not router fragments.
 - **Content is data-driven**: all portfolio text/data in `src/app/shared/data/portfolio.data.ts`, types in `shared/models/portfolio.models.ts`. Edit data there, not in templates.
 - **Shared UI**: `<app-icon name="...">` renders inline SVGs from `shared/icons/icon-data.ts` (no icon library). Global styles: `src/styles.css` imports `shared/styles/*.css` (CSS variables, `cards.css`). All `@keyframes` + the `prefers-reduced-motion` rule live in `shared/animations/animations.css`. `reveal-on-scroll` directive wraps IntersectionObserver.
 
@@ -43,5 +43,7 @@ Keep the layers separate:
 - `engine/solids/` also computes the total surface (`solid-surface.ts`, derivative-free frustum sum) and supports 1–5 curves (region = envelope between the highest and lowest curve).
 - Graph interaction: `engine/critical-points.ts` + `canvas/curve-locator.ts` + `canvas/trace-renderer.ts`, state in `state/graph-interaction.state.ts` (trace, points of interest, `P` cycles them). Share links: `state/share-state.ts` (`#s=` base64url JSON, versioned, captured before routing). Canvas redraws are triggered by effects on state signals — new state that affects drawing must be read inside one of those effects.
 - `components/` — `solid-panel`, `integral-formula`, `math-renderer`, `conic-assistant`, `value-table`, `color-picker`. Calculator CSS is split across `graphing-calculator.component.css`, `function-list.css`, `canvas.css`, `results.css` to stay under the per-stylesheet budget. `graphing-calculator.component.ts` is large — put new logic in `engine/`/`state/`/`canvas/`, not in the component.
+- Row indices (integral, multi-area, value table, solid curves) are remapped on remove/reorder through `engine/row-index.ts` `remapIndex` — use it for any new state that stores a row index.
+- `poiComputeKey` (points of interest) includes the angle unit; any new input that changes what `critical-points` sees must go in that key. Asymptote cache is keyed by AST + angle unit.
 - UI text is English.
 - Keyboard: `+`/`-` zoom, arrows pan, `R` reset.
