@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePieces, sliceArea } from './solid-integrand';
+import { computePieces, pieceOrderMatchesEnvelope, sliceArea } from './solid-integrand';
 import type { SolidCurve, SolidSpec } from './solid.types';
 
 function curve(fn: (t: number) => number, label = 'f'): SolidCurve {
@@ -345,5 +345,26 @@ describe('computePieces with close crossings of different curve pairs', () => {
   it('collapses a triple point into one breakpoint', () => {
     const found = breaks([(x) => x, (x) => x * x, (x) => 2 - x], 0, 3);
     expect(found.filter((x) => Math.abs(x - 1) < 1e-6)).toHaveLength(1);
+  });
+});
+
+describe('pieceOrderMatchesEnvelope', () => {
+  const base = (curves: SolidCurve[], a: number, b: number): SolidSpec => ({
+    method: 'cross-section',
+    variable: 'x',
+    shape: 'square',
+    curves,
+    a,
+    b,
+  });
+
+  it('holds for ordinary 3-curve regions', () => {
+    const sp = base([curve((x) => x), curve((x) => x * x), curve((x) => 2 - x)], 0, 2);
+    expect(pieceOrderMatchesEnvelope(sp, computePieces(sp))).toBe(true);
+  });
+
+  it('fails when fast oscillations make findIntersections miss crossings', () => {
+    const sp = base([curve((x) => Math.sin(1000 * x)), curve(() => 0), curve(() => -2)], 0, 1);
+    expect(pieceOrderMatchesEnvelope(sp, computePieces(sp))).toBe(false);
   });
 });

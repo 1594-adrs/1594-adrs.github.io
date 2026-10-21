@@ -158,7 +158,9 @@
   @if (state.result(); as result) {
     <div class="range-section solid-result">
       <span class="range-label">volume</span>
-      <app-integral-formula [terms]="result.terms" />
+      @if (result.terms.length > 0) {
+        <app-integral-formula [terms]="result.terms" />
+      }
       @if (result.volume !== null) {
         <p class="volume-line">
           V ≈ {{ formatVolume(result.volume) }}

@@ -207,6 +207,31 @@ function envelopeValues(spec: SolidSpec, t: number): [number, number] {
 }
 
 /**
+ * With 3+ curves the volume uses the pointwise envelope, but the displayed formula and the 3D
+ * rings follow each piece's fixed upper/lower order. False when, at sample points, that order is
+ * not the real max/min (fast-oscillating curves lose crossings in findIntersections' fixed steps).
+ */
+export function pieceOrderMatchesEnvelope(spec: SolidSpec, pieces: SolidPiece[]): boolean {
+  if (spec.curves.length < 3) return true;
+  const baseline = baselineValue(spec);
+  for (const p of pieces) {
+    for (let i = 1; i <= 16; i++) {
+      const t = p.a + ((p.b - p.a) * i) / 17;
+      const [U, L] = envelopeValues(spec, t);
+      if (!Number.isFinite(U)) continue;
+      const tol = 1e-9 * Math.max(1, Math.abs(U), Math.abs(L));
+      if (
+        Math.abs(boundaryValue(spec, p.upperIndex, t, baseline) - U) > tol ||
+        Math.abs(boundaryValue(spec, p.lowerIndex, t, baseline) - L) > tol
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
  * Builds A(t): the cross-sectional area (disk/washer/cross-section) or the
  * shell's lateral area 2π·|t−k|·(U−L), valid across the whole [a, b] domain
  * (not just one piece) so it also serves as the sweep readout.

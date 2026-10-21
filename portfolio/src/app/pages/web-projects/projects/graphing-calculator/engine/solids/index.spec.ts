@@ -619,3 +619,39 @@ describe('computeSolid wave-1 regressions', () => {
     ]);
   });
 });
+
+describe('computeSolid stale piece order (3+ curves)', () => {
+  it('keeps the volume but hides formula and surface, with a warning, when crossings are missed', () => {
+    const r = computeSolid({
+      method: 'cross-section',
+      variable: 'x',
+      curves: [
+        curveFromExpr('sin(1000*x)', 'f1'),
+        curveFromExpr('0', 'f2'),
+        curveFromExpr('-2', 'f3'),
+      ],
+      a: 0,
+      b: 1,
+      shape: 'square',
+    });
+    expect(r.volume).not.toBeNull();
+    expect(r.terms).toEqual([]);
+    expect(r.surfaceArea).toBeNull();
+    expect(r.issues).toEqual([
+      expect.objectContaining({ code: 'inaccurate', severity: 'warning' }),
+    ]);
+  });
+
+  it('shows the formula for an ordinary 3-curve region', () => {
+    const r = computeSolid({
+      method: 'cross-section',
+      variable: 'x',
+      curves: [curveFromExpr('x', 'f1'), curveFromExpr('x^2', 'f2'), curveFromExpr('2-x', 'f3')],
+      a: 0,
+      b: 2,
+      shape: 'square',
+    });
+    expect(r.terms.length).toBeGreaterThan(0);
+    expect(r.issues.filter((i) => i.code === 'inaccurate')).toEqual([]);
+  });
+});
