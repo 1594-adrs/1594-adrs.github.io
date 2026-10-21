@@ -5,6 +5,7 @@ import {
   canHaveObliqueAsymptote,
 } from './asymptote-detector';
 import { parse } from './parser';
+import { evaluate } from './evaluator';
 
 describe('asymptote-detector', () => {
   it('should detect vertical asymptote for 1/(x-2)', () => {
@@ -187,5 +188,27 @@ describe('detectAsymptotes memoization', () => {
     // be recomputed at full density rather than just filtering the stale wide result.
     const tight = detectAsymptotes(fn, 500, 501, ast);
     expect(tight.some((a) => a.type === 'vertical' && Math.abs(a.value - c) < 0.01)).toBe(true);
+  });
+});
+
+describe('asymptote-detector: piecewise if()', () => {
+  const run = (src: string, a = -10, b = 10) => {
+    const ast = parse(src);
+    return detectAsymptotes((x) => evaluate(ast, { x }), a, b, ast).filter(
+      (s) => s.type === 'vertical',
+    );
+  };
+
+  it('a finite jump is not a vertical asymptote', () => {
+    expect(run('if(x < 0, -1, 1)')).toEqual([]);
+    expect(run('if(x < 1, x^2, x + 5)', -7.3, 9.1)).toEqual([]);
+  });
+
+  it('a pole kept by the active branch still is', () => {
+    const v = run('if(x != 2, 3/(x-2), 4)');
+    expect(v.length).toBe(1);
+    expect(v[0].value).toBeCloseTo(2, 6);
+    const w = run('if(x < 1, 1/x, x + 5)');
+    expect(w.map((s) => Math.abs(Math.round(s.value * 1e6) / 1e6))).toEqual([0]);
   });
 });

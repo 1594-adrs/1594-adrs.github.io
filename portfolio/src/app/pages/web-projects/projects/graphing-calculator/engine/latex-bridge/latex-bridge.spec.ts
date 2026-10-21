@@ -20,6 +20,26 @@ const TO_RAW: ToRawCase[] = [
   ['\\exponentialE^{x}', 'e^x'],
   ['\\mathrm{e}^{x}', 'e^x'],
   ['e', 'e'],
+  // multi-digit exponents (smartSuperscript off) and the continuation after them
+  ['x^{10}', 'x^10'],
+  ['x^{10}+1', 'x^10+1'],
+  // infinity (limit point field)
+  ['\\infty', 'inf'],
+  ['-\\infty', '-inf'],
+  ['∞', 'inf'],
+  // function names typed or pasted as plain letters
+  ['asin(x)', 'asin(x)'],
+  ['abs(x)+1', 'abs(x)+1'],
+  ['floor\\left(x\\right)', 'floor(x)'],
+  ['min(x,2)', 'min(x,2)'],
+  ['mod(x,3)', 'mod(x,3)'],
+  ['sin(x)+cos(x)', 'sin(x)+cos(x)'],
+  ['xmax(x,1)', 'x*max(x,1)'],
+  ['sqrt(x)', 'sqrt(x)'],
+  ['xy', 'x*y'],
+  ['ex', 'e*x'],
+  ['\\operatorname{\\mathrm{abs}}\\left(x\\right)', 'abs(x)'],
+  ['\\operatorname{\\mathrm{min}}\\left(x,2\\right)', 'min(x,2)'],
   // implicit multiplication made explicit
   ['2x', '2*x'],
   ['xy', 'x*y'],
@@ -208,6 +228,17 @@ describe('latexToRaw: virtual keyboard insertions', () => {
     ['\\sinh\\left(x\\right)', 'sinh(x)'],
     ['\\cosh\\left(x\\right)', 'cosh(x)'],
     ['\\tanh\\left(x\\right)', 'tanh(x)'],
+    ['\\coth\\left(x\\right)', 'coth(x)'],
+    ['\\operatorname{sech}\\left(x\\right)', 'sech(x)'],
+    ['\\operatorname{csch}x', 'csch(x)'],
+    ['\\operatorname{asinh}\\left(x\\right)', 'asinh(x)'],
+    ['\\operatorname{arcosh}\\left(x\\right)', 'acosh(x)'],
+    ['\\operatorname{atanh}\\left(x\\right)', 'atanh(x)'],
+    ['\\operatorname{cbrt}\\left(x\\right)', 'cbrt(x)'],
+    ['\\sinh^{-1}x', 'asinh(x)'],
+    ['\\cosh^{-1}\\left(x\\right)', 'acosh(x)'],
+    ['\\tanh^{-1}x', 'atanh(x)'],
+    ['\\left(t,t^2\\right)', 't,t^2'],
     ['\\sec\\left(x\\right)', 'sec(x)'],
     ['\\csc\\left(x\\right)', 'csc(x)'],
     ['\\cot\\left(x\\right)', 'cot(x)'],
@@ -244,6 +275,9 @@ const TO_LATEX: [raw: string, latex: string][] = [
   ['   ', ''],
   ['x', 'x'],
   ['x^2', 'x^{2}'],
+  ['x^10', 'x^{10}'],
+  ['inf', '\\infty'],
+  ['-inf', '-\\infty'],
   ['2x+1', '2x+1'],
   ['2*3', '2\\cdot3'],
   ['x*2', 'x\\cdot2'],
@@ -284,6 +318,9 @@ const TO_LATEX: [raw: string, latex: string][] = [
   ['exp(-x^2)', '\\exp\\left(-x^{2}\\right)'],
   ['sqrt(x)', '\\sqrt{x}'],
   ['root(3,x)', '\\sqrt[3]{x}'],
+  ['coth(x)', '\\coth\\left(x\\right)'],
+  ['cbrt(x)', '\\operatorname{cbrt}\\left(x\\right)'],
+  ['(cos(t),sin(t))', '\\left(\\cos\\left(t\\right),\\sin\\left(t\\right)\\right)'],
   ['logb(2,x)', '\\log_{2}\\left(x\\right)'],
   ['abs(x-1)', '\\left|x-1\\right|'],
   ['floor(x)', '\\left\\lfloor x\\right\\rfloor'],
@@ -374,6 +411,7 @@ const CORPUS: string[] = [
   'cos(2*x)+sin(x/2)',
   'tan(x)+sec(x)+csc(x)+cot(x)',
   'sinh(x)+cosh(x)+tanh(x)',
+  'cbrt(x)+asinh(x)+acosh(x+3)+atanh(x/9)+sech(x)+csch(x)+coth(x)',
   'asin(x/3)+acos(x/3)+atan(x)',
   'ln(x)+log(x)',
   'exp(-x^2)',
@@ -652,5 +690,58 @@ describe('never throws', () => {
   it('tolerates non-string input', () => {
     expect(latexToRaw(undefined as unknown as string)).toEqual({ raw: '', issues: [] });
     expect(rawToLatex(undefined as unknown as string)).toBe('');
+  });
+});
+
+describe('piecewise: cases <-> if()', () => {
+  it.each<[string, string]>([
+    [String.raw`\begin{cases}-1 & x<0\\ 1 & \text{otherwise}\end{cases}`, 'if(x<0,-1,1)'],
+    [
+      String.raw`\begin{cases}x^2, & \text{if } 0\le x<1\\ 2-x, & 1\le x\le 2\end{cases}`,
+      'if(0<=x<1,x^2,if(1<=x<=2,2-x))',
+    ],
+    [String.raw`y=\begin{cases}x & x=0\\[3pt] 2 & \end{cases}`, 'y=if(x==0,x,2)'],
+    [String.raw`\begin{dcases}1 & x\ne 2\\ 0 & \text{else}\end{dcases}`, 'if(x!=2,1,0)'],
+    [String.raw`2\begin{cases}x & x>0\\ 0 & \text{otherwise}\end{cases}`, '2*if(x>0,x,0)'],
+    // What MathLive emits when `if(x<0,-1,1)` is typed on a physical keyboard.
+    [String.raw`if\left(x<0,-1,1\right)`, 'if(x<0,-1,1)'],
+    [String.raw`y=if\left(0\le x<1,x,0\right)`, 'y=if(0<=x<1,x,0)'],
+  ])('%s -> %s', (latex, raw) => {
+    expect(latexToRaw(latex)).toEqual({ raw, issues: [] });
+  });
+
+  it('flags unsupported environments and a missing end', () => {
+    expect(latexToRaw(String.raw`\begin{matrix}1\end{matrix}`).issues).toContain(
+      'Unsupported: \\begin{matrix}',
+    );
+    expect(latexToRaw(String.raw`\begin{cases}1 & x<0`).issues).toContain('Missing \\end{cases}');
+  });
+
+  it.each<[string, string]>([
+    ['if(x<0, -1, 1)', String.raw`\begin{cases}-1 & x<0\\ 1 & \text{otherwise}\end{cases}`],
+    ['if(x<0, -x, if(x<1, x^2))', String.raw`\begin{cases}-x & x<0\\ x^{2} & x<1\end{cases}`],
+    ['if(0<=x<1, x, 0)', String.raw`\begin{cases}x & 0\le x<1\\ 0 & \text{otherwise}\end{cases}`],
+  ])('rawToLatex %s', (raw, latex) => {
+    expect(rawToLatex(raw)).toBe(latex);
+  });
+
+  it.each([
+    'y = if(x<0, -1, 1)',
+    'y = if(x < 0, -x, if(x < 1, x^2, 1))',
+    'y = if(0 <= x < 1, x^2, if(1 <= x <= 2, 2 - x))',
+    'y = if(x == 2, 4, 3/(x-2))',
+    'y = 2*if(x != 0, sin(x)/x, 1)^2',
+  ])('round trip latex -> raw -> latex: %s', (raw) => {
+    const latex = rawToLatex(raw);
+    const back = latexToRaw(latex);
+    expect(back.issues).toEqual([]);
+    expect(rawToLatex(back.raw)).toBe(latex);
+    const rhs = (s: string) => parse(s.replace(/^y\s*=\s*/, ''));
+    for (const x of [-1.5, -0.5, 0, 0.5, 1, 1.5, 2, 3]) {
+      const want = evaluate(rhs(raw), { x });
+      const got = evaluate(rhs(back.raw), { x });
+      if (Number.isNaN(want)) expect(got).toBeNaN();
+      else expect(got).toBeCloseTo(want, 12);
+    }
   });
 });

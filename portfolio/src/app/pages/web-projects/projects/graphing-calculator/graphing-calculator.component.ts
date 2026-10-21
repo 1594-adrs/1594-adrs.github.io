@@ -55,11 +55,20 @@ import { findAxisCrossings } from './canvas/utils';
 import { findNearestCurvePoint } from './canvas/curve-locator';
 import type { TraceCurve } from './canvas/curve-locator';
 import { drawTracePoint, drawPointOfInterest } from './canvas/trace-renderer';
+import {
+  drawLimitMarker,
+  drawNewtonSteps,
+  drawSequence,
+  drawTangentOverlay,
+  drawTaylorPolynomial,
+} from './canvas/calculus-renderer';
+import { drawSlopeField } from './canvas/slope-field-renderer';
 import { computePointsOfInterest } from './engine/critical-points';
 import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
-import { detectCurveMode } from './engine/mode-detector';
+import { detectCurveMode, maskNested, unwrapParametricPair } from './engine/mode-detector';
+import { substituteParams } from './engine/params';
 import { FUNCTION_COLORS } from './utils/color';
 import { MathInput } from './components/math-input/math-input';
 import {
@@ -72,11 +81,20 @@ import {
 } from './components/math-input/mathlive-loader';
 import { ConicAssistantComponent } from './components/conic-assistant/conic-assistant.component';
 import { SolidPanelComponent } from './components/solid-panel/solid-panel.component';
+import { CalculusPanel } from './components/calculus-panel/calculus-panel';
 import { ValueTable } from './components/value-table/value-table';
+import { MathRendererComponent } from './components/math-renderer/math-renderer.component';
 import { ColorPicker } from './components/color-picker/color-picker';
+import { ParamSlider } from './components/param-slider/param-slider';
 import { SolidToolState } from './state/solid-tool.state';
 import { GraphInteractionState } from './state/graph-interaction.state';
 import { UiLayoutState } from './state/ui-layout.state';
+import { CalculusToolState, parseLimitPoint } from './state/calculus-tool.state';
+import { ParamSlidersState } from './state/param-sliders.state';
+import { IntegralExtrasState, centroidFor } from './state/integral-extras.state';
+import { IntegralExtras } from './components/integral-extras/integral-extras';
+import { drawCentroid, drawRiemannPanels } from './canvas/integral-extras-renderer';
+import { derivativeOf, differentialCurveOf, tangentAt } from './state/derivative-view';
 import type { ToolTab, SheetSnap } from './state/ui-layout.state';
 import { IconComponent } from '../../../../shared/icons/icon.component';
 import { ShortcutsPopover } from './components/shortcuts-popover/shortcuts-popover';
@@ -84,6 +102,7 @@ import {
   buildShareHash,
   extractShareFragment,
   parseShareState,
+  SHARE_STATE_VERSION,
   type ShareState,
 } from './state/share-state';
 import { formatValue } from './utils/format-value';
@@ -104,6 +123,7 @@ import type {
   MultiFunctionAreaConfig,
   CurveMode,
 } from './models/calculator.models';
+import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from './models/calculator.models';
 
 /** Screen-px hit radius for snapping the pointer to a curve (trace mode). */
 const TRACE_SNAP_PX = 12;
@@ -112,6 +132,9 @@ const POI_HIT_PX_FINE = 12;
 const POI_HIT_PX_COARSE = 22;
 /** Debounce for recomputing points of interest after a pan/zoom. */
 const POI_RECOMPUTE_DELAY_MS = 150;
+/** Quiet time before the tangent readout under the pointer is announced to screen readers. */
+const TANGENT_ANNOUNCE_DELAY_MS = 600;
+const NO_TANGENT_TEXT = 'No visible curve supports a tangent line.';
 /** Quiet time after the last wheel/key/button view change before the full-resolution redraw. */
 const GESTURE_IDLE_MS = 150;
 /** Movement (screen px) beyond which a single-finger touch commits to panning
@@ -138,6 +161,9 @@ function roundLimit(v: number): number {
   return Math.round(v * 10000) / 10000;
 }
 
+/** Limit fields that accept ±∞. */
+const INTEGRAL_KEYS: ReadonlySet<string> = new Set(['integralA', 'integralB']);
+
 @Component({
   selector: 'app-graphing-calculator',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -148,13 +174,24 @@ function roundLimit(v: number): number {
     MathInput,
     ConicAssistantComponent,
     SolidPanelComponent,
+    CalculusPanel,
+    IntegralExtras,
+    MathRendererComponent,
     ValueTable,
     ColorPicker,
+    ParamSlider,
     IconComponent,
     ShortcutsPopover,
   ],
   host: { '[style.--kb-h.px]': 'kbHeight()' },
-  providers: [SolidToolState, GraphInteractionState, UiLayoutState],
+  providers: [
+    SolidToolState,
+    GraphInteractionState,
+    UiLayoutState,
+    CalculusToolState,
+    IntegralExtrasState,
+    ParamSlidersState,
+  ],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
     './graphing-calculator.component.css',
@@ -176,6 +213,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   solidToolState = inject(SolidToolState);
   interactionState = inject(GraphInteractionState);
   uiLayout = inject(UiLayoutState);
+  calculusState = inject(CalculusToolState);
+  /** Free parameters: slider rows (`a = 2`) and the rows that use them. */
+  paramSliders = inject(ParamSlidersState);
+  protected readonly MAX_CURVE_ROWS = MAX_CURVE_ROWS;
+  protected readonly MAX_SLIDER_ROWS = MAX_SLIDER_ROWS;
+  integralExtras = inject(IntegralExtrasState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
@@ -192,6 +235,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       error: null,
     },
   ]);
+
+  /** Rows by kind: a new empty row is a curve until it turns into a slider (`a = 1`). */
+  protected readonly sliderRowCount = computed(
+    () => this.functions().filter((f) => f.mode === 'slider').length,
+  );
+  protected readonly curveRowCount = computed(
+    () => this.functions().length - this.sliderRowCount(),
+  );
 
   activeIntegral = signal<{ fnIndex: number; a: number; b: number } | null>(null);
   showSolidTool = signal(false);
@@ -217,13 +268,31 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   poiAnnouncement = signal<string>('');
   tableOpenIndex = signal<number | null>(null);
   shareNotice = signal<string>('');
+  /** Debounced screen-reader text for the tangent at the traced point. */
+  tangentAnnouncement = signal<string>('');
+  private tangentTimerId: ReturnType<typeof setTimeout> | null = null;
+  /** Row whose "f′ unavailable" reason is shown under it (tap/click on the disabled f′ button). */
+  derivHintIndex = signal<number | null>(null);
+  /** True while a finger-lifted trace point is kept on screen (touch has no hover). */
+  private touchHeld = false;
+
+  /** Whether any visible row can be traced for a tangent / normal (implicit curves cannot). */
+  canTangent = computed(() =>
+    this.functions().some((f) => f.visible && !f.error && !!differentialCurveOf(f)),
+  );
+
+  /** f′ per row (or why not), for the row toggle, its formula line and the dashed curve. */
+  derivatives = computed(() => {
+    const au = this.angleUnit();
+    return this.functions().map((f) => derivativeOf(f, au));
+  });
   private shareNoticeTimerId: ReturnType<typeof setTimeout> | null = null;
 
   /** Accessible description of what's currently on the canvas, for aria-describedby. */
   canvasDescription = computed(() => {
     const parts: string[] = [];
     const descriptions = this.functions()
-      .filter((f) => f.visible && f.raw.trim())
+      .filter((f) => f.visible && f.raw.trim() && f.mode !== 'slider')
       .map((f) => this.describeFunctionForA11y(f));
     parts.push(
       descriptions.length > 0 ? `Graph of ${descriptions.join(', ')}.` : 'No functions plotted.',
@@ -231,6 +300,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.showSolidTool()) parts.push('Solid of revolution tool active.');
     if (this.activeIntegral()) parts.push('Integral tool active.');
     if (this.activeMultiArea()) parts.push('Area between curves tool active.');
+    if (this.calculusState.open()) parts.push('Calculus tool active.');
+    if (this.interactionState.showTangent()) {
+      parts.push('Tangent line shown at the traced point.');
+    }
     if (this.poiAnnouncement()) parts.push(this.poiAnnouncement());
     return parts.join(' ');
   });
@@ -292,6 +365,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private poiKey: string | null = null;
   private touchAnchor: { x: number; y: number } | null = null;
   private touchPanEngaged = false;
+  private touchPinched = false;
 
   /** Canvas size in CSS px (logical drawing space — what Viewport/renderers use) and
    *  its bounding rect, cached by `measureCanvas()` (the ResizeObserver callback and
@@ -452,6 +526,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.showSolidTool() && target !== 'solids') this.toggleSolidTool();
     if (this.activeMultiArea() && target !== 'area') this.activeMultiArea.set(null);
     if (this.showConicAssistant() && target !== 'conics') this.showConicAssistant.set(false);
+    this.calculusState.open.set(target === 'calculus');
     if (target === 'integral' && !this.activeIntegral()) this.activateIntegral();
     else if (target === 'solids' && !this.showSolidTool()) this.toggleSolidTool();
     else if (target === 'area' && !this.activeMultiArea()) this.activateMultiArea();
@@ -571,6 +646,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return null;
   });
 
+  /** Centroid of the area tool's region (null without a usable selection). */
+  private centroid = computed(() => centroidFor(this.multiAreaGeometry()));
+
   results = computed<ResultRow[]>(() => {
     const res: ResultRow[] = [];
     const au = this.angleUnit();
@@ -582,7 +660,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const fn = (x: number) => compiled(x, 0);
         const result = integrateAdaptive(fn, intg.a, intg.b);
         const abs =
-          result.status === 'ok' || result.status === 'inaccurate'
+          Number.isFinite(intg.a) &&
+          Number.isFinite(intg.b) &&
+          (result.status === 'ok' || result.status === 'inaccurate')
             ? areaSingle(fn, Math.min(intg.a, intg.b), Math.max(intg.a, intg.b))
             : undefined;
         res.push(...describeIntegral(expr.raw, intg.a, intg.b, result, abs));
@@ -615,6 +695,18 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         label: areaLabel(geom.a, geom.b, [name]),
         value: formatValue(value),
         notes: areaLimitNotes(geom.a, geom.b),
+      });
+    }
+
+    const c = this.centroid();
+    if (c) {
+      const ok = c.status === 'ok' || c.status === 'inaccurate';
+      res.push({
+        label: 'Centroid',
+        value: ok
+          ? `(${formatValue(c.x)}, ${formatValue(c.y)})`
+          : statusValueText(c.status, NaN, c.badPoint),
+        approx: ok && c.status === 'inaccurate',
       });
     }
 
@@ -686,6 +778,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     });
 
     this.solidToolState.connect(this.functions, this.angleUnit);
+    this.paramSliders.connect(this.functions, (fn, raw, values) => this.parseRow(fn, raw, values));
 
     // Snap or keyboard change: re-centre the plot above the sheet and repaint.
     effect(() => {
@@ -700,7 +793,34 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.showSolidTool,
       this.activeMultiArea,
       this.showConicAssistant,
+      this.calculusState.open,
     );
+    this.calculusState.connect(this.functions, this.angleUnit);
+    this.integralExtras.connect(this.functions, this.angleUnit, this.activeIntegral);
+
+    // No traceable curve left: drop the stale tangent text so screen readers don't keep it.
+    effect(() => {
+      if (this.canTangent()) return;
+      if (this.tangentTimerId !== null) clearTimeout(this.tangentTimerId);
+      this.tangentTimerId = null;
+      this.tangentAnnouncement.set('');
+    });
+
+    // f′ curves, the tangent toggles and the calculus overlays are drawn imperatively.
+    effect(() => {
+      this.derivatives();
+      this.interactionState.showTangent();
+      this.interactionState.showNormal();
+      this.calculusState.limit();
+      this.calculusState.newton();
+      this.calculusState.taylor();
+      this.calculusState.ode();
+      this.calculusState.series();
+      this.integralExtras.riemann();
+      this.centroid();
+      if (!this.isBrowser) return;
+      this.requestRender();
+    });
 
     // The 2D canvas is drawn imperatively (not from template bindings), so solid-panel
     // edits (method/axis/bounds/curve selection) need an explicit trigger to redraw —
@@ -717,19 +837,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.requestRender();
     });
 
-    // Points of interest are memoized off the visible functions; invalidate and
-    // recompute them the instant a function's text/visibility changes (add/edit/
-    // remove/hide), rather than waiting for some other render to notice the key
-    // changed — this also covers the case where a tool (e.g. solids) is active
-    // and would otherwise be the only thing driving further renders.
+    // Points of interest are memoized off the visible functions; invalidate them and
+    // schedule the (debounced) recompute as soon as a function's text/visibility changes
+    // (add/edit/remove/hide), rather than waiting for some other render to notice the key
+    // changed — this also covers the case where a tool (e.g. solids) is active and would
+    // otherwise be the only thing driving further renders. Debounced so a slider drag
+    // recomputes on its first tick and once it settles, not on every tick.
     effect(() => {
       this.functions();
       this.poiKey = null;
       if (!this.isBrowser) return;
-      if (this.interactionState.showPointsOfInterest()) {
-        this.recomputePointsOfInterest();
-        this.poiKey = this.poiComputeKey();
-      }
+      if (this.interactionState.showPointsOfInterest()) this.schedulePoiRecompute();
       this.requestRender();
     });
   }
@@ -795,6 +913,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       clearTimeout(this.shareNoticeTimerId);
       this.shareNoticeTimerId = null;
     }
+    if (this.tangentTimerId !== null) {
+      clearTimeout(this.tangentTimerId);
+      this.tangentTimerId = null;
+    }
     if (this.wheelIdleTimerId !== null) {
       clearTimeout(this.wheelIdleTimerId);
       this.wheelIdleTimerId = null;
@@ -802,7 +924,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   addFunction(): void {
-    if (this.functions().length >= 5) return;
+    if (this.curveRowCount() >= MAX_CURVE_ROWS) return;
     const idx = this.functions().length;
     this.functions.update((fns) => [
       ...fns,
@@ -824,6 +946,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.activeMultiArea.set(null);
     }
     this.solidToolState.handleFunctionRemoved(index);
+    this.calculusState.handleFunctionRemoved(index);
+    this.derivHintIndex.set(null);
+    // The removed row may have defined (or duplicated) a slider other rows use.
+    this.paramSliders.resolveAll();
     this.requestRender();
   }
 
@@ -832,11 +958,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private parseAndValidate(
     exprText: string,
     sampleVars: Record<string, number>,
+    values: ReadonlyMap<string, number>,
   ): { ast: ExpressionNode | null; error: string | null } {
     if (!exprText.trim()) return { ast: null, error: null };
     let ast: ExpressionNode;
     try {
-      ast = parse(exprText);
+      ast = substituteParams(parse(exprText), values);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ast: null, error: formatExpressionError(message, exprText) };
@@ -851,14 +978,81 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   updateExpression(index: number, raw: string): void {
-    this.functions.update((fns) =>
-      fns.map((fn, i) => {
-        if (i !== index) return fn;
-        const mode = this.detectMode(raw);
-        const effectiveRaw = mode === 'explicit' ? this.stripYEquals(raw) : raw;
-        if (mode === 'explicit-y') {
-          const rhs = raw.trim().replace(/^[xX]\s*=\s*/, '');
-          const { ast, error } = this.parseAndValidate(rhs, { y: 1 });
+    this.paramSliders.updateRow(index, raw);
+    this.requestRender();
+  }
+
+  /** One row read from `raw`, with the slider values substituted (called by ParamSlidersState,
+   *  which handles slider rows and missing parameters itself). */
+  private parseRow(
+    fn: MathExpression,
+    raw: string,
+    values: ReadonlyMap<string, number>,
+  ): MathExpression {
+    const mode = this.detectMode(raw);
+    const effectiveRaw = mode === 'explicit' ? this.stripYEquals(raw) : raw;
+    if (mode === 'explicit-y') {
+      const rhs = raw.trim().replace(/^[xX]\s*=\s*/, '');
+      const { ast, error } = this.parseAndValidate(rhs, { y: 1 }, values);
+      return {
+        ...fn,
+        raw,
+        ast,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error,
+      };
+    }
+    if (mode === 'implicit') {
+      // Length guard: the lazy `.*?` regex is quadratic on long inputs without an operator.
+      const top = maskNested(raw);
+      const inequalityMatch = raw.length <= MAX_INEQUALITY_RAW ? /(>=|<=|>|<)/.exec(top) : null;
+      // `1 < x^2+y^2 < 4`: the parser desugars the chain to a 1/0 indicator, drawn as `> 0`.
+      if (
+        inequalityMatch &&
+        raw.length <= MAX_INEQUALITY_RAW &&
+        top.match(/[<>]=?/g)!.length === 2
+      ) {
+        const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values);
+        return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: '>', error };
+      }
+      if (inequalityMatch) {
+        const lhs = raw.slice(0, inequalityMatch.index).trim();
+        const op = inequalityMatch[1] as '>' | '<' | '>=' | '<=';
+        const rhs = raw.slice(inequalityMatch.index + op.length).trim();
+        if (/^y$/i.test(lhs)) {
+          const { ast, error } = this.parseAndValidate(rhs, { x: 1 }, values);
+          return {
+            ...fn,
+            raw,
+            ast,
+            mode,
+            paramX: null,
+            paramY: null,
+            inequalityOp: op,
+            error,
+          };
+        }
+        const { ast, error } = this.parseAndValidate(`(${lhs})-(${rhs})`, { x: 1, y: 1 }, values);
+        return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op, error };
+      }
+      if (top.includes('=')) {
+        const eqIdx = top.indexOf('=');
+        const lhsText = raw.substring(0, eqIdx);
+        const rhsText = raw.substring(eqIdx + 1);
+        try {
+          const lhs = substituteParams(parse(lhsText), values);
+          const rhs = substituteParams(parse(rhsText), values);
+          evaluate(lhs, { x: 1, y: 1 }, this.angleUnit());
+          evaluate(rhs, { x: 1, y: 1 }, this.angleUnit());
+          const ast: ExpressionNode = {
+            type: 'BinaryOp',
+            operator: '=',
+            left: lhs,
+            right: rhs,
+          };
           return {
             ...fn,
             raw,
@@ -867,116 +1061,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
-            error,
+            error: null,
           };
-        }
-        if (mode === 'implicit') {
-          // Length guard: the lazy `.*?` regex is quadratic on long inputs without an operator.
-          const inequalityMatch =
-            raw.length <= MAX_INEQUALITY_RAW ? raw.match(/(.*?)(>=|<=|>|<)(.*)/) : null;
-          if (inequalityMatch) {
-            const lhs = inequalityMatch[1].trim();
-            const op = inequalityMatch[2] as '>' | '<' | '>=' | '<=';
-            const rhs = inequalityMatch[3].trim();
-            if (/^y$/i.test(lhs)) {
-              const { ast, error } = this.parseAndValidate(rhs, { x: 1 });
-              return {
-                ...fn,
-                raw,
-                ast,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: op,
-                error,
-              };
-            }
-            const { ast, error } = this.parseAndValidate(`(${lhs})-(${rhs})`, { x: 1, y: 1 });
-            return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op, error };
-          }
-          if (raw.includes('=')) {
-            const eqIdx = raw.indexOf('=');
-            const lhsText = raw.substring(0, eqIdx);
-            const rhsText = raw.substring(eqIdx + 1);
-            try {
-              const lhs = parse(lhsText);
-              const rhs = parse(rhsText);
-              evaluate(lhs, { x: 1, y: 1 }, this.angleUnit());
-              evaluate(rhs, { x: 1, y: 1 }, this.angleUnit());
-              const ast: ExpressionNode = {
-                type: 'BinaryOp',
-                operator: '=',
-                left: lhs,
-                right: rhs,
-              };
-              return {
-                ...fn,
-                raw,
-                ast,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: undefined,
-                error: null,
-              };
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              return {
-                ...fn,
-                raw,
-                ast: null,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: undefined,
-                error: formatExpressionError(message, raw),
-              };
-            }
-          }
-          const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 });
-          return {
-            ...fn,
-            raw,
-            ast,
-            mode,
-            paramX: null,
-            paramY: null,
-            inequalityOp: undefined,
-            error,
-          };
-        }
-        if (mode === 'parametric') {
-          const parts = raw.split(',');
-          if (parts.length === 2) {
-            const xExpr = parts[0].trim().replace(/^[xX]\s*=\s*/, '');
-            const yExpr = parts[1].trim().replace(/^[yY]\s*=\s*/, '');
-            try {
-              const paramX = parse(xExpr);
-              const paramY = parse(yExpr);
-              return {
-                ...fn,
-                raw,
-                ast: null,
-                mode,
-                paramX,
-                paramY,
-                inequalityOp: undefined,
-                error: null,
-              };
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              return {
-                ...fn,
-                raw,
-                ast: null,
-                mode,
-                paramX: null,
-                paramY: null,
-                inequalityOp: undefined,
-                error: formatExpressionError(message, raw),
-              };
-            }
-          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           return {
             ...fn,
             raw,
@@ -985,38 +1073,105 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
-            error: null,
+            error: formatExpressionError(message, raw),
           };
         }
-        if (mode === 'polar') {
-          const expr = raw.replace(/^r\s*=\s*/i, '');
-          // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
-          const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 });
+      }
+      const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values);
+      return {
+        ...fn,
+        raw,
+        ast,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error,
+      };
+    }
+    if (mode === 'parametric') {
+      const pair = unwrapParametricPair(raw);
+      const commas = [...maskNested(pair).matchAll(/,/g)].map((m) => m.index);
+      const parts =
+        commas.length === 1 ? [pair.slice(0, commas[0]), pair.slice(commas[0] + 1)] : [];
+      if (parts.length === 2) {
+        const xExpr = parts[0].trim().replace(/^[xX]\s*=\s*/, '');
+        const yExpr = parts[1].trim().replace(/^[yY]\s*=\s*/, '');
+        try {
+          const paramX = substituteParams(parse(xExpr), values);
+          const paramY = substituteParams(parse(yExpr), values);
           return {
             ...fn,
             raw,
-            ast,
+            ast: null,
+            mode,
+            paramX,
+            paramY,
+            inequalityOp: undefined,
+            error: null,
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            ...fn,
+            raw,
+            ast: null,
             mode,
             paramX: null,
             paramY: null,
             inequalityOp: undefined,
-            error,
+            error: formatExpressionError(message, raw),
           };
         }
-        const { ast, error } = this.parseAndValidate(effectiveRaw, { x: 1 });
-        return {
-          ...fn,
-          raw,
-          ast,
-          mode: 'explicit',
-          paramX: null,
-          paramY: null,
-          inequalityOp: undefined,
-          error,
-        };
-      }),
+      }
+      return {
+        ...fn,
+        raw,
+        ast: null,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error: null,
+      };
+    }
+    if (mode === 'polar') {
+      const expr = raw.replace(/^r\s*=\s*/i, '');
+      // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
+      const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 }, values);
+      return {
+        ...fn,
+        raw,
+        ast,
+        mode,
+        paramX: null,
+        paramY: null,
+        inequalityOp: undefined,
+        error,
+      };
+    }
+    const { ast, error } = this.parseAndValidate(effectiveRaw, { x: 1 }, values);
+    return {
+      ...fn,
+      raw,
+      ast,
+      mode: 'explicit',
+      paramX: null,
+      paramY: null,
+      inequalityOp: undefined,
+      error,
+    };
+  }
+
+  /** f′ row toggle; a no-op on rows it does not apply to (the button says why). */
+  toggleDerivative(index: number): void {
+    if (!this.derivatives()[index]?.applicable) {
+      this.derivHintIndex.update((i) => (i === index ? null : index));
+      return;
+    }
+    this.functions.update((fns) =>
+      fns.map((fn, i) => (i === index ? { ...fn, showDerivative: !fn.showDerivative } : fn)),
     );
-    this.requestRender();
   }
 
   toggleVisibility(index: number): void {
@@ -1089,7 +1244,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else {
       this.closeSolidTool();
       this.activeMultiArea.set(null);
-      this.activeIntegral.set({ fnIndex: 0, a: -2, b: 2 });
+      const first = this.functions().findIndex((f) => f.mode !== 'slider');
+      this.activeIntegral.set({ fnIndex: Math.max(0, first), a: -2, b: 2 });
     }
     this.requestRender();
   }
@@ -1159,8 +1315,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else {
       this.activeIntegral.set(null);
       this.closeSolidTool();
-      const indices =
-        this.functions().length >= 2 ? [0, 1] : this.functions().length === 1 ? [0] : [];
+      const indices = this.functions()
+        .flatMap((f, i) => (f.mode === 'slider' ? [] : [i]))
+        .slice(0, 2);
 
       let a = -2;
       let b = 2;
@@ -1215,6 +1372,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   toggleMultiAreaFunction(index: number): void {
+    if (this.functions()[index]?.mode === 'slider') return;
     this.activeMultiArea.update((cfg) => {
       if (!cfg) return null;
       const has = cfg.functionIndices.includes(index);
@@ -1388,6 +1546,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       case 'P':
         this.cyclePointOfInterest();
         return;
+      case 't':
+      case 'T':
+        this.toggleTangentKey();
+        return;
+      case 'n':
+      case 'N':
+        this.toggleNormalKey();
+        return;
       case 'Escape':
         if (this.interactionState.pinnedPoints().length > 0) {
           this.interactionState.clearPinned();
@@ -1402,19 +1568,51 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     this.requestRender();
   }
 
+  /** T key / tangent button: toggles the tangent and says so (the readout is otherwise mouse-only). */
+  toggleTangentKey(): void {
+    if (!this.canTangent()) return this.announceReadout(NO_TANGENT_TEXT);
+    this.interactionState.toggleTangent();
+    const on = this.interactionState.showTangent();
+    if (!on && this.touchHeld) this.releaseTouchTrace();
+    this.announceReadout(
+      on ? 'Tangent line on. Hover or touch a curve to read it.' : 'Tangent and normal lines off.',
+    );
+  }
+
+  /** N key / normal button. */
+  toggleNormalKey(): void {
+    if (!this.canTangent()) return this.announceReadout(NO_TANGENT_TEXT);
+    this.interactionState.toggleNormal();
+    this.announceReadout(
+      this.interactionState.showNormal()
+        ? 'Normal line on, with the tangent. Hover or touch a curve to read it.'
+        : 'Normal line off.',
+    );
+  }
+
+  private releaseTouchTrace(): void {
+    this.touchHeld = false;
+    this.mousePos.set(null);
+    this.requestRender();
+  }
+
   /** Cycles the keyboard focus through the currently visible points of interest,
    *  announcing the current one via the canvas's aria-describedby region. */
   private cyclePointOfInterest(): void {
-    if (!this.interactionState.showPointsOfInterest()) return;
+    if (!this.interactionState.showPointsOfInterest()) {
+      this.announceReadout('Points of interest are hidden. Turn them on first.');
+      return;
+    }
     const next = this.interactionState.cycleNext();
     if (!next) {
       this.poiAnnouncement.set('No points of interest in view.');
+      this.announceReadout('No points of interest in view.');
       return;
     }
     const { point, index, total } = next;
-    this.poiAnnouncement.set(
-      `Point of interest ${index + 1} of ${total}: (${point.x.toFixed(3)}, ${point.y.toFixed(3)}), ${point.label}.`,
-    );
+    const text = `Point of interest ${index + 1} of ${total}: (${point.x.toFixed(3)}, ${point.y.toFixed(3)}), ${point.label}.`;
+    this.poiAnnouncement.set(text);
+    this.announceReadout(text);
     this.requestRender();
   }
 
@@ -1431,6 +1629,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const x = touch.clientX - rect.left;
       const y = touch.clientY - rect.top;
       this.touchAnchor = { x, y };
+      this.touchHeld = false;
+      this.touchPinched = false;
       this.touchPanEngaged = false;
       this.isDragging.set(false);
       this.lastDrag.set({ x, y });
@@ -1442,6 +1642,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const dx = touch2.clientX - touch1.clientX;
       const dy = touch2.clientY - touch1.clientY;
       this.lastDrag.set({ x: Math.hypot(dx, dy), y: 0 });
+      this.touchPinched = true;
     }
   }
 
@@ -1506,8 +1707,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.isDragging.set(false);
       this.lastDrag.set(null);
       this.touchAnchor = null;
+      // A still finger leaves its trace (and tangent) in place: touch has no hover. A tap elsewhere,
+      // the tangent toggle or a pan/pinch clears it.
+      this.touchHeld = !this.touchPanEngaged && !this.touchPinched && !!this.mousePos();
+      if (!this.touchHeld) this.mousePos.set(null);
       this.touchPanEngaged = false;
-      this.mousePos.set(null);
+      this.touchPinched = false;
       this.gestureActive = false;
       this.requestRender();
     } else if (event.touches.length === 1) {
@@ -1591,8 +1796,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const intg = this.activeIntegral();
     const area = this.activeMultiArea();
     const state: ShareState = {
-      v: 1,
-      functions: this.functions().map((f) => ({ raw: f.raw, color: f.color, visible: f.visible })),
+      v: SHARE_STATE_VERSION,
+      functions: this.functions().map((f) => ({
+        raw: f.raw,
+        color: f.color,
+        visible: f.visible,
+        ...(f.showDerivative ? { derivative: true } : {}),
+        ...(f.slider ? { slider: { ...f.slider } } : {}),
+      })),
       viewport: {
         xMin: this.viewport.xMin,
         xMax: this.viewport.xMax,
@@ -1610,6 +1821,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         overlapMode: area.overlapMode,
       };
     }
+    if (this.interactionState.showTangent()) state.tangent = true;
     if (this.showSolidTool()) {
       state.tool.solid = {
         method: this.solidToolState.method(),
@@ -1656,6 +1868,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       /* clipboard unavailable; the input still shows the URL if focus lands there */
     }
     document.body.removeChild(input);
+  }
+
+  private announceReadout(text: string): void {
+    if (text === this.tangentAnnouncement()) return;
+    if (this.tangentTimerId !== null) clearTimeout(this.tangentTimerId);
+    this.tangentTimerId = setTimeout(() => {
+      this.tangentTimerId = null;
+      this.tangentAnnouncement.set(text);
+    }, TANGENT_ANNOUNCE_DELAY_MS);
   }
 
   private announceShare(message: string): void {
@@ -1706,9 +1927,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         visible: f.visible,
         mode: 'explicit' as const,
         error: null,
+        ...(f.slider ? { slider: { ...f.slider } } : {}),
       })),
     );
-    state.functions.forEach((f, i) => this.updateExpression(i, f.raw));
+    // All rows at once: a row may use a slider defined further down.
+    this.paramSliders.resolveAll();
+    this.functions.update((fns) =>
+      fns.map((fn, i) => (state.functions[i]?.derivative ? { ...fn, showDerivative: true } : fn)),
+    );
+    this.interactionState.showTangent.set(!!state.tangent);
 
     this.viewport.xMin = state.viewport.xMin;
     this.viewport.xMax = state.viewport.xMax;
@@ -1812,8 +2039,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
    *  incomplete (keeps `pi/2`, and `pi/` mid-typing, instead of echoing 1.5707…), else the number. */
   limitText(key: string, num: number): string {
     const typed = this.limitTexts()[key];
-    if (typed === undefined) return String(num);
-    const { value } = parseLimitText(typed);
+    if (typed === undefined)
+      return Number.isFinite(num) || Number.isNaN(num) ? String(num) : num > 0 ? 'inf' : '-inf';
+    const { value } = INTEGRAL_KEYS.has(key) ? parseLimitPoint(typed) : parseLimitText(typed);
     return value === null || value === num ? typed : String(num);
   }
 
@@ -1869,8 +2097,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       updated.splice(targetIndex, 0, moved);
       return updated;
     });
+    // Order decides which duplicate slider definition wins.
+    this.paramSliders.resolveAll();
 
     this.solidToolState.handleFunctionMoved(sourceIndex, targetIndex);
+    this.calculusState.handleFunctionMoved(sourceIndex, targetIndex);
+    this.derivHintIndex.set(null);
 
     if (this.activeIntegral()) {
       this.activeIntegral.update((intg) => {
@@ -1943,7 +2175,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   addConicToGraph(expression: string): void {
-    if (this.functions().length >= 5) return;
+    if (this.curveRowCount() >= MAX_CURVE_ROWS) return;
     const idx = this.functions().length;
     this.functions.update((fns) => [
       ...fns,
@@ -1962,7 +2194,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   private parseLimit(value: string, key: string): number | null {
     this.limitTexts.update((t) => ({ ...t, [key]: value }));
-    const { value: v, invalid } = parseLimitText(value);
+    const { value: v, invalid } = (INTEGRAL_KEYS.has(key) ? parseLimitPoint : parseLimitText)(
+      value,
+    );
     this.limitErrors.update((e) => ({ ...e, [key]: invalid }));
     return v;
   }
@@ -1983,7 +2217,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private parseAll(): void {
     this.functions.update((fns) =>
       fns.map((fn) => {
-        if (!fn.raw || fn.ast) return fn;
+        if (!fn.raw || fn.ast || fn.error || fn.mode === 'slider') return fn;
         try {
           return { ...fn, ast: parse(fn.raw) };
         } catch {
@@ -2016,7 +2250,34 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           mode: 'explicit-y',
           fn: (y: number) => compiled(0, y),
         });
+      } else if (fn.mode === 'polar') {
+        const compiled = compileExpression(fn.ast, au);
+        curves.push({
+          index,
+          color: fn.color,
+          mode: 'parametric',
+          xy: (t: number) => {
+            const r = compiled(t, 0);
+            return [r * Math.cos(t), r * Math.sin(t)];
+          },
+          tMin: this.evalRange(fn.thetaMin, 0),
+          tMax: this.evalRange(fn.thetaMax, 2 * Math.PI),
+        });
       }
+    });
+    // Parametric rows keep their components in paramX / paramY (ast is null).
+    this.functions().forEach((fn, index) => {
+      if (!fn.visible || fn.mode !== 'parametric' || !fn.paramX || !fn.paramY) return;
+      const cx = compileExpression(fn.paramX, au);
+      const cy = compileExpression(fn.paramY, au);
+      curves.push({
+        index,
+        color: fn.color,
+        mode: 'parametric',
+        xy: (t: number) => [cx(t, 0), cy(t, 0)],
+        tMin: this.evalRange(fn.tMin, 0),
+        tMax: this.evalRange(fn.tMax, 2 * Math.PI),
+      });
     });
     return curves;
   }
@@ -2044,21 +2305,29 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return `${v.xMin.toFixed(4)},${v.xMax.toFixed(4)}|${fnsKey}`;
   }
 
-  /** Recomputes points of interest at most once per POI_RECOMPUTE_DELAY_MS, so panning
-   *  or zooming doesn't re-run root/extrema/intersection search every frame. Skipped
-   *  entirely while a gesture is active — not just debounced — so the key string
-   *  itself isn't rebuilt every drag frame; the trailing recompute runs once the
-   *  gesture ends (mouseup/touchend/wheel-idle already trigger a render). */
+  /** Recomputes points of interest at once on the first change after an idle spell (a fresh
+   *  load or edit shows them without delay), then once more POI_RECOMPUTE_DELAY_MS after the
+   *  last change of a burst, so panning, zooming or a slider drag doesn't re-run
+   *  root/extrema/intersection search every frame. Skipped entirely while a gesture is active
+   *  — not just debounced — so the key string itself isn't rebuilt every drag frame; the
+   *  trailing recompute runs once the gesture ends (mouseup/touchend/wheel-idle already
+   *  trigger a render). Waits for the view: an earlier run would spend the leading edge on
+   *  the pre-restore functions and push the real first result behind the debounce. */
   private schedulePoiRecompute(): void {
-    if (this.gestureActive) return;
+    if (this.gestureActive || !this.viewInitialized) return;
     if (this.poiComputeKey() === this.poiKey) return;
-    if (this.poiTimer !== null) return;
+    if (this.poiTimer === null) this.runPoiRecompute();
+    else clearTimeout(this.poiTimer);
     this.poiTimer = setTimeout(() => {
       this.poiTimer = null;
-      this.poiKey = this.poiComputeKey();
-      this.recomputePointsOfInterest();
-      this.requestRender();
+      if (this.poiComputeKey() !== this.poiKey) this.runPoiRecompute();
     }, POI_RECOMPUTE_DELAY_MS);
+  }
+
+  private runPoiRecompute(): void {
+    this.poiKey = this.poiComputeKey();
+    this.recomputePointsOfInterest();
+    this.requestRender();
   }
 
   private recomputePointsOfInterest(): void {
@@ -2089,10 +2358,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   private getImplicitDiffAst(fn: MathExpression): ExpressionNode | null {
     const cached = this.implicitDiffAstCache.get(fn);
     if (cached) return cached;
-    const parts = fn.raw.split('=');
-    if (parts.length !== 2) return null;
+    const top = maskNested(fn.raw);
+    const eq = top.indexOf('=');
+    if (eq < 0 || top.indexOf('=', eq + 1) >= 0) return null;
     try {
-      const expr = parse(`(${parts[0].trim()})-(${parts[1].trim()})`);
+      const expr = parse(`(${fn.raw.slice(0, eq).trim()})-(${fn.raw.slice(eq + 1).trim()})`);
       this.implicitDiffAstCache.set(fn, expr);
       return expr;
     } catch {
@@ -2152,7 +2422,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             );
           }
         } else {
-          if (!fn.raw.includes('=')) continue;
+          if (!maskNested(fn.raw).includes('=')) continue;
           // A recognized conic (circle/ellipse/parabola/hyperbola) is drawn
           // parametrically — ~300 points — instead of the marching-squares grid;
           // `fn.ast` is already the raw `lhs = rhs` equation detectConic expects.
@@ -2198,6 +2468,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    const derivatives = this.derivatives();
+    this.functions().forEach((fn, i) => {
+      const d = derivatives[i]?.ast;
+      if (!fn.visible || !fn.showDerivative || !d) return;
+      const compiled = compileExpression(d, au);
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      drawFunction(ctx, this.viewport, (x: number) => compiled(x, 0), fn.color, w, h, d);
+      ctx.restore();
+    });
+
     const intg = this.activeIntegral();
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
@@ -2205,6 +2486,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const compiled = compileExpression(expr.ast, au);
         const fn = (x: number) => compiled(x, 0);
         drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, expr.color, w, h);
+        const riemann = this.integralExtras.riemann();
+        if (riemann?.panels.length) {
+          drawRiemannPanels(ctx, this.viewport, riemann.panels, riemann.rule, w, h);
+        }
       }
     }
 
@@ -2242,6 +2527,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     } else if (geom?.mode === 'single') {
       drawIntegralArea(ctx, this.viewport, geom.fn, geom.a, geom.b, geom.expr.color, w, h);
     }
+    const centroid = this.centroid();
+    if (centroid) drawCentroid(ctx, this.viewport, centroid.x, centroid.y, w, h);
 
     if (this.showSolidTool()) {
       const spec = this.solidToolState.spec();
@@ -2258,6 +2545,25 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         );
       }
     }
+
+    const limit = this.calculusState.limit();
+    if (limit) {
+      drawLimitMarker(
+        ctx,
+        this.viewport,
+        { x0: limit.x0, value: limit.result.value, text: limit.text, color: limit.color },
+        w,
+        h,
+      );
+    }
+    const newtonRun = this.calculusState.newton();
+    if (newtonRun) drawNewtonSteps(ctx, this.viewport, newtonRun.rows, newtonRun.color, w, h);
+    const taylorRun = this.calculusState.taylor();
+    if (taylorRun) drawTaylorPolynomial(ctx, this.viewport, taylorRun, w, h);
+    const odeRun = this.calculusState.ode();
+    if (odeRun) drawSlopeField(ctx, this.viewport, odeRun, w, h);
+    const seriesRun = this.calculusState.series();
+    if (seriesRun) drawSequence(ctx, this.viewport, seriesRun, w, h);
 
     if (this.interactionState.showPointsOfInterest()) {
       this.schedulePoiRecompute();
@@ -2285,7 +2591,32 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         h,
         TRACE_SNAP_PX,
       );
-      if (trace) {
+      const traceFn = trace ? this.functions()[trace.curveIndex] : undefined;
+      const tangent =
+        trace && traceFn && this.interactionState.showTangent()
+          ? tangentAt(
+              traceFn,
+              traceFn.mode === 'explicit' || traceFn.mode === 'explicit-y'
+                ? trace.worldX
+                : trace.param,
+              traceFn.mode === 'explicit-y' ? trace.worldY : undefined,
+              au,
+              this.interactionState.showNormal(),
+            )
+          : null;
+      if (trace && tangent) {
+        drawTangentOverlay(
+          ctx,
+          this.viewport,
+          tangent,
+          [trace.screenX, trace.screenY],
+          trace.color,
+          this.interactionState.showNormal(),
+          w,
+          h,
+        );
+        this.announceReadout(tangent.summary);
+      } else if (trace) {
         drawTracePoint(
           ctx,
           trace.screenX,

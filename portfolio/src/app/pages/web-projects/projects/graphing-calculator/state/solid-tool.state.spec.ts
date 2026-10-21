@@ -92,6 +92,22 @@ describe('SolidToolState', () => {
     expect(options[1].compatible).toBe(false);
   });
 
+  it('never offers or uses a slider row', () => {
+    const slider: MathExpression = {
+      raw: 'a = 1',
+      ast: null,
+      color: FUNCTION_COLORS[1],
+      visible: true,
+      mode: 'slider',
+      error: null,
+      slider: { min: -10, max: 10, step: 0.1 },
+    };
+    state.connect(signal<MathExpression[]>([slider, explicitFn('x')]));
+    expect(state.curveOptions().map((o) => o.index)).toEqual([1]);
+    state.toggleCurve(0);
+    expect(state.spec()).toBeNull();
+  });
+
   it('shifts curve indices when a function row is removed', () => {
     state.connect(
       signal<MathExpression[]>([explicitFn('x'), explicitFn('x+1'), explicitFn('x+2')]),

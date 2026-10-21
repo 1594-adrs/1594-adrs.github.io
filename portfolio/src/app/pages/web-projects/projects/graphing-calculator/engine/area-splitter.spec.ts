@@ -3,6 +3,7 @@ import { computeAreaRegions } from './area-splitter';
 import type { IntersectionPoint } from './intersection-finder';
 
 const PI = Math.PI;
+const at = (x: number): IntersectionPoint[] => [{ x, y: 0, functionIndices: [0, 1] }];
 
 describe('computeAreaRegions', () => {
   it('should produce 2 regions with one intersection', () => {
@@ -127,5 +128,25 @@ describe('computeAreaRegions wave-1 (H4, H26)', () => {
   it('degenerate interval returns no regions', () => {
     expect(computeAreaRegions([(x) => x], [], 1, 1)).toEqual([]);
     expect(computeAreaRegions([(x) => x], [], 2, 1)).toEqual([]);
+  });
+
+  it('3 curves: area of the band that closes at both limits, not the envelope (e, e^x, e^-x → 2)', () => {
+    const fns = [() => Math.E, Math.exp, (x: number) => Math.exp(-x)];
+    const rs = computeAreaRegions(fns, at(0), -1, 1);
+    expect(rs.reduce((s, r) => s + r.area, 0)).toBeCloseTo(2, 8);
+    expect(rs.every((r) => r.topFunctionIndex === 0)).toBe(true);
+  });
+
+  it('3 curves: closing band at the bottom (12-x, sqrt x, 1 on [1, 11] → 34/3)', () => {
+    const fns = [(x: number) => 12 - x, Math.sqrt, () => 1];
+    const rs = computeAreaRegions(fns, at(9), 1, 11);
+    expect(rs.reduce((s, r) => s + r.area, 0)).toBeCloseTo(34 / 3, 8);
+    expect(rs.every((r) => r.bottomFunctionIndex === 2)).toBe(true);
+  });
+
+  it('3 curves with no single closing band keep the envelope', () => {
+    const fns = [() => 2, () => 1, () => 0];
+    const rs = computeAreaRegions(fns, [], 0, 1);
+    expect(rs[0].area).toBeCloseTo(2, 12);
   });
 });

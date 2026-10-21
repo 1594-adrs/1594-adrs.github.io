@@ -1,3 +1,6 @@
+/* KaTeX faces for MathLive (see mathlive-loader.ts): fetched only when a glyph needs them. */
+@import 'mathlive/fonts.css';
+
 :host {
   display: block;
   min-width: 0;

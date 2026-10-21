@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { compileExpression } from './evaluator';
+import { parse } from './parser';
 import {
   findRoots,
   findExtrema,
@@ -123,5 +125,72 @@ describe('critical-points wave-1 (H25)', () => {
     const pts = findExtrema((x) => 1e-3 * x * x, -5, 5);
     expect(pts.length).toBe(1);
     expect(pts[0].kind).toBe('min');
+  });
+});
+
+describe('critical-points: flat, close, cusp and wide-interval extrema', () => {
+  const xs = (f: (x: number) => number, a: number, b: number) =>
+    findExtrema(f, a, b).map((p) => [p.kind, p.x] as const);
+
+  it('finds flat (high-multiplicity) extrema', () => {
+    // x^5 - 5x^4 - 240: max at 0 where f is flat to ~3e-4 in floating point, min at 4.
+    const p = xs((x) => x ** 5 - 5 * x ** 4 - 240, -10, 10);
+    expect(p.length).toBe(2);
+    expect(p[0][0]).toBe('max');
+    expect(Math.abs(p[0][1])).toBeLessThan(1e-6);
+    expect(p[1][1]).toBeCloseTo(4, 6);
+    const q = xs((x) => 5 / (x ** 4 + 5), -10, 10);
+    expect(q.length).toBe(1);
+    expect(Math.abs(q[0][1])).toBeLessThan(1e-6);
+    const r = xs((x) => x ** 11 - 6 * x ** 10, -2, 10);
+    expect(r.map((e) => e[0])).toEqual(['max', 'min']);
+    expect(Math.abs(r[0][1])).toBeLessThan(1e-6);
+    const t = xs((x) => (x - 6 / x) ** 8, -10, 10);
+    expect(t.map((e) => e[0])).toEqual(['min', 'min']);
+    expect(t[1][1]).toBeCloseTo(Math.sqrt(6), 5);
+  });
+
+  it('keeps two critical points 0.0014 apart', () => {
+    const f = (x: number) => x ** 8 / 8 - 0.4 * x ** 5 - 5 * x - 5 / x ** 2 + 11;
+    const p = xs(f, 0.5, 2);
+    expect(p.length).toBe(2);
+    expect(p[0][1]).toBeCloseTo(5 ** (1 / 7), 7);
+    expect(p[1][1]).toBeCloseTo(2 ** (1 / 3), 7);
+  });
+
+  it('locates a cusp extremum on the corner, not where the smoothed f′ vanishes', () => {
+    const p = xs((x) => 2 * x - 3 * Math.cbrt(x * x), -10, 10);
+    expect(p.map((e) => e[0])).toEqual(['max', 'min']);
+    expect(Math.abs(p[0][1])).toBeLessThan(1e-9);
+    expect(p[1][1]).toBeCloseTo(1, 6);
+  });
+
+  it('finds an extremum of a large-valued curve on a wide interval', () => {
+    const p = xs((x) => 180 * Math.sqrt(x * x + 640000) + 100 * (10560 - x), 0, 10560);
+    expect(p.length).toBe(1);
+    expect(p[0][0]).toBe('min');
+    expect(p[0][1]).toBeCloseTo(800 / Math.sqrt(2.24), 4);
+  });
+
+  it('an inflection with f′ = 0 is not an extremum', () => {
+    expect(findExtrema((x) => x ** 3, -2, 2)).toEqual([]);
+  });
+});
+
+describe('critical-points: piecewise if()', () => {
+  const fn = (src: string) => {
+    const c = compileExpression(parse(src));
+    return (x: number) => c(x, NaN);
+  };
+
+  it('a corner written with if() keeps its extremum', () => {
+    const p = findExtrema(fn('if(x < 0, -x, x)'), -1, 2);
+    expect(p.map((e) => e.kind)).toEqual(['min']);
+    expect(Math.abs(p[0].x)).toBeLessThan(1e-6);
+  });
+
+  it('a jump is neither a root nor an extremum', () => {
+    expect(findRoots(fn('if(x < 0, -1, 1)'), -2, 2)).toEqual([]);
+    expect(findExtrema(fn('if(x < 0, x, x + 3)'), -2, 2)).toEqual([]);
   });
 });

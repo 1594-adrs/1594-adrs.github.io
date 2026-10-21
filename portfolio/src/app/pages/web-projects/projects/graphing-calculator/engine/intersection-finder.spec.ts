@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { compileExpression } from './evaluator';
+import { parse } from './parser';
 import { findIntersections } from './intersection-finder';
 
 const PI = Math.PI;
@@ -155,5 +157,40 @@ describe('findIntersections wave-1 (H2, H26)', () => {
   it('a curve partly coincident with another reports the crossing once', () => {
     const r = findIntersections([(x) => x, (x) => Math.max(0, x)], -2, 2);
     expect(r.length).toBeLessThanOrEqual(1);
+  });
+
+  it('a high-multiplicity crossing is located precisely: 10(x-1)^9 vs 0', () => {
+    const r = findIntersections([(x) => 10 * (x - 1) ** 9, () => 0], 0.01, 1.99);
+    expect(r.length).toBe(1);
+    expect(r[0].x).toBeCloseTo(1, 9);
+  });
+
+  it('two crossings closer than the sample spacing stay apart', () => {
+    const r = findIntersections([(x) => (x - 1) * (x - 1.001), () => 0], 0, 2);
+    expect(r.map((p) => p.x)).toEqual([expect.closeTo(1, 9), expect.closeTo(1.001, 9)]);
+  });
+
+  it('three curves through one point share a single intersection', () => {
+    const r = findIntersections([(x) => x, (x) => 2 * x, (x) => -x], -1, 1.3);
+    expect(r.length).toBe(1);
+    expect(r[0].functionIndices.sort()).toEqual([0, 1, 2]);
+  });
+});
+
+describe('findIntersections: piecewise jumps', () => {
+  const fn = (src: string) => {
+    const c = compileExpression(parse(src));
+    return (x: number) => c(x, NaN);
+  };
+
+  it('crossing a jump of one curve over another is no intersection', () => {
+    expect(findIntersections([fn('if(x < 0, -1, 1)'), () => 0], -3, 3)).toEqual([]);
+    expect(findIntersections([fn('if(x < 1, x, x + 3)'), fn('2')], -2, 4)).toEqual([]);
+  });
+
+  it('a real crossing on one branch is kept', () => {
+    const r = findIntersections([fn('if(x < 1, x, x + 3)'), fn('4.5')], -2, 4);
+    expect(r.map((p) => p.x)).toHaveLength(1);
+    expect(r[0].x).toBeCloseTo(1.5, 8);
   });
 });

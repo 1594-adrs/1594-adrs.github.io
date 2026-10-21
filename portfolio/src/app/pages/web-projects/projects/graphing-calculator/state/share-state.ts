@@ -1,15 +1,22 @@
 import type { OverlapMode } from '../models/calculator.models';
 import { FUNCTION_COLORS } from '../utils/color';
+import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from '../models/calculator.models';
+import { sliderName } from '../engine/mode-detector';
 import type { CrossSectionShape, SolidMethod } from '../engine/solids/solid.types';
 
-/** Current on-the-wire share format. Bumping this invalidates old links, which are then
- *  ignored (not partially restored). */
-export const SHARE_STATE_VERSION = 1;
+/** Current on-the-wire share format. v2 adds the optional f′ toggles and the tangent toggle;
+ *  v1 links (same shape without them) still load. Any other version is ignored. */
+export const SHARE_STATE_VERSION = 2;
+const READABLE_VERSIONS: readonly unknown[] = [1, 2];
 
 interface ShareFunction {
   raw: string;
   color: string;
   visible: boolean;
+  /** v2: plot f′ too (only written when true). */
+  derivative?: boolean;
+  /** Slider rows (`a = 2`): the range. Optional, so v2 keeps loading either way (no bump). */
+  slider?: { min: number; max: number; step: number };
 }
 
 interface ShareViewport {
@@ -54,6 +61,8 @@ export interface ShareState {
   functions: ShareFunction[];
   viewport: ShareViewport;
   tool: ShareTool;
+  /** v2: tangent at the trace point (only written when true). */
+  tangent?: boolean;
 }
 
 function toBase64Url(json: string): string {
@@ -74,16 +83,39 @@ function fromBase64Url(encoded: string): string {
 /** Serializes app state to a base64url string suitable for `location.hash` (without the
  *  leading `#s=`). Never throws. */
 export function serializeShareState(state: ShareState): string {
-  return toBase64Url(JSON.stringify(state));
+  const integral = state.tool.integral;
+  // JSON turns ±Infinity into null: write non-finite integral bounds as 'inf' / '-inf'.
+  const out = integral
+    ? {
+        ...state,
+        tool: {
+          ...state.tool,
+          integral: { ...integral, a: encodeBound(integral.a), b: encodeBound(integral.b) },
+        },
+      }
+    : state;
+  return toBase64Url(JSON.stringify(out));
 }
 
-const MAX_FUNCTIONS = 5;
+function encodeBound(v: number): number | string {
+  return Number.isFinite(v) ? v : v > 0 ? 'inf' : '-inf';
+}
+
+/** Integral bound: a bounded number, or the strings 'inf' / '-inf'. */
+function decodeIntegralBound(v: unknown): number | null {
+  if (v === 'inf') return Infinity;
+  if (v === '-inf') return -Infinity;
+  return isBoundNumber(v) ? v : null;
+}
+
+/** Rows in a link: curves and sliders are capped separately (see parseShareState). */
+const MAX_FUNCTIONS = MAX_CURVE_ROWS + MAX_SLIDER_ROWS;
 const MAX_RAW_LENGTH = 500;
 const MAX_VIEWPORT_ABS = 1e9;
 const MIN_RELATIVE_WIDTH = 1e-9;
 const MAX_TOOL_BOUND = 1e6;
 const MAX_BOUND_TEXT_LENGTH = 100;
-const MAX_CURVES = 5;
+const MAX_CURVES = MAX_FUNCTIONS;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const METHODS: readonly string[] = ['disk-washer', 'shell', 'cross-section'];
 const SHAPES: readonly string[] = [
@@ -108,14 +140,29 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  *  An invalid `color` is replaced by the palette color for its slot. */
 function sanitizeFunction(f: unknown, index: number): ShareFunction | null {
   if (!isRecord(f)) return null;
-  const { raw, color, visible } = f;
+  const { raw, color, visible, derivative, slider } = f;
   if (typeof raw !== 'string' || raw.length > MAX_RAW_LENGTH) return null;
   if (typeof visible !== 'boolean') return null;
   const safeColor =
     typeof color === 'string' && COLOR_RE.test(color)
       ? color
       : FUNCTION_COLORS[index % FUNCTION_COLORS.length];
-  return { raw, color: safeColor, visible };
+  const out: ShareFunction = { raw, color: safeColor, visible };
+  if (derivative === true) out.derivative = true;
+  const bounds = sanitizeSlider(slider);
+  if (bounds) out.slider = bounds;
+  return out;
+}
+
+/** Slider range, or null (dropped, link kept) unless finite, bounded, min < max, 0 < step ≤ span. */
+function sanitizeSlider(v: unknown): ShareFunction['slider'] | null {
+  if (!isRecord(v)) return null;
+  const { min, max, step } = v;
+  if (![min, max, step].every((n) => isFiniteNumber(n) && Math.abs(n) <= MAX_TOOL_BOUND)) {
+    return null;
+  }
+  const [lo, hi, st] = [min, max, step] as number[];
+  return lo < hi && st > 0 && st <= hi - lo ? { min: lo, max: hi, step: st } : null;
 }
 
 function isValidViewport(v: unknown): v is ShareViewport {
@@ -156,8 +203,10 @@ function sanitizeIntegral(t: unknown): ShareIntegralTool | null {
   if (!Number.isInteger(fnIndex) || (fnIndex as number) < 0 || (fnIndex as number) >= MAX_CURVES) {
     return null;
   }
-  if (!isBoundNumber(a) || !isBoundNumber(b)) return null;
-  return { fnIndex: fnIndex as number, a, b };
+  const lo = decodeIntegralBound(a);
+  const hi = decodeIntegralBound(b);
+  if (lo === null || hi === null) return null;
+  return { fnIndex: fnIndex as number, a: lo, b: hi };
 }
 
 function sanitizeArea(t: unknown): ShareAreaTool | null {
@@ -223,7 +272,7 @@ export function parseShareState(encoded: string): ShareState | null {
     const json = fromBase64Url(encoded);
     const parsed: unknown = JSON.parse(json);
     if (!isRecord(parsed)) return null;
-    if (parsed['v'] !== SHARE_STATE_VERSION) return null;
+    if (!READABLE_VERSIONS.includes(parsed['v'])) return null;
     const rawFunctions = parsed['functions'];
     if (!Array.isArray(rawFunctions) || rawFunctions.length > MAX_FUNCTIONS) return null;
     const functions: ShareFunction[] = [];
@@ -232,11 +281,14 @@ export function parseShareState(encoded: string): ShareState | null {
       if (!fn) return null;
       functions.push(fn);
     }
+    // Over-cap links are rejected whole (not trimmed): trimming would shift row indices the tools use.
+    const sliders = functions.filter((f) => sliderName(f.raw) !== null).length;
+    if (sliders > MAX_SLIDER_ROWS || functions.length - sliders > MAX_CURVE_ROWS) return null;
     const viewport = parsed['viewport'];
     if (!isValidViewport(viewport)) return null;
     const tool = sanitizeTool(parsed['tool']);
     if (!tool) return null;
-    return {
+    const state: ShareState = {
       v: SHARE_STATE_VERSION,
       functions,
       viewport: {
@@ -247,6 +299,8 @@ export function parseShareState(encoded: string): ShareState | null {
       },
       tool,
     };
+    if (parsed['tangent'] === true) state.tangent = true;
+    return state;
   } catch {
     return null;
   }

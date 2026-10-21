@@ -42,7 +42,13 @@ export function describeIntegral(
   else if (a > b) {
     notes.push('a > b: the limits are reversed, so the sign of the integral is flipped.');
   }
-  if (r.status === 'divergent') notes.push('The integral diverges (it has no finite value).');
+  if (r.status === 'divergent') {
+    notes.push(
+      r.badPoint !== undefined && !Number.isFinite(r.badPoint)
+        ? `The integral diverges at ${r.badPoint > 0 ? '∞' : '-∞'}: the tail does not converge.`
+        : 'The integral diverges (it has no finite value).',
+    );
+  }
   if (r.status === 'undefined') notes.push('f is undefined somewhere inside [a, b].');
   if (r.status === 'inaccurate') {
     notes.push('The result is approximate: the integrand is hard to integrate numerically.');

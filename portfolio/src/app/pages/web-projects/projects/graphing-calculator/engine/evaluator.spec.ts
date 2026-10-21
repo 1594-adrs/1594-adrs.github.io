@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { compileExpression, evalConstantExpression, evalExpression, evaluate } from './evaluator';
-import { parse, type PoweredFunctionCall } from './parser';
+import { parse, type ExpressionNode, type PoweredFunctionCall } from './parser';
 
 describe('evalConstantExpression', () => {
   it('should evaluate pi', () => {
@@ -107,6 +107,26 @@ describe('evalConstantExpression', () => {
 
     it('tanh(0) = 0', () => {
       expect(evalExpression('tanh(0)', 0)).toBeCloseTo(0, 10);
+    });
+
+    it('cbrt is the real cube root', () => {
+      expect(evalExpression('cbrt(27)', 0)).toBeCloseTo(3, 12);
+      expect(evalExpression('cbrt(-8)', 0)).toBeCloseTo(-2, 12);
+    });
+
+    it('inverse hyperbolics, with NaN outside the domain', () => {
+      expect(evalExpression('asinh(1)', 0)).toBeCloseTo(Math.asinh(1), 12);
+      expect(evalExpression('acosh(2)', 0)).toBeCloseTo(Math.acosh(2), 12);
+      expect(evalExpression('atanh(0.5)', 0)).toBeCloseTo(Math.atanh(0.5), 12);
+      expect(evalExpression('acosh(0.5)', 0)).toBeNaN();
+      expect(evalExpression('atanh(1)', 0)).toBeNaN();
+      expect(evalExpression('atanh(-2)', 0)).toBeNaN();
+    });
+
+    it('sech, csch, coth are reciprocals of cosh, sinh, tanh', () => {
+      expect(evalExpression('sech(1)', 0)).toBeCloseTo(1 / Math.cosh(1), 12);
+      expect(evalExpression('csch(1)', 0)).toBeCloseTo(1 / Math.sinh(1), 12);
+      expect(evalExpression('coth(1)', 0)).toBeCloseTo(1 / Math.tanh(1), 12);
     });
 
     it('floor(1.5) = 1', () => {
@@ -498,5 +518,155 @@ describe('evaluator wave-1 regressions (H24)', () => {
     expect(evalExpression('gamma(5)', 0)).toBeCloseTo(24, 9);
     expect(evalExpression('gamma(0.5)', 0)).toBeCloseTo(Math.sqrt(Math.PI), 9);
     expect(evalExpression('gamma(-0.5)', 0)).toBeCloseTo(-2 * Math.sqrt(Math.PI), 9);
+  });
+});
+
+describe('if() and comparisons', () => {
+  const both = (s: string, x: number): [number, number] => [
+    evaluate(parse(s), { x, y: 0, t: x }),
+    compileExpression(parse(s))(x, 0),
+  ];
+
+  it.each<[string, number, number]>([
+    ['if(x < 0, -1, 1)', -2, -1],
+    ['if(x < 0, -1, 1)', 0, 1],
+    ['if(x, 2, 3)', 0.5, 2],
+    ['if(x < 0, -1)', 2, NaN],
+    ['if(sqrt(x) < 1, 1, 2)', -1, NaN],
+    ['if(x > 0, ln(x), 0)', -1, 0],
+    ['if(x < 0, -x, if(x < 1, x^2, 1))', 0.5, 0.25],
+    ['sqrt(x) < 1', -1, NaN],
+    ['x == 2', 2, 1],
+    ['x != 2', 2, 0],
+  ])('%s at %d = %d (evaluate and compiled)', (s, x, want) => {
+    expect(both(s, x)).toEqual([want, want]);
+  });
+
+  it('only the selected branch is evaluated', () => {
+    expect(evaluate(parse('if(x < 0, 1, foo)'), { x: -1 })).toBe(1);
+    expect(compileExpression(parse('if(x < 0, 1, foo)'))(-1, 0)).toBe(1);
+    expect(() => evaluate(parse('if(x < 0, 1, foo)'), { x: 1 })).toThrow(/foo/);
+    expect(() => compileExpression(parse('if(x < 0, 1, foo)'))(1, 0)).toThrow(/foo/);
+  });
+});
+
+describe('compileExpression parity', () => {
+  const UNARY = [
+    'sin',
+    'cos',
+    'tan',
+    'sec',
+    'csc',
+    'cot',
+    'asin',
+    'acos',
+    'atan',
+    'sinh',
+    'cosh',
+    'tanh',
+    'cbrt',
+    'asinh',
+    'acosh',
+    'atanh',
+    'sech',
+    'csch',
+    'coth',
+    'log',
+    'ln',
+    'sqrt',
+    'abs',
+    'exp',
+    'floor',
+    'ceil',
+    'round',
+    'sign',
+    'factorial',
+    'gamma',
+  ];
+  const exprs = [
+    ...UNARY.map((f) => `${f}(x)`),
+    ...UNARY.map((f) => `${f}^2(x)`),
+    'asin^(1/3)(x)',
+    'min(x, y, 1)',
+    'max(x, y)',
+    'mod(x, y)',
+    'logb(y, x)',
+    'root(3, x)',
+    'atan2(y, x)',
+    'npr(x, 2)',
+    'ncr(x, 2)',
+    'x^(1/3)',
+    'x^(2/3)',
+    'x^y',
+    '-x^2',
+    '(-x)^3',
+    'x^-1',
+    '2^x',
+    'e^x + pi - π',
+    '1 < x < 3',
+    'x <= y > 0',
+    'x >= 1',
+    'x == y',
+    'x != y',
+    '(x < 1) < 1',
+    'if(x < 0, -x)',
+    'if(x, y)',
+    'if(x > y, ln(x), sqrt(y))',
+    'if(x<0, x^2, sqrt(x))+tan(x)',
+    '0/0 + x',
+    '1/x',
+    '1e-7*x',
+    '2.5E3 - x',
+  ];
+  const xs = [-8, -2.5, -1, -0.5, 0, 0.3, 1, 2, 5, 90, 180, NaN, Infinity, -Infinity];
+  const ys = [-3, 0, 2, NaN];
+
+  for (const angleUnit of ['rad', 'deg'] as const) {
+    it(`matches evaluate() bit for bit on every function and operator (${angleUnit})`, () => {
+      const mismatches: string[] = [];
+      for (const src of exprs) {
+        const ast = parse(src);
+        const fn = compileExpression(ast, angleUnit);
+        for (const x of xs) {
+          for (const y of ys) {
+            const want = evaluate(ast, { x, y, t: x }, angleUnit);
+            const got = fn(x, y);
+            if (!Object.is(want, got)) mismatches.push(`${src} @(${x},${y}): ${want} vs ${got}`);
+          }
+        }
+      }
+      expect(mismatches).toEqual([]);
+    });
+  }
+
+  it('substituted slider values (negative, -0, NaN, Infinity literals) compile to the same numbers', () => {
+    for (const value of [-2, -0, 1e-300, -1.5e21, NaN, Infinity, -Infinity]) {
+      const ast = {
+        type: 'BinaryOp',
+        operator: '-',
+        left: { type: 'Variable', name: 'x' },
+        right: { type: 'NumberLiteral', value },
+      } as const;
+      expect(compileExpression(ast)(1, 0)).toBe(1 - value);
+      expect(Object.is(compileExpression({ type: 'NumberLiteral', value })(0, 0), value)).toBe(
+        true,
+      );
+    }
+  });
+
+  // f'' of a 250-factor product (the deepest tree the parser + symbolic-diff produce) is ~750 deep.
+  it('compiles 1000-deep trees (symbolic derivatives exceed MAX_AST_NODES) without a stack overflow', () => {
+    let deep: ExpressionNode = { type: 'Variable', name: 'x' };
+    for (let i = 0; i < 1000; i++) {
+      deep = {
+        type: 'BinaryOp',
+        operator: '+',
+        left: deep,
+        right: { type: 'NumberLiteral', value: 1 },
+      };
+    }
+    expect(compileExpression(deep)(1, 0)).toBe(1001);
+    const long = Array.from({ length: 160 }, () => 'x').join('+');
+    expect(compileExpression(parse(long))(1, 0)).toBe(160);
   });
 });

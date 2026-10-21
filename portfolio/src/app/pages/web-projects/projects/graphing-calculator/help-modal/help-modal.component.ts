@@ -39,8 +39,54 @@ import {
           <div class="help-grid">
             <span class="key-hint">+/-</span><span>Zoom in/out</span>
             <span class="key-hint">←→↑↓</span><span>Pan view</span> <span class="key-hint">R</span
-            ><span>Reset view</span>
+            ><span>Reset view</span> <span class="key-hint">P</span
+            ><span>Cycle points of interest</span> <span class="key-hint">T</span
+            ><span>Tangent line at the trace point</span> <span class="key-hint">N</span
+            ><span>Normal line at the trace point</span>
           </div>
+          <p class="help-note">
+            Hover a curve to trace it. The tangent and normal buttons next to the canvas do the same
+            as T and N, and are disabled when no visible curve supports them (implicit curves do
+            not).
+          </p>
+        </div>
+
+        <div class="help-section">
+          <h3>TOUCH (canvas)</h3>
+          <div class="help-grid">
+            <span class="key-hint">Hold</span><span>Trace the nearest curve</span>
+            <span class="key-hint">Drag</span><span>Pan the graph</span>
+            <span class="key-hint">Pinch</span><span>Zoom in/out</span>
+          </div>
+          <p class="help-note">
+            The traced point (and its tangent) stays after you lift the finger. Tap elsewhere to
+            move it, or switch the tangent off to clear it.
+          </p>
+        </div>
+
+        <div class="help-section">
+          <h3>DERIVATIVE f′</h3>
+          <p class="help-note">
+            The f′ button on a y = f(x) row plots its symbolic derivative as a dashed curve and
+            shows the formula under the row. Trig functions need RAD mode; other row types show the
+            reason when you tap the button.
+          </p>
+        </div>
+
+        <div class="help-section">
+          <h3>CALCULUS TAB</h3>
+          <div class="help-grid">
+            <span class="key-hint">Limit</span><span>Numeric limit of a y = f(x) row</span>
+            <span class="key-hint">side</span
+            ><span>Both sides, from the left or from the right</span>
+            <span class="key-hint">inf, -inf</span><span>Limits at ±infinity (also ∞)</span>
+            <span class="key-hint">Newton</span
+            ><span>Iterates from x₀; "steps" empty runs until convergence</span>
+          </div>
+          <p class="help-note">
+            Limits accept pi/2, -3, e^2. "Does not exist" says whether f is undefined there or which
+            one-sided limit fails. Newton steps: whole number from 1 to 50.
+          </p>
         </div>
 
         <div class="help-section">
@@ -52,7 +98,10 @@ import {
             ><span>Trigonometric functions</span> <span class="key-hint">asin/acos/atan</span
             ><span>Inverse trig</span> <span class="key-hint">sec/csc/cot</span
             ><span>Reciprocal trig</span> <span class="key-hint">sinh/cosh/tanh</span
-            ><span>Hyperbolic</span> <span class="key-hint">log</span><span>Logarithm base 10</span>
+            ><span>Hyperbolic</span> <span class="key-hint">asinh/acosh/atanh</span
+            ><span>Inverse hyperbolic</span> <span class="key-hint">sech/csch/coth</span
+            ><span>Reciprocal hyperbolic</span> <span class="key-hint">cbrt</span
+            ><span>Cube root</span> <span class="key-hint">log</span><span>Logarithm base 10</span>
             <span class="key-hint">ln</span><span>Natural logarithm</span>
             <span class="key-hint">sqrt</span><span>Square root</span>
             <span class="key-hint">abs</span><span>Absolute value</span>
@@ -62,7 +111,19 @@ import {
             <span class="key-hint">mod</span><span>Modulo (2 args)</span>
             <span class="key-hint">^</span><span>Power (e.g. x^2)</span>
             <span class="key-hint">()</span><span>Grouping</span>
+            <span class="key-hint">if(c, a, b)</span><span>a where c holds, else b</span>
+            <span class="key-hint">if(c, a)</span><span>a where c holds, gap elsewhere</span>
+            <span class="key-hint">cases key</span
+            ><span>Piecewise block in the "x y" keyboard tab</span>
           </div>
+          <p class="help-note">
+            Conditions use &lt; &lt;= &gt; &gt;= == != and may be chained: if(0 &lt;= x &lt; 1, x^2,
+            1) means 0 &lt;= x and x &lt; 1. A cases block ends with "otherwise" for the else value.
+          </p>
+          <p class="help-note">
+            Parameters: type a = 1 to make a slider; letters other than x, y, t, r, e, θ in a
+            function become parameters.
+          </p>
           <p class="help-note">
             x = g(y): switch a row's mode to "x" to plot a curve as x in terms of y (e.g. x=y^2);
             integral/area/solid tools don't support these rows yet.

@@ -42,7 +42,7 @@ const NUMBERS: Key[][] = [
     '[6]',
     sym('\\times'),
     { latex: 'x^y', insert: '#@^{#?}' },
-    { latex: '|x|', insert: '\left|#0\right|' },
+    { latex: '|x|', insert: '\\left|#0\\right|' },
   ],
   ['[1]', '[2]', '[3]', '[-]', '[(]', '[)]'],
   ['[0]', '[.]', '[+]', ...ACTIONS],
@@ -51,6 +51,7 @@ const NUMBERS: Key[][] = [
 const FUNCTIONS: Key[][] = [
   [fn('sin'), fn('cos'), fn('tan'), fn('sec'), fn('csc'), fn('cot')],
   [fn('arcsin'), fn('arccos'), fn('arctan'), fn('sinh'), fn('cosh'), fn('tanh')],
+  [op('cbrt'), op('asinh'), op('acosh'), op('atanh'), op('sech'), op('csch')],
   [
     fn('ln'),
     fn('log'),
@@ -72,7 +73,20 @@ const FUNCTIONS: Key[][] = [
 
 const VARIABLES: Key[][] = [
   ['x', 'y', 't', 'r', sym('\\theta'), sym('\\pi')],
-  ['e', '=', '<', '>', sym('\\le'), sym('\\ge')],
+  [
+    'e',
+    '=',
+    '<',
+    '>',
+    sym('\\le'),
+    sym('\\ge'),
+    {
+      latex: '\\scriptstyle\\begin{cases}a\\\\b\\end{cases}',
+      insert: '\\begin{cases}#0 & #? \\\\ #? & \\text{otherwise}\\end{cases}',
+      tooltip: 'Piecewise (cases)',
+      class: 'small',
+    },
+  ],
   [',', '[(]', '[)]', ...ACTIONS],
 ];
 
@@ -80,7 +94,15 @@ const LIMIT: Key[][] = [
   ['[7]', '[8]', '[9]', sym('\\div'), '\\frac{#@}{#?}', '\\sqrt{#0}', '[backspace]'],
   ['[4]', '[5]', '[6]', sym('\\times'), '[^]', '[(]', '[)]'],
   ['[1]', '[2]', '[3]', '[-]', '[+]', sym('\\pi'), 'e'],
-  ['[0]', '[.]', '[left]', '[right]', HIDE],
+  ['[0]', '[.]', sym('\\infty'), '[left]', '[right]', HIDE],
+];
+
+/** Letters for touch devices (typed function names, other variables). */
+const LETTERS: Key[][] = [
+  ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+  ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+  ['z', 'x', 'c', 'v', 'b', 'n', 'm', '[backspace]'],
+  ['[(]', '[)]', ',', '[left]', '[right]', HIDE],
 ];
 
 const layout = (
@@ -100,10 +122,12 @@ export const EXPRESSION_LAYOUTS: VirtualKeyboardLayout[] = [
   layout('calc-numbers', '123', 'Numbers and operators', NUMBERS),
   layout('calc-functions', 'f(x)', 'Functions', FUNCTIONS),
   layout('calc-variables', 'x y', 'Variables and constants', VARIABLES),
+  layout('calc-letters', 'abc', 'Letters', LETTERS),
 ];
 
 export const LIMIT_LAYOUTS: VirtualKeyboardLayout[] = [
-  layout('calc-limit', '123', 'Numbers', LIMIT),
+  layout('calc-limit', '123', 'Numbers and infinity', LIMIT),
+  layout('calc-limit-letters', 'abc', 'Letters', LETTERS),
 ];
 
 /**
@@ -123,11 +147,31 @@ export const SAFE_INLINE_SHORTCUTS: Record<string, string> = {
   sinh: '\\sinh',
   cosh: '\\cosh',
   tanh: '\\tanh',
+  coth: '\\coth',
+  cbrt: '\\operatorname{cbrt}',
+  asinh: '\\operatorname{asinh}',
+  acosh: '\\operatorname{acosh}',
+  atanh: '\\operatorname{atanh}',
+  sech: '\\operatorname{sech}',
+  csch: '\\operatorname{csch}',
   ln: '\\ln',
   log: '\\log',
   exp: '\\exp',
   pi: '\\pi',
   theta: '\\theta',
+  asin: '\\arcsin',
+  acos: '\\arccos',
+  atan: '\\arctan',
+  inf: '\\infty',
+  abs: '\\operatorname{abs}',
+  floor: '\\operatorname{floor}',
+  ceil: '\\operatorname{ceil}',
+  round: '\\operatorname{round}',
+  sign: '\\operatorname{sign}',
+  min: '\\operatorname{min}',
+  max: '\\operatorname{max}',
+  mod: '\\operatorname{mod}',
+  root: '\\operatorname{root}',
   sqrt: '\\sqrt{#0}',
   '<=': '\\le',
   '>=': '\\ge',

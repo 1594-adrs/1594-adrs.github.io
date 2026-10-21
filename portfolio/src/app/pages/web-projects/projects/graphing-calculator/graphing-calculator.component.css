@@ -420,3 +420,7 @@
     flex-wrap: wrap;
   }
 }
+.canvas-ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

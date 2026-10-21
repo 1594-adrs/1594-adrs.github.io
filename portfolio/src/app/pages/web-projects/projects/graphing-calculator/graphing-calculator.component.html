@@ -6,11 +6,12 @@
   <div
     class="canvas-container"
     tabindex="0"
-    aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset, P to cycle points of interest, Escape to clear pinned labels."
+    aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset, P to cycle points of interest, T to toggle the tangent line, N the normal line, Escape to clear pinned labels."
     aria-describedby="canvas-graph-description"
     (keydown)="onCanvasKeyDown($event)"
   >
     <span id="canvas-graph-description" class="sr-only">{{ canvasDescription() }}</span>
+    <p class="sr-only" role="status" aria-live="polite">{{ tangentAnnouncement() }}</p>
     <!-- The 2D canvas stays mounted (listeners/ResizeObserver are bound to this element
          once); the 3D view is an absolute overlay on top of it. -->
     <canvas #graphCanvas [attr.aria-hidden]="show3DSolid() && hasSolidResult()"></canvas>
@@ -74,6 +75,62 @@
           title="Points of interest (P)"
         >
           <app-icon name="target" />
+        </button>
+        <button
+          class="canvas-ctrl-btn"
+          [class.active]="canTangent() && interactionState.showTangent()"
+          (click)="toggleTangentKey()"
+          [attr.aria-pressed]="canTangent() && interactionState.showTangent()"
+          [disabled]="!canTangent()"
+          aria-label="Tangent line at the traced point"
+          [title]="canTangent() ? 'Tangent at trace (T)' : 'No curve here has a tangent'"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path
+              d="M4 18c4 0 7-2 9-6s4-6 7-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              opacity="0.55"
+            />
+            <path
+              d="M3 17.5 21 6.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          class="canvas-ctrl-btn"
+          [class.active]="canTangent() && interactionState.showNormal()"
+          (click)="toggleNormalKey()"
+          [attr.aria-pressed]="canTangent() && interactionState.showNormal()"
+          [disabled]="!canTangent()"
+          aria-label="Normal line at the traced point"
+          [title]="canTangent() ? 'Normal at trace (N)' : 'No curve here has a normal'"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path
+              d="M3 17.5 21 6.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              opacity="0.55"
+              stroke-linecap="round"
+            />
+            <path
+              d="M8 6.5 16 17.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+          </svg>
         </button>
         <div class="canvas-ctrl-shortcuts-anchor">
           <button
@@ -140,23 +197,27 @@
             (drop)="onDrop($index, $event)"
             (dragend)="onDragEnd()"
           >
-            <div class="fn-gutter">
-              <button
-                type="button"
-                class="visibility-dot"
-                [class.visible]="fn.visible"
-                [style.--dot-color]="fn.color"
-                (click)="toggleVisibility($index)"
-                [attr.aria-pressed]="fn.visible"
-                [attr.aria-label]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
-                [title]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
-              ></button>
-              <app-color-picker
-                [color]="fn.color"
-                [label]="'Change colour of f' + ($index + 1)"
-                (colorChange)="updateColor($index, $event)"
-              />
-            </div>
+            @if (fn.mode !== 'slider') {
+              <div class="fn-gutter">
+                <button
+                  type="button"
+                  class="visibility-dot"
+                  [class.visible]="fn.visible"
+                  [style.--dot-color]="fn.color"
+                  (click)="toggleVisibility($index)"
+                  [attr.aria-pressed]="fn.visible"
+                  [attr.aria-label]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
+                  [title]="(fn.visible ? 'Hide ' : 'Show ') + functionLabel($index)"
+                ></button>
+                <app-color-picker
+                  [color]="fn.color"
+                  [label]="'Change colour of f' + ($index + 1)"
+                  (colorChange)="updateColor($index, $event)"
+                />
+              </div>
+            } @else {
+              <div class="fn-gutter" aria-hidden="true"></div>
+            }
             <div class="fn-expression">
               <app-math-input
                 [inputId]="'fn-input-' + $index"
@@ -203,26 +264,49 @@
                   <app-icon name="arrow-down" />
                 </button>
               </span>
-              <button
-                class="action-btn mode-btn"
-                (click)="cycleMode($index)"
-                [attr.aria-label]="
-                  'Cycle curve type for ' + functionLabel($index) + ', currently ' + fn.mode
-                "
-                [title]="'Curve type: ' + fn.mode"
-              >
-                {{
-                  fn.mode === 'implicit'
-                    ? '='
-                    : fn.mode === 'explicit-y'
-                      ? 'x'
-                      : fn.mode === 'parametric'
-                        ? 't'
-                        : fn.mode === 'polar'
-                          ? 'r'
-                          : 'y'
-                }}
-              </button>
+              @if (fn.mode !== 'slider') {
+                <button
+                  class="action-btn mode-btn"
+                  (click)="cycleMode($index)"
+                  [attr.aria-label]="
+                    'Cycle curve type for ' + functionLabel($index) + ', currently ' + fn.mode
+                  "
+                  [title]="'Curve type: ' + fn.mode"
+                >
+                  {{
+                    fn.mode === 'implicit'
+                      ? '='
+                      : fn.mode === 'explicit-y'
+                        ? 'x'
+                        : fn.mode === 'parametric'
+                          ? 't'
+                          : fn.mode === 'polar'
+                            ? 'r'
+                            : 'y'
+                  }}
+                </button>
+              }
+              @if (fn.mode !== 'slider' && derivatives()[$index]; as d) {
+                <button
+                  type="button"
+                  class="action-btn mode-btn deriv-btn"
+                  [class.active]="!!d.ast && !!fn.showDerivative"
+                  [attr.aria-pressed]="d.applicable ? !!d.ast && !!fn.showDerivative : null"
+                  [attr.aria-disabled]="d.applicable ? null : true"
+                  (click)="toggleDerivative($index)"
+                  [attr.aria-describedby]="
+                    !d.applicable && derivHintIndex() === $index ? 'deriv-hint-' + $index : null
+                  "
+                  [attr.aria-label]="
+                    d.applicable
+                      ? 'Plot derivative f′ of ' + functionLabel($index)
+                      : 'Derivative unavailable: ' + d.reason
+                  "
+                  [title]="d.applicable ? 'Plot f′ (dashed)' : d.reason"
+                >
+                  f′
+                </button>
+              }
               @if (canShowValueTable(fn)) {
                 <button
                   class="action-btn"
@@ -247,6 +331,13 @@
               </button>
             </div>
           </div>
+          @if (paramSliders.sliders()[$index]; as spec) {
+            <app-param-slider
+              [spec]="spec"
+              (valueChange)="paramSliders.setSliderValue($index, $event)"
+              (boundsChange)="paramSliders.setSliderBounds($index, $event)"
+            />
+          }
           @if (fn.error) {
             <p [id]="'fn-error-' + $index" role="alert" aria-live="polite" class="fn-error">
               {{ fn.error }}
@@ -255,6 +346,43 @@
             <p role="status" aria-live="polite" class="fn-error">{{ fnIssues()[$index][0] }}</p>
           } @else if (expHint(fn.raw); as hint) {
             <p role="status" aria-live="polite" class="fn-error">{{ hint }}</p>
+          }
+          @if (paramSliders.missing()[$index]?.length) {
+            <div class="add-sliders">
+              @for (name of paramSliders.missing()[$index]; track name) {
+                <button
+                  type="button"
+                  class="add-slider-btn"
+                  [disabled]="sliderRowCount() >= MAX_SLIDER_ROWS"
+                  [title]="
+                    sliderRowCount() >= MAX_SLIDER_ROWS
+                      ? 'Limit of ' + MAX_SLIDER_ROWS + ' sliders reached'
+                      : 'Add a slider row for ' + name
+                  "
+                  (click)="paramSliders.addSlider(name)"
+                >
+                  add slider: {{ name }}
+                </button>
+              }
+            </div>
+          }
+          @if (!derivatives()[$index]?.applicable && derivHintIndex() === $index) {
+            <p [id]="'deriv-hint-' + $index" role="status" class="deriv-reason deriv-hint">
+              {{ derivatives()[$index]?.reason }}
+            </p>
+          }
+          @if (fn.showDerivative && fn.mode === 'explicit' && derivatives()[$index]; as d) {
+            <div class="deriv-line" [style.--dot-color]="fn.color">
+              @if (d.ast) {
+                <span class="deriv-name">f{{ $index + 1 }}′(x) =</span>
+                <app-math-renderer [ast]="d.ast" [fontSize]="13" />
+                @if (d.note) {
+                  <span class="deriv-note">{{ d.note }}</span>
+                }
+              } @else {
+                <span class="deriv-reason" role="status">{{ d.reason }}</span>
+              }
+            </div>
           }
           @if (tableOpenIndex() === $index && canShowValueTable(fn)) {
             <app-value-table
@@ -324,16 +452,24 @@
       <button
         class="add-expression-btn"
         (click)="addFunction()"
-        [disabled]="functions().length >= 5"
+        [disabled]="curveRowCount() >= MAX_CURVE_ROWS"
         [attr.aria-label]="
-          functions().length >= 5
-            ? 'Add expression, limit of 5 expressions reached'
+          curveRowCount() >= MAX_CURVE_ROWS
+            ? 'Add expression, limit of ' + MAX_CURVE_ROWS + ' expressions reached'
             : 'Add expression'
         "
-        [title]="functions().length >= 5 ? 'Limit of 5 expressions reached' : 'Add expression'"
+        [title]="
+          curveRowCount() >= MAX_CURVE_ROWS
+            ? 'Limit of ' + MAX_CURVE_ROWS + ' expressions reached'
+            : 'Add expression'
+        "
       >
         <app-icon name="plus" />
-        <span>{{ functions().length >= 5 ? 'Limit of 5 reached' : 'Add expression' }}</span>
+        <span>{{
+          curveRowCount() >= MAX_CURVE_ROWS
+            ? 'Limit of ' + MAX_CURVE_ROWS + ' reached'
+            : 'Add expression'
+        }}</span>
       </button>
 
       <div class="tool-tabs" role="tablist" aria-label="Graph tools">
@@ -387,6 +523,16 @@
         >
           Conics
         </button>
+        <button
+          type="button"
+          role="tab"
+          class="tool-tab"
+          [class.active]="uiLayout.activeTool() === 'calculus'"
+          [attr.aria-selected]="uiLayout.activeTool() === 'calculus'"
+          (click)="selectTool('calculus')"
+        >
+          Calculus
+        </button>
       </div>
       @if (functions().some((f) => f.mode === 'explicit-y')) {
         <p class="tool-note">x = g(y) rows aren't supported by the integral or area tools yet.</p>
@@ -397,6 +543,10 @@
           (addGraph)="addConicToGraph($event)"
           (close)="showConicAssistant.set(false)"
         />
+      }
+
+      @if (calculusState.open()) {
+        <app-calculus-panel />
       }
 
       @if (activeIntegral()) {
@@ -435,6 +585,7 @@
             <p id="int-b-error" class="fn-error" role="alert">{{ msg }}</p>
           }
         </div>
+        <app-integral-extras />
       }
 
       @if (showSolidTool()) {
@@ -470,16 +621,18 @@
           <span class="range-label">Area between curves</span>
           <div class="bounded-fn-selects" role="group" aria-label="Curves for the area">
             @for (fn of functions(); track $index) {
-              <label class="range-field multi-fn-toggle">
-                <input
-                  type="checkbox"
-                  [checked]="activeMultiArea()!.functionIndices.includes($index)"
-                  [attr.aria-label]="'Include f' + ($index + 1) + ' in the area'"
-                  (change)="toggleMultiAreaFunction($index)"
-                />
-                <span class="color-swatch" [style.background]="fn.color"></span>
-                f{{ $index + 1 }}
-              </label>
+              @if (fn.mode !== 'slider') {
+                <label class="range-field multi-fn-toggle">
+                  <input
+                    type="checkbox"
+                    [checked]="activeMultiArea()!.functionIndices.includes($index)"
+                    [attr.aria-label]="'Include f' + ($index + 1) + ' in the area'"
+                    (change)="toggleMultiAreaFunction($index)"
+                  />
+                  <span class="color-swatch" [style.background]="fn.color"></span>
+                  f{{ $index + 1 }}
+                </label>
+              }
             }
           </div>
           <div class="range-inputs">

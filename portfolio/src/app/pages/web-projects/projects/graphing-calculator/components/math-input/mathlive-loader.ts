@@ -1,9 +1,27 @@
+import type { VirtualKeyboardLayer, VirtualKeyboardLayout } from 'mathlive';
 import {
   EXPRESSION_LAYOUTS,
   LIMIT_LAYOUTS,
   MATH_KEYBOARD_THEME_CSS,
   type MathKeyboardKind,
 } from '../../keyboard/math-keyboard-layout';
+
+/** Field kinds the loader knows: the shared keyboard kinds plus `sequence` (terms aₙ in n). */
+export type MathFieldKind = MathKeyboardKind | 'sequence';
+
+/** The expression keyboard with `n` in place of `y` on the variables layer, for sequence terms. */
+export const SEQUENCE_LAYOUTS: VirtualKeyboardLayout[] = EXPRESSION_LAYOUTS.map((l) => {
+  if (l.id !== 'calc-variables' || !('layers' in l)) return l;
+  const layers = l.layers.map((layer) =>
+    typeof layer === 'string'
+      ? layer
+      : ({
+          ...layer,
+          rows: layer.rows?.map((row) => row.map((k) => (k === 'y' ? 'n' : k))),
+        } satisfies VirtualKeyboardLayer),
+  );
+  return { ...l, label: 'n x', tooltip: 'Index n, variables and constants', layers };
+});
 
 let loading: Promise<boolean> | null = null;
 let ready = false;
@@ -28,9 +46,11 @@ function injectTheme(): void {
 /** Loads MathLive once (browser only). Resolves `false`, never rejects, when unavailable. */
 export function loadMathlive(): Promise<boolean> {
   if (!supported()) return Promise.resolve(false);
+  // MathLive's own font loader fetches all 20 KaTeX faces up front (~300 kB); this flag turns
+  // it off, and the @font-face rules in math-input.css let the browser fetch only those used.
+  document.documentElement.style.setProperty('--ML__static-fonts', '1');
   loading ??= import('mathlive')
     .then((m) => {
-      m.MathfieldElement.fontsDirectory = new URL('assets/mathlive/fonts', document.baseURI).href;
       m.MathfieldElement.soundsDirectory = null;
       injectTheme();
       window.mathVirtualKeyboard.layouts = EXPRESSION_LAYOUTS;
@@ -54,9 +74,14 @@ export function hideMathKeyboard(): void {
 }
 
 /** Switches the global keyboard layout for the focused field's kind. */
-export function setMathKeyboardKind(kind: MathKeyboardKind): void {
+export function setMathKeyboardKind(kind: MathFieldKind): void {
   if (ready) {
-    window.mathVirtualKeyboard.layouts = kind === 'limit' ? LIMIT_LAYOUTS : EXPRESSION_LAYOUTS;
+    window.mathVirtualKeyboard.layouts =
+      kind === 'limit'
+        ? LIMIT_LAYOUTS
+        : kind === 'sequence'
+          ? SEQUENCE_LAYOUTS
+          : EXPRESSION_LAYOUTS;
   }
 }
 
