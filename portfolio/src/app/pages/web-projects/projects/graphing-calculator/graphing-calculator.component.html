@@ -604,12 +604,6 @@
               3D view
             </button>
           </div>
-          @if (limitError('multiA'); as msg) {
-            <p id="multi-a-error" class="fn-error" role="alert">{{ msg }}</p>
-          }
-          @if (limitError('multiB'); as msg) {
-            <p id="multi-b-error" class="fn-error" role="alert">{{ msg }}</p>
-          }
           @if (areaHint(); as hint) {
             <p class="tool-note" role="status">{{ hint }}</p>
           }
@@ -661,6 +655,12 @@
               />
             </label>
           </div>
+          @if (limitError('multiA'); as msg) {
+            <p id="multi-a-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
+          @if (limitError('multiB'); as msg) {
+            <p id="multi-b-error" class="fn-error" role="alert">{{ msg }}</p>
+          }
         </div>
       }
 
@@ -698,8 +698,8 @@
                 <span class="result-err">{{ r.error }}</span>
               }
             </div>
-            @if (r.notes?.length) {
-              <p class="result-note" role="status">{{ r.notes![0] }}</p>
+            @for (note of r.notes ?? []; track $index) {
+              <p class="result-note" role="status">{{ note }}</p>
             }
           }
         </div>

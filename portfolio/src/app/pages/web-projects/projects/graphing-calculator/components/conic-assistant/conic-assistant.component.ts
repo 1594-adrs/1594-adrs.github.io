@@ -55,25 +55,31 @@ export class ConicAssistantComponent {
     this.activeTab.set(tab);
   }
 
+  /** Applies a numeric field; a rejected value (empty, NaN, or non-positive when `positive`)
+   *  resets the input to the last accepted one so the field never disagrees with the plot. */
+  private setNumber(e: Event, key: 'h' | 'k' | 'a' | 'b' | 'p', positive = false): void {
+    const input = e.target as HTMLInputElement;
+    const v = parseFloat(input.value);
+    if (isNaN(v) || (positive && v <= 0)) {
+      input.value = String(this.params()[key]);
+      return;
+    }
+    this.params.update((p) => ({ ...p, [key]: v }));
+  }
   updateParamH(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v)) this.params.update((p) => ({ ...p, h: v }));
+    this.setNumber(e, 'h');
   }
   updateParamK(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v)) this.params.update((p) => ({ ...p, k: v }));
+    this.setNumber(e, 'k');
   }
   updateParamA(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v) && v > 0) this.params.update((p) => ({ ...p, a: v }));
+    this.setNumber(e, 'a', true);
   }
   updateParamB(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v) && v > 0) this.params.update((p) => ({ ...p, b: v }));
+    this.setNumber(e, 'b', true);
   }
   updateParamP(e: Event): void {
-    const v = parseFloat((e.target as HTMLInputElement).value);
-    if (!isNaN(v)) this.params.update((p) => ({ ...p, p: v }));
+    this.setNumber(e, 'p');
   }
   updateOrientation(e: Event): void {
     const v = (e.target as HTMLSelectElement).value as 'horizontal' | 'vertical';

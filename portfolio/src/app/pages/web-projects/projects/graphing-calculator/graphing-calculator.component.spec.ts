@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { GraphingCalculatorComponent } from './graphing-calculator.component';
-import { evalExpression } from './engine/evaluator';
+import { evalExpression, evaluate } from './engine/evaluator';
 import { buildShareHash, extractShareFragment, parseShareState } from './state/share-state';
 import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from './models/calculator.models';
 import { FUNCTION_COLORS } from './utils/color';
@@ -145,6 +145,38 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.functions().length).toBe(2);
     comp.removeFunction(0);
     expect(comp.functions().length).toBe(1);
+  });
+
+  it('draws a non-conic implicit curve that uses a slider parameter', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    comp.addFunction();
+    comp.addFunction();
+    comp.updateExpression(1, 'a = 2');
+    comp.updateExpression(2, 'x^3+y^3=a');
+    const diff = (comp as any).getImplicitDiffAst(comp.functions()[2]);
+    expect(diff).not.toBeNull();
+    // x^3 + y^3 - a at (1, 1) with a = 2
+    expect(evaluate(diff, { x: 1, y: 1 })).toBeCloseTo(0, 10);
+  });
+
+  it('keeps the integral and value table on the same row when an earlier row is removed or moved', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    comp.addFunction();
+    comp.addFunction();
+    comp.updateExpression(0, 'x');
+    comp.updateExpression(1, 'x^2');
+    comp.updateExpression(2, 'x^3');
+    comp.activeIntegral.set({ fnIndex: 1, a: 0, b: 1 });
+    comp.tableOpenIndex.set(1);
+    (comp as any).reorderFunction(0, 2);
+    expect(comp.functions().map((f) => f.raw)).toEqual(['x^2', 'x^3', 'x']);
+    expect(comp.activeIntegral()!.fnIndex).toBe(0);
+    expect(comp.tableOpenIndex()).toBe(0);
+    comp.removeFunction(2);
+    expect(comp.activeIntegral()!.fnIndex).toBe(0);
+    comp.removeFunction(0);
+    expect(comp.activeIntegral()).toBeNull();
+    expect(comp.tableOpenIndex()).toBeNull();
   });
 
   it('should toggle visibility', () => {
