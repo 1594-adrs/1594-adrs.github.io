@@ -58,6 +58,11 @@ export class GraphInteractionState {
     });
   }
 
+  isPinned(p: PointOfInterest): boolean {
+    const id = pointId(p);
+    return this.pinnedPoints().some((pt) => pt.id === id);
+  }
+
   clearPinned(): void {
     this.pinnedPoints.set([]);
   }

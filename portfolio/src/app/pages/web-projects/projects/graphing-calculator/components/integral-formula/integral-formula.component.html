@@ -1,4 +1,4 @@
-<p class="integral-formula" [attr.aria-label]="spokenText()">
+<p class="integral-formula" role="img" [attr.aria-label]="spokenText()">
   @for (term of terms(); track $index) {
     <span class="term" aria-hidden="true">
       @if ($index > 0) {

@@ -1,4 +1,12 @@
-import { Component, ChangeDetectionStrategy, input, output, signal } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  ElementRef,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FUNCTION_COLORS } from '../../utils/color';
 
 /** Small swatch button that opens a popover with the 5 palette presets plus a native
@@ -17,6 +25,8 @@ export class ColorPicker {
 
   open = signal(false);
 
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
+
   readonly presets = FUNCTION_COLORS;
 
   toggle(): void {
@@ -25,7 +35,7 @@ export class ColorPicker {
 
   choose(value: string): void {
     this.colorChange.emit(value);
-    this.open.set(false);
+    this.close();
   }
 
   onCustomColor(value: string): void {
@@ -33,8 +43,11 @@ export class ColorPicker {
   }
 
   onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      this.open.set(false);
-    }
+    if (event.key === 'Escape') this.close();
+  }
+
+  private close(): void {
+    this.open.set(false);
+    this.host.nativeElement.querySelector<HTMLElement>('.color-swatch-btn')?.focus();
   }
 }

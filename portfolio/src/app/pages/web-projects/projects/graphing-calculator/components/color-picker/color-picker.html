@@ -19,6 +19,7 @@
             class="color-preset"
             [style.background]="preset"
             [class.selected]="preset === color()"
+            [attr.aria-pressed]="preset === color()"
             (click)="choose(preset)"
             [attr.aria-label]="'Use color ' + preset"
           ></button>

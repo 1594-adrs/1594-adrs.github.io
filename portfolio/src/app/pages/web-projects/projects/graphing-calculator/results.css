@@ -129,3 +129,8 @@
     background: var(--color-bg-dark);
   }
 }
+
+/* Always-present live region wrapper; adds no box of its own. */
+.live-region {
+  display: contents;
+}
