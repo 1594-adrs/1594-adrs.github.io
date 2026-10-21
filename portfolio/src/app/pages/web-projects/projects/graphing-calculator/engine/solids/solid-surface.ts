@@ -1,4 +1,5 @@
-import { validateSolidSpec } from './solid-validation';
+import { baselineValue, safeEval } from './solid-integrand';
+import { axisInsideRegion } from './solid-validation';
 import type { SolidPiece, SolidSpec } from './solid.types';
 
 /**
@@ -40,7 +41,7 @@ export function computeSurfaceArea(spec: SolidSpec, pieces: SolidPiece[]): numbe
   if (spec.method === 'cross-section') return null;
   if (!spec.axis) return null;
   if (pieces.length === 0) return null;
-  if (validateSolidSpec(spec).some((issue) => issue.code === 'axis-inside-region')) return null;
+  if (axisInsideRegion(spec)) return null;
 
   const k = spec.axis.value;
   const isShell = spec.method === 'shell';
@@ -61,18 +62,6 @@ export function computeSurfaceArea(spec: SolidSpec, pieces: SolidPiece[]): numbe
   total += capA + capB;
 
   return total;
-}
-
-function safeEval(fn: (t: number) => number, t: number): number {
-  try {
-    return fn(t);
-  } catch {
-    return NaN;
-  }
-}
-
-function baselineValue(spec: SolidSpec): number {
-  return spec.method === 'disk-washer' ? (spec.axis?.value ?? 0) : 0;
 }
 
 interface ArcResult {

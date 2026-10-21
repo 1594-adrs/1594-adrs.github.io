@@ -18,7 +18,7 @@ describe('parseLimitText', () => {
     expect(parseLimitText('  ')).toEqual({ value: null, invalid: false });
   });
 
-  it.each(['pi/', 'abc', '2*'])('flags %s as invalid', (text) => {
+  it.each(['pi/', 'abc', '2*', 'Infinity', '1E999', '0x10', '0b11', '0o7'])('flags %s as invalid', (text) => {
     expect(parseLimitText(text)).toEqual({ value: null, invalid: true });
   });
 });

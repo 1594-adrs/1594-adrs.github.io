@@ -228,12 +228,15 @@ class Lexer {
       if (tokIsValue && nextIsValue) {
         if (tok.type === 'variable' && isKnownFunction(tok.value)) continue;
         if (tok.type === 'rparen' && powerGroupCloses.has(i)) continue;
+        // `sin^2(x)`: the lparen is the powered function's argument; `x^2(x+1)` multiplies.
         if (
           tok.type === 'number' &&
           next.type === 'lparen' &&
-          i > 0 &&
+          i > 1 &&
           this.tokens[i - 1].type === 'operator' &&
-          this.tokens[i - 1].value === '^'
+          this.tokens[i - 1].value === '^' &&
+          this.tokens[i - 2].type === 'variable' &&
+          isKnownFunction(this.tokens[i - 2].value)
         )
           continue;
         result.push({ type: 'operator', value: '*' });

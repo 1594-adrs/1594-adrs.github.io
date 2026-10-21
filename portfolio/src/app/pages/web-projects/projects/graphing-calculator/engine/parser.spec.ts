@@ -587,6 +587,18 @@ describe('parser', () => {
       const ast = parse('x(x+1)');
       expect(evaluate(ast, { x: 3 })).toBe(12);
     });
+
+    it('a power of a non-function before ( multiplies: x^2(x+1), 2^3(4), e^2(x+1)', () => {
+      expect(evaluate(parse('x^2(x+1)'), { x: 2 })).toBe(12);
+      expect(evaluate(parse('2^3(4)'), {})).toBe(32);
+      expect(evaluate(parse('e^2(x+1)'), { x: 2 })).toBeCloseTo(22.17, 2);
+    });
+
+    it('a powered known function keeps its argument: ln^2(x)', () => {
+      const ast = parse('ln^2(x)');
+      expect(ast.type).toBe('PoweredFunctionCall');
+      expect(evaluate(ast, { x: Math.E })).toBeCloseTo(1, 10);
+    });
   });
 
   describe('complexity limit', () => {

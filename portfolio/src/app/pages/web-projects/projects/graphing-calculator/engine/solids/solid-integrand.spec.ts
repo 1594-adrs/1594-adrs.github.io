@@ -275,3 +275,44 @@ describe('shell sliceArea sign (H1)', () => {
     expect(pieces.map((p) => p.lowerIndex === 0)).toEqual([false, true, false]);
   });
 });
+
+describe('sliceArea envelope with 3+ curves', () => {
+  // findIntersections samples 200 steps: sin(1000x) crosses 0 ~318 times on [0, 1], so pieces miss
+  // crossings and their fixed upper/lower order is wrong between them.
+  const W = 1000;
+  const spec = (method: SolidSpec['method']): SolidSpec => ({
+    method,
+    variable: 'x',
+    shape: 'square',
+    curves: [curve((x) => Math.sin(W * x), 'f1'), curve(() => 0, 'f2'), curve(() => -2, 'f3')],
+    a: 0,
+    b: 1,
+    axis: { orientation: method === 'shell' ? 'vertical' : 'horizontal', value: -3 },
+  });
+
+  it('uses the pointwise max/min of the curves, not the piece order', () => {
+    const cases: Array<[SolidSpec['method'], (t: number, U: number, L: number) => number]> = [
+      ['cross-section', (_t, U, L) => (U - L) ** 2],
+      ['disk-washer', (_t, U, L) => Math.PI * ((U + 3) ** 2 - (L + 3) ** 2)],
+      ['shell', (t, U, L) => 2 * Math.PI * (t + 3) * (U - L)],
+    ];
+    for (const [method, expected] of cases) {
+      const sp = spec(method);
+      const area = sliceArea(sp, computePieces(sp));
+      for (let i = 1; i < 2000; i++) {
+        const t = i / 2000;
+        expect(area(t)).toBeCloseTo(expected(t, Math.max(Math.sin(W * t), 0), -2), 9);
+      }
+    }
+  });
+
+  it('drops a curve that is undefined at t instead of returning NaN', () => {
+    const sp: SolidSpec = {
+      ...spec('cross-section'),
+      curves: [curve(() => 1), curve((x) => (x < 0.5 ? NaN : 0.5)), curve(() => -1)],
+    };
+    const area = sliceArea(sp, computePieces(sp));
+    expect(area(0.25)).toBeCloseTo(4, 12);
+    expect(area(0.75)).toBeCloseTo(4, 12);
+  });
+});

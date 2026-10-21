@@ -270,3 +270,25 @@ describe('buildTerms', () => {
     });
   });
 });
+
+describe('buildTerms: axis inside the region (disk-washer)', () => {
+  it('uses the far radius alone, matching sliceArea (y = 1, y = -1 about y = 0)', () => {
+    const spec: SolidSpec = {
+      method: 'disk-washer',
+      variable: 'x',
+      curves: [symbolicCurve('1', 'f1'), symbolicCurve('-1', 'f2')],
+      a: 0,
+      b: 2,
+      axis: { orientation: 'horizontal', value: 0 },
+    };
+    const pieces = computePieces(spec);
+    const terms = buildTerms(spec, pieces);
+    const area = sliceArea(spec, pieces);
+    expect(terms).toHaveLength(1);
+    for (const t of [0.3, 1, 1.7]) {
+      const fromTerm = coeffValue(terms[0].coefficient) * evaluate(terms[0].integrand, { x: t });
+      expect(fromTerm).toBeCloseTo(area(t), 10);
+    }
+    expect(area(1)).toBeCloseTo(Math.PI, 10);
+  });
+});

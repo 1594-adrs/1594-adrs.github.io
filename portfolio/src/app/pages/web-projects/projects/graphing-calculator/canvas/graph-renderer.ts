@@ -144,8 +144,9 @@ function getVerticalAsymptotes(
   viewport: Viewport,
   eps: number,
   ast?: ExpressionNode,
+  variant?: string,
 ): number[] {
-  const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax, ast);
+  const asymptotes = detectAsymptotes(fn, viewport.xMin, viewport.xMax, ast, variant);
   return asymptotes
     .filter((a) => a.type === 'vertical')
     .map((a) => a.value)
@@ -180,12 +181,14 @@ export function drawFunction(
   width: number,
   height: number,
   ast?: ExpressionNode,
+  /** Cache key for what fn depends on besides ast (the angle unit), see detectAsymptotes. */
+  variant?: string,
 ): void {
   // Gap left at each side of a vertical asymptote, relative to the view so it works at any zoom.
   const eps = (viewport.xMax - viewport.xMin) * 1e-9;
   setStroke(ctx, color);
   let start = viewport.xMin;
-  for (const ax of getVerticalAsymptotes(fn, viewport, eps, ast)) {
+  for (const ax of getVerticalAsymptotes(fn, viewport, eps, ast, variant)) {
     if (ax > start + eps) drawFunctionSegment(ctx, viewport, fn, start, ax - eps, width, height);
     start = ax + eps;
   }

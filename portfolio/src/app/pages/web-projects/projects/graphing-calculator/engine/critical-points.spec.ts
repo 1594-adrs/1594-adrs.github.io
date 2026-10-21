@@ -194,3 +194,23 @@ describe('critical-points: piecewise if()', () => {
     expect(findExtrema(fn('if(x < 0, x, x + 3)'), -2, 2)).toEqual([]);
   });
 });
+
+describe('critical-points: zoomed-in views', () => {
+  const f = (x: number) => x * x + 1000 * x ** 3;
+
+  it('finds the max and min of x^2 + 1000x^3 on [-1e-3, 1e-3]', () => {
+    const p = findExtrema(f, -1e-3, 1e-3);
+    expect(p.map((e) => e.kind)).toEqual(['max', 'min']);
+    expect(p[0].x).toBeCloseTo(-2 / 3000, 7);
+    expect(Math.abs(p[1].x)).toBeLessThan(1e-7);
+  });
+
+  it('finds the min of x^2 + 1000x^3 on [-1e-5, 1e-5]', () => {
+    const p = findExtrema(f, -1e-5, 1e-5);
+    expect(p.some((e) => e.kind === 'min' && Math.abs(e.x) < 1e-7)).toBe(true);
+  });
+
+  it('sin on [-10, 10] still has 6 extrema', () => {
+    expect(findExtrema(Math.sin, -10, 10)).toHaveLength(6);
+  });
+});

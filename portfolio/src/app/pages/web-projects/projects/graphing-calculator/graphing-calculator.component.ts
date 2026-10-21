@@ -2460,8 +2460,14 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         if (!fn.ast) continue;
         const compiled = compileExpression(fn.ast, au);
         const evalFn = (x: number) => compiled(x, 0);
-        drawFunction(ctx, this.viewport, evalFn, fn.color, w, h, fn.ast);
-        const asymptotes = detectAsymptotes(evalFn, this.viewport.xMin, this.viewport.xMax, fn.ast);
+        drawFunction(ctx, this.viewport, evalFn, fn.color, w, h, fn.ast, au);
+        const asymptotes = detectAsymptotes(
+          evalFn,
+          this.viewport.xMin,
+          this.viewport.xMax,
+          fn.ast,
+          au,
+        );
         for (const a of asymptotes) {
           drawAsymptote(ctx, this.viewport, a, w, h);
         }
@@ -2473,9 +2479,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const d = derivatives[i]?.ast;
       if (!fn.visible || !fn.showDerivative || !d) return;
       const compiled = compileExpression(d, au);
+      const base = fn.ast ? compileExpression(fn.ast, au) : null;
+      // f' is only drawn where f itself is defined (e.g. ln(x) has no derivative curve for x < 0)
+      const evalD = (x: number) => (base && Number.isNaN(base(x, 0)) ? NaN : compiled(x, 0));
       ctx.save();
       ctx.setLineDash([6, 4]);
-      drawFunction(ctx, this.viewport, (x: number) => compiled(x, 0), fn.color, w, h, d);
+      drawFunction(ctx, this.viewport, evalD, fn.color, w, h, d, au);
       ctx.restore();
     });
 

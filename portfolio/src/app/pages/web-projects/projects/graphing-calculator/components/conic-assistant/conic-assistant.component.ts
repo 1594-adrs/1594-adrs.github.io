@@ -10,6 +10,19 @@ interface ConicParams {
   orientation: 'horizontal' | 'vertical';
 }
 
+/** Surface of the ellipsoid made by revolving x²/rx² + y²/ry² = 1 about the x-axis. */
+export function ellipseRevolutionSurface(rx: number, ry: number): number {
+  const PI = Math.PI;
+  if (Math.abs(rx - ry) < 1e-10 * Math.max(rx, ry)) return 4 * PI * rx * rx;
+  if (rx > ry) {
+    const e = Math.sqrt(1 - (ry * ry) / (rx * rx));
+    return 2 * PI * ry * ry + ((2 * PI * rx * ry) / e) * Math.asin(e);
+  }
+  // oblate: ln((1+e)/(1-e)) = 2·atanh(e)
+  const e = Math.sqrt(1 - (rx * rx) / (ry * ry));
+  return 2 * PI * ry * ry + ((2 * PI * rx * rx) / e) * Math.atanh(e);
+}
+
 @Component({
   selector: 'app-conic-assistant',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -123,15 +136,7 @@ export class ConicAssistantComponent {
         const rx = p.a;
         const ry = p.b;
         const revVol = (4 / 3) * PI * rx * ry * ry;
-        let revSA: string;
-        if (Math.abs(ecc) < 1e-10) {
-          revSA = `${(4 * PI * rx * rx).toFixed(4)}`;
-        } else if (rx > ry) {
-          revSA = `${(2 * PI * ry * ry + ((2 * PI * rx * ry) / ecc) * Math.asin(ecc)).toFixed(4)}`;
-        } else {
-          const e2 = Math.sqrt(1 - (rx * rx) / (ry * ry));
-          revSA = `${(2 * PI * rx * rx + ((2 * PI * ry * ry) / e2) * Math.asin(e2)).toFixed(4)}`;
-        }
+        const revSA = ellipseRevolutionSurface(rx, ry).toFixed(4);
         return [
           { label: 'Center', value: `(${h}, ${k})` },
           { label: 'Semi-axes', value: `a=${p.a}, b=${p.b}` },

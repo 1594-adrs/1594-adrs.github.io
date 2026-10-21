@@ -19,6 +19,7 @@ export interface AreaRegion {
 }
 
 const EPS = 1e-12;
+const PROBES = [0.5, 0.49, 0.51, 0.25, 0.75];
 
 function valuesAt(functions: Array<(x: number) => number>, x: number): number[] | null {
   const out: number[] = [];
@@ -63,14 +64,14 @@ function closedBand(functions: Array<(x: number) => number>, a: number, b: numbe
  * Splits [a, b] at the given intersections and integrates |top - bottom| over each region with
  * the adaptive Gauss-Kronrod quadrature (the single integration path of the app). Intersections
  * outside (a, b) are ignored and coincident ones merged, so a crossing beyond the interval can
- * never create a region that reaches outside [a, b]. `steps` is kept for API compatibility.
+ * never create a region that reaches outside [a, b]. A region where no probe point has every
+ * curve defined is reported as 'undefined' (area NaN), never as a zero-height region.
  */
 export function computeAreaRegions(
   functions: Array<(x: number) => number>,
   intersections: IntersectionPoint[],
   a: number,
   b: number,
-  _steps = 200,
 ): AreaRegion[] {
   if (!(b > a)) return [];
   const lo = a;
@@ -94,34 +95,28 @@ export function computeAreaRegions(
     const rb = boundaries[i + 1];
     if (rb - ra < EPS) continue;
 
-    const mid = (ra + rb) / 2;
-    let topIdx = 0;
-    let bottomIdx = 0;
-    let topVal = -Infinity;
-    let bottomVal = Infinity;
-
-    for (let f = 0; f < functions.length; f++) {
-      let val: number;
-      try {
-        val = functions[f](mid);
-      } catch {
-        continue;
-      }
-      if (!isFinite(val)) continue;
-      if (val > topVal) {
-        topVal = val;
-        topIdx = f;
-      }
-      if (val < bottomVal) {
-        bottomVal = val;
-        bottomIdx = f;
-      }
+    // probe off-centre too: a removable hole (sin(x)/x at 0) must not hide a curve
+    const vals = PROBES.reduce<number[] | null>(
+      (found, t) => found ?? valuesAt(functions, ra + t * (rb - ra)),
+      null,
+    );
+    if (!vals) {
+      regions.push({
+        a: ra,
+        b: rb,
+        area: NaN,
+        topFunctionIndex: 0,
+        bottomFunctionIndex: 0,
+        status: 'undefined',
+        badPoint: (ra + rb) / 2,
+      });
+      continue;
     }
 
-    if (topVal === -Infinity || bottomVal === Infinity) continue;
-    const midVals = band === null ? null : valuesAt(functions, mid);
-    if (band !== null && midVals) {
-      const order = midVals.map((_, i) => i).sort((p, q) => midVals[p] - midVals[q]);
+    let topIdx = vals.indexOf(Math.max(...vals));
+    let bottomIdx = vals.indexOf(Math.min(...vals));
+    if (band !== null) {
+      const order = vals.map((_, i) => i).sort((p, q) => vals[p] - vals[q]);
       bottomIdx = order[band];
       topIdx = order[band + 1];
     }
