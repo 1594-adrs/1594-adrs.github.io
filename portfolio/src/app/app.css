@@ -91,6 +91,10 @@
   color: var(--color-primary);
 }
 
+#main-content:focus {
+  outline: none; /* programmatic focus target of the skip link */
+}
+
 @media (max-width: 768px) {
   #main-content {
     position: relative;

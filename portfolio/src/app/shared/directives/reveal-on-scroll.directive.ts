@@ -45,6 +45,7 @@ export class RevealOnScroll implements OnInit, OnDestroy {
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
+            if (this.hideTimerId !== null) clearTimeout(this.hideTimerId);
             this.hiding.set(false);
             this.revealed.set(true);
             this.visible.emit();
