@@ -43,9 +43,14 @@ function interiorBreakpoints(spec: SolidSpec): number[] {
   const points: number[] = [];
 
   if (curves.length >= 2) {
-    const fns = curves.map((c) => c.fn);
-    for (const p of findIntersections(fns, a, b)) {
-      if (p.x > a + span * EPS && p.x < b - span * EPS) points.push(p.x);
+    // Pair by pair: one joint call merges crossings of different pairs closer than 2h, which loses
+    // a breakpoint and makes the formula terms drift from the computed volume.
+    for (let i = 0; i < curves.length; i++) {
+      for (let j = i + 1; j < curves.length; j++) {
+        for (const p of findIntersections([curves[i].fn, curves[j].fn], a, b)) {
+          if (p.x > a + span * EPS && p.x < b - span * EPS) points.push(p.x);
+        }
+      }
     }
   }
 

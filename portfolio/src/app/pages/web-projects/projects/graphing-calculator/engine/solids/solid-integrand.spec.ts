@@ -316,3 +316,34 @@ describe('sliceArea envelope with 3+ curves', () => {
     expect(area(0.75)).toBeCloseTo(4, 12);
   });
 });
+
+describe('computePieces with close crossings of different curve pairs', () => {
+  const breaks = (fns: Array<(x: number) => number>, a: number, b: number): number[] =>
+    computePieces({
+      method: 'disk-washer',
+      variable: 'x',
+      curves: fns.map((f) => curve(f)),
+      a,
+      b,
+      axis: { orientation: 'horizontal', value: -50 },
+    })
+      .map((p) => p.b)
+      .slice(0, -1);
+
+  it('keeps both crossings of y = x with y = 0 and y = x - 0.15 (closer than 2h)', () => {
+    const found = breaks([(x) => x, () => 0, (x) => x - 0.15], -10, 10);
+    expect(found.some((x) => Math.abs(x) < 1e-6)).toBe(true);
+    expect(found.some((x) => Math.abs(x - 0.15) < 1e-6)).toBe(true);
+  });
+
+  it('keeps the crossings of x² with y = 1 and y = 1.02', () => {
+    const found = breaks([(x) => x * x, () => 1, () => 1.02], 0, 2);
+    expect(found.some((x) => Math.abs(x - 1) < 1e-6)).toBe(true);
+    expect(found.some((x) => Math.abs(x - Math.sqrt(1.02)) < 1e-6)).toBe(true);
+  });
+
+  it('collapses a triple point into one breakpoint', () => {
+    const found = breaks([(x) => x, (x) => x * x, (x) => 2 - x], 0, 3);
+    expect(found.filter((x) => Math.abs(x - 1) < 1e-6)).toHaveLength(1);
+  });
+});
