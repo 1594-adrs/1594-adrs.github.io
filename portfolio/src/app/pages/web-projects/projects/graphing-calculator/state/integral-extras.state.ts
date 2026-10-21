@@ -12,7 +12,7 @@ import { RADIANS_REASON, usesAngleUnit } from './derivative-view';
 
 export type { RiemannRule };
 
-export const MAX_RIEMANN_N = 1000;
+const MAX_RIEMANN_N = 1000;
 
 export interface ActiveIntegral {
   fnIndex: number;
