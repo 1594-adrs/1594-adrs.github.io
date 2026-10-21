@@ -251,6 +251,15 @@ async function waitForPage(port) {
   throw new Error('Chrome did not expose a DevTools page');
 }
 
+// A crashed Chrome never answers; fail instead of hanging the build forever.
+function withTimeout(promise, what, ms = 30000) {
+  let timer;
+  const timeout = new Promise((_, rej) => {
+    timer = setTimeout(() => rej(new Error(`CDP timeout: ${what}`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function connect(url) {
   const ws = new WebSocket(url);
   await new Promise((res, rej) => {
@@ -273,11 +282,14 @@ async function connect(url) {
   });
   return {
     send: (method, params = {}) =>
-      new Promise((res, rej) => {
-        pending.set(++id, { res, rej });
-        ws.send(JSON.stringify({ id, method, params }));
-      }),
-    once: (method) => new Promise((res) => listeners.set(method, res)),
+      withTimeout(
+        new Promise((res, rej) => {
+          pending.set(++id, { res, rej });
+          ws.send(JSON.stringify({ id, method, params }));
+        }),
+        method,
+      ),
+    once: (method) => withTimeout(new Promise((res) => listeners.set(method, res)), method),
     close: () => ws.close(),
   };
 }
