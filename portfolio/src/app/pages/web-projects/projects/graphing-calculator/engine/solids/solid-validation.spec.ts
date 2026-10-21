@@ -237,7 +237,7 @@ describe('validateSolidSpec', () => {
     expect(issues[0].message).toContain('1');
   });
 
-  it('blocks (error) a shell whose two sides overlap: y=x^2 on [0,1] about x=0.5', () => {
+  it('only warns for a shell whose nested sides overlap: y=x^2 on [0,1] about x=0.5', () => {
     const s = spec({
       method: 'shell',
       variable: 'x',
@@ -246,10 +246,23 @@ describe('validateSolidSpec', () => {
       a: 0,
       b: 1,
     });
-    const issues = validateSolidSpec(s);
-    expect(issues).toEqual([
-      expect.objectContaining({ code: 'axis-inside-region', severity: 'error', field: 'axis' }),
+    expect(validateSolidSpec(s)).toEqual([
+      expect.objectContaining({ code: 'axis-inside-region', severity: 'warning', field: 'axis' }),
     ]);
+  });
+
+  it('blocks (error) a shell whose sides partly overlap: x+1 and x+2 on [-1,1] about x=0', () => {
+    const s = spec({
+      method: 'shell',
+      variable: 'x',
+      axis: { orientation: 'vertical', value: 0 },
+      curves: [curve((x) => x + 1), curve((x) => x + 2)],
+      a: -1,
+      b: 1,
+    });
+    expect(validateSolidSpec(s)).toContainEqual(
+      expect.objectContaining({ code: 'axis-inside-region', severity: 'error', field: 'axis' }),
+    );
   });
 
   it('only warns for a shell whose sides never overlap: y=x on [-1,1] about x=0', () => {

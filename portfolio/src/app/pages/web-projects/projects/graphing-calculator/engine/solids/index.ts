@@ -3,7 +3,7 @@ import { computePieces, sliceArea } from './solid-integrand';
 import { buildTerms } from './solid-formula';
 import { recognizeExact } from './solid-exact';
 import { computeSurfaceArea } from './solid-surface';
-import { SHELL_AXIS_OVERLAP_MESSAGE, shellAxisOverlap } from './solid-validation';
+import { SHELL_AXIS_OVERLAP_MESSAGE, shellAxisSplit } from './solid-validation';
 import type { SolidIssue, SolidIssueCode, SolidResult, SolidSpec } from './solid.types';
 
 export { recognizeExact } from './solid-exact';
@@ -54,8 +54,9 @@ function failedResult(issues: SolidIssue[]): SolidResult {
  */
 export function computeSolid(spec: SolidSpec): SolidResult {
   try {
-    // Shell with an axis cutting the region and the two sides overlapping: no correct volume.
-    if (shellAxisOverlap(spec)) {
+    // Shell with an axis cutting the region and the two sides partly overlapping: no correct volume.
+    const split = shellAxisSplit(spec);
+    if (split === 'partial') {
       return failedResult([
         {
           code: 'axis-inside-region',
@@ -66,7 +67,14 @@ export function computeSolid(spec: SolidSpec): SolidResult {
       ]);
     }
 
-    const pieces = computePieces(spec);
+    // Nested sides: revolve only the kept t-intervals, so the overlap is counted once.
+    const pieces = split
+      ? computePieces(spec).flatMap((p) =>
+          split
+            .map(([lo, hi]) => ({ ...p, a: Math.max(p.a, lo), b: Math.min(p.b, hi) }))
+            .filter((q) => q.b - q.a > 1e-12 * (spec.b - spec.a)),
+        )
+      : computePieces(spec);
 
     // Defence in depth: with a structurally valid, non-empty curve selection this shouldn't
     // happen (computePieces always returns at least one piece), but a volume of 0 must never

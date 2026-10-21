@@ -356,7 +356,7 @@ describe('computeSolid', () => {
     expect(divergent!.message).toContain('x = 0');
   });
 
-  it('21: shell y=x^2 on [0,1] about x=0.5 (sides overlap when revolved) is blocked, not double counted', () => {
+  it('21: shell y=x^2 on [0,1] about x=0.5 counts the overlapping sides once: 17π/96', () => {
     const spec: SolidSpec = {
       method: 'shell',
       variable: 'x',
@@ -366,8 +366,75 @@ describe('computeSolid', () => {
       axis: { orientation: 'vertical', value: 0.5 },
     };
     const r = computeSolid(spec);
-    // The old shell sum gave 2*pi*Integral(|x-0.5|*x^2) = 0.58905; the real (union) solid is
-    // 2*pi*Integral_0^0.5 r*(0.5+r)^2 dr = 0.4909, so no volume is better than the wrong one.
+    // The right side contains the left one at every radius, so the union is the right side alone
+    // (the plain shell sum 2*pi*Integral(|x-0.5|*x^2) = 0.58905 would double count).
+    expect(relErr(r.volume!, (17 * Math.PI) / 96)).toBeLessThanOrEqual(1e-9);
+    expect(r.issues).toEqual([]);
+    expect(r.pieces.map((p) => [p.a, p.b])).toEqual([[0.5, 1]]);
+  });
+
+  it('21c: shell 3+2x-x^2 on [-1,3] about its own symmetry axis x=1 is 8π, one term on [1,3]', () => {
+    const r = computeSolid({
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('3+2x-x^2')],
+      a: -1,
+      b: 3,
+      axis: { orientation: 'vertical', value: 1 },
+    });
+    expect(relErr(r.volume!, 8 * Math.PI)).toBeLessThanOrEqual(1e-9);
+    expect(r.exact).toBe('8π');
+    expect(r.terms).toHaveLength(1);
+    expect([r.terms[0].a, r.terms[0].b]).toEqual([1, 3]);
+  });
+
+  it('21d: shell y=x^2 on [0,1] about x=0.25 keeps the right side plus its tail: 171π/512', () => {
+    const r = computeSolid({
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('x^2')],
+      a: 0,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0.25 },
+    });
+    expect(relErr(r.volume!, (171 * Math.PI) / 512)).toBeLessThanOrEqual(1e-9);
+    expect(r.pieces.map((p) => [p.a, p.b])).toEqual([[0.25, 1]]);
+  });
+
+  it('21e: shell 2+sin(3x) on [-1.5,1.5] about x=0 switches sides at r=π/3: 2π∫ r(2+|sin 3r|) dr', () => {
+    const r = computeSolid({
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('2+sin(3x)')],
+      a: -1.5,
+      b: 1.5,
+      axis: { orientation: 'vertical', value: 0 },
+    });
+    const n = 200000;
+    let expected = 0;
+    for (let i = 0; i < n; i++) {
+      const t = (1.5 * (i + 0.5)) / n;
+      expected += t * (2 + Math.abs(Math.sin(3 * t)));
+    }
+    expected *= (2 * Math.PI * 1.5) / n;
+    expect(relErr(r.volume!, expected)).toBeLessThanOrEqual(1e-8);
+    expect(r.pieces.map((p) => [p.a, p.b])).toEqual(
+      [
+        [-1.5, -Math.PI / 3],
+        [0, Math.PI / 3],
+      ].map(([a, b]) => [expect.closeTo(a, 9), expect.closeTo(b, 9)]),
+    );
+  });
+
+  it('21f: shell between x+1 and x+2 on [-1,1] about x=0 (sides partly overlap) is blocked', () => {
+    const r = computeSolid({
+      method: 'shell',
+      variable: 'x',
+      curves: [curveFromExpr('x+1', 'f1'), curveFromExpr('x+2', 'f2')],
+      a: -1,
+      b: 1,
+      axis: { orientation: 'vertical', value: 0 },
+    });
     expect(r.volume).toBeNull();
     expect(r.issues).toEqual([
       expect.objectContaining({ code: 'axis-inside-region', severity: 'error', field: 'axis' }),
@@ -389,7 +456,7 @@ describe('computeSolid', () => {
     expect(r.pieces).toHaveLength(2);
   });
 
-  it('H14: shell y=1 on [-1,1] about x=0 (union is a cylinder, π) is blocked instead of 2π', () => {
+  it('H14: shell y=1 on [-1,1] about x=0 is the union cylinder π, not 2π', () => {
     const spec: SolidSpec = {
       method: 'shell',
       variable: 'x',
@@ -399,9 +466,8 @@ describe('computeSolid', () => {
       axis: { orientation: 'vertical', value: 0 },
     };
     const r = computeSolid(spec);
-    expect(r.volume).toBeNull();
-    expect(r.issues[0]).toMatchObject({ code: 'axis-inside-region', severity: 'error' });
-    // The disk method models the union correctly for the same region: π.
+    expect(relErr(r.volume!, Math.PI)).toBeLessThanOrEqual(1e-9);
+    // The disk method gives the same union for the same region: π.
     const disk = computeSolid({
       method: 'disk-washer',
       variable: 'y',
