@@ -33,7 +33,18 @@ function toScreen(
     : viewport.worldToScreen(v, t, width, height);
 }
 
-function drawPieceFill(
+type Mirror = (t: number, v: number) => [number, number];
+
+/** Reflection across the axis of revolution: the solid's outline in the plane of the region. */
+function mirrorFor(spec: SolidSpec): Mirror | null {
+  const axis = spec.axis;
+  if (!axis || spec.method === 'cross-section') return null;
+  const k = axis.value;
+  return spec.method === 'disk-washer' ? (t, v) => [t, 2 * k - v] : (t, v) => [2 * k - t, v];
+}
+
+/** Builds the closed outline of a piece (optionally mirrored); false when nothing is finite. */
+function tracePiece(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,
   spec: SolidSpec,
@@ -41,10 +52,10 @@ function drawPieceFill(
   baseline: number,
   width: number,
   height: number,
-): void {
+  mirror: Mirror = (t, v) => [t, v],
+): boolean {
   const n = Math.max(20, Math.min(400, Math.round(Math.abs(piece.b - piece.a) * 40)));
   const h = (piece.b - piece.a) / n;
-  const color = boundaryColor(spec, piece);
 
   ctx.beginPath();
   let started = false;
@@ -52,7 +63,7 @@ function drawPieceFill(
     const t = piece.a + i * h;
     const u = boundaryValue(spec, piece.upperIndex, t, baseline);
     if (!Number.isFinite(u)) continue;
-    const [sx, sy] = toScreen(viewport, spec.variable, t, u, width, height);
+    const [sx, sy] = toScreen(viewport, spec.variable, ...mirror(t, u), width, height);
     if (!started) {
       ctx.moveTo(sx, sy);
       started = true;
@@ -64,13 +75,45 @@ function drawPieceFill(
     const t = piece.a + i * h;
     const l = boundaryValue(spec, piece.lowerIndex, t, baseline);
     if (!Number.isFinite(l)) continue;
-    const [sx, sy] = toScreen(viewport, spec.variable, t, l, width, height);
+    const [sx, sy] = toScreen(viewport, spec.variable, ...mirror(t, l), width, height);
     ctx.lineTo(sx, sy);
   }
-  if (!started) return;
+  if (!started) return false;
   ctx.closePath();
-  ctx.fillStyle = color + '30';
+  return true;
+}
+
+function drawPieceFill(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  spec: SolidSpec,
+  piece: SolidPiece,
+  baseline: number,
+  width: number,
+  height: number,
+): void {
+  if (!tracePiece(ctx, viewport, spec, piece, baseline, width, height)) return;
+  ctx.fillStyle = boundaryColor(spec, piece) + '30';
   ctx.fill();
+}
+
+function drawPieceMirror(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  spec: SolidSpec,
+  piece: SolidPiece,
+  baseline: number,
+  mirror: Mirror,
+  width: number,
+  height: number,
+): void {
+  if (!tracePiece(ctx, viewport, spec, piece, baseline, width, height, mirror)) return;
+  ctx.save();
+  ctx.strokeStyle = boundaryColor(spec, piece) + 'aa';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawAxisLine(
@@ -198,8 +241,9 @@ function drawSweepStrip(
 
 /**
  * Draws the 2D region for the "solids by integration" tool: the filled region per piece (in the
- * curves' own colors, low alpha), the dashed axis of revolution with its label, and — when
- * `sweepT` is set — the representative strip at t (and its mirror across the axis, for shell).
+ * curves' own colors, low alpha), its dashed mirror across the axis of revolution, the dashed
+ * axis with its label, and — when `sweepT` is set — the representative strip at t (and its
+ * mirror across the axis, for shell).
  */
 export function drawSolidRegion(
   ctx: CanvasRenderingContext2D,
@@ -211,8 +255,10 @@ export function drawSolidRegion(
   height: number,
 ): void {
   const baseline = baselineFor(spec);
+  const mirror = mirrorFor(spec);
   for (const piece of pieces) {
     drawPieceFill(ctx, viewport, spec, piece, baseline, width, height);
+    if (mirror) drawPieceMirror(ctx, viewport, spec, piece, baseline, mirror, width, height);
   }
 
   if (spec.axis) {

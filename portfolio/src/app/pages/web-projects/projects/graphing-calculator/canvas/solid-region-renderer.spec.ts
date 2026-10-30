@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Viewport } from './viewport';
+import { drawSolidRegion } from './solid-region-renderer';
 import type { SolidSpec, SolidPiece, AxisLine } from '../engine/solids/solid.types';
 
 // Helper functions extracted from solid-region-renderer.ts
@@ -288,5 +289,59 @@ describe('drawSolidRegion simulation', () => {
     const beforeStrokeCount = ctx.calls.length;
     // No additional fill calls should happen
     expect(beforeStrokeCount).toBeGreaterThan(0);
+  });
+});
+
+describe('drawSolidRegion mirror outline', () => {
+  const curve = (c: number) => ({ fn: () => c, ast: null, label: 'f', color: '#3366cc' });
+  const piece: SolidPiece = { a: 0, b: 1, upperIndex: 0, lowerIndex: 1 };
+  const spec = (method: SolidSpec['method'], axis?: AxisLine): SolidSpec => ({
+    method,
+    variable: 'x',
+    curves: [curve(2), curve(1)],
+    a: 0,
+    b: 1,
+    axis,
+  });
+  const points = (ctx: MockContext) =>
+    ctx.calls.filter((c) => c.method === 'lineTo').map((c) => c.args as [number, number]);
+
+  it('outlines the region reflected across y = k for disk-washer', () => {
+    const ctx = createMockContext();
+    const viewport = new Viewport();
+    drawSolidRegion(
+      ctx,
+      viewport,
+      spec('disk-washer', { orientation: 'horizontal', value: -1 }),
+      [piece],
+      null,
+      200,
+      140,
+    );
+    expect(ctx.calls).toContainEqual({ method: 'setLineDash', args: [[6, 4]] });
+    const [, mirroredTop] = viewport.worldToScreen(0, -4, 200, 140);
+    expect(points(ctx).some(([, y]) => Math.abs(y - mirroredTop) < 1e-9)).toBe(true);
+  });
+
+  it('outlines the region reflected across x = k for shell', () => {
+    const ctx = createMockContext();
+    const viewport = new Viewport();
+    drawSolidRegion(
+      ctx,
+      viewport,
+      spec('shell', { orientation: 'vertical', value: 3 }),
+      [piece],
+      null,
+      200,
+      140,
+    );
+    const [mirroredRight] = viewport.worldToScreen(6, 0, 200, 140);
+    expect(points(ctx).some(([x]) => Math.abs(x - mirroredRight) < 1e-9)).toBe(true);
+  });
+
+  it('draws no mirror for cross-sections', () => {
+    const ctx = createMockContext();
+    drawSolidRegion(ctx, new Viewport(), spec('cross-section'), [piece], null, 200, 140);
+    expect(ctx.calls).not.toContainEqual({ method: 'setLineDash', args: [[6, 4]] });
   });
 });
