@@ -69,5 +69,6 @@ describe('recognizeExact false positives (H13)', () => {
     expect(recognizeExact(Math.PI * 16)).toBe('16π');
     expect(recognizeExact(900)).toBe('900');
     expect(recognizeExact((256 * Math.PI) / 15)).toBe('256π/15');
+    expect(recognizeExact((1088 * Math.PI) / 15)).toBe('1088π/15');
   });
 });
