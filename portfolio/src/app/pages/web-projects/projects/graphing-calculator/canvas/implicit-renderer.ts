@@ -9,15 +9,17 @@ const IDLE_CELL_PX = 2;
 const MIN_STEPS = 40;
 const MAX_STEPS = 400;
 
-function evalImplicit(fn: (x: number, y: number) => number, x: number, y: number): number {
+/** NaN where the curve does not exist (outside a `{cond}` domain, sqrt of a negative, …). */
+export function evalImplicit(fn: (x: number, y: number) => number, x: number, y: number): number {
   try {
     const v = fn(x, y);
+    if (Number.isNaN(v)) return NaN;
     if (!isFinite(v)) return CLAMP;
     if (v > CLAMP) return CLAMP;
     if (v < -CLAMP) return -CLAMP;
     return v;
   } catch {
-    return CLAMP;
+    return NaN;
   }
 }
 
@@ -84,6 +86,7 @@ function computeContourSegments(
       const tr = val[base + col + 1];
       const br = val[baseNext + col + 1];
       const bl = val[baseNext + col];
+      if (Number.isNaN(tl + tr + br + bl)) continue;
 
       const caseIndex =
         (tl >= level ? 8 : 0) |

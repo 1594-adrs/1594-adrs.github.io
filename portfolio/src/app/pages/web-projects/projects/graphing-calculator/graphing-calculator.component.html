@@ -5,6 +5,7 @@
 >
   <div
     class="canvas-container"
+    [class.canvas-light]="canvasTheme.isLight()"
     tabindex="0"
     aria-label="Graphing calculator canvas. Use +/- to zoom, arrow keys to pan, R to reset, P to cycle points of interest, T to toggle the tangent line, N the normal line, Escape to clear pinned labels."
     aria-describedby="canvas-graph-description"
@@ -24,7 +25,8 @@
             [spec]="solidToolState.spec()"
             [pieces]="solidToolState.result()?.pieces ?? []"
             [sweepT]="solidToolState.sweepT()"
-            [color]="solidColor()"
+            [color]="solid3dColor()"
+            [palette]="canvasTheme.palette().scene"
             [visible]="show3DSolid()"
             [bottomInset]="solidSheetInset()"
           />
@@ -35,8 +37,8 @@
         }
       </div>
     }
-    @if (!show3DSolid()) {
-      <div class="canvas-controls">
+    <div class="canvas-controls">
+      @if (!show3DSolid()) {
         <button class="canvas-ctrl-btn" (click)="zoomIn()" aria-label="Zoom in" title="Zoom in (+)">
           <app-icon name="zoom-in" />
         </button>
@@ -147,8 +149,26 @@
             <app-shortcuts-popover (close)="uiLayout.showShortcuts.set(false)" />
           }
         </div>
-      </div>
-    }
+      }
+      <button
+        class="canvas-ctrl-btn canvas-ctrl-output"
+        [class.active]="canvasTheme.isLight()"
+        (click)="canvasTheme.toggle()"
+        [attr.aria-pressed]="canvasTheme.isLight()"
+        aria-label="Print colors"
+        title="Print colors: white background, dark ink"
+      >
+        <app-icon name="contrast" />
+      </button>
+      <button
+        class="canvas-ctrl-btn"
+        (click)="exportPng()"
+        aria-label="Download PNG"
+        title="Download this view as PNG"
+      >
+        <app-icon name="download" />
+      </button>
+    </div>
   </div>
 
   <aside
@@ -795,7 +815,6 @@
           Math keyboard
         </button>
         <button class="t-btn" (click)="share()">Share</button>
-        <button class="t-btn" (click)="exportPng()">Export PNG</button>
       </div>
       <p class="share-notice" role="status" aria-live="polite">{{ shareNotice() }}</p>
     </div>

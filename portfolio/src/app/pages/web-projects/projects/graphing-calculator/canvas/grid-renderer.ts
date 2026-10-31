@@ -1,13 +1,6 @@
 import { Viewport } from './viewport';
+import { canvasPalette } from './palette';
 
-// Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
-const COLOR_BG = '#0d0d15';
-const COLOR_GRID = '#1a1a2e';
-const COLOR_MINOR_GRID = '#131320';
-const COLOR_AXIS = '#333355';
-const COLOR_LABEL = '#666680';
-
-const LABEL_FONT = '11px "JetBrains Mono", monospace';
 /** Minor gridlines subdivide each major step this many times; skipped once that would
  *  pack them closer than MIN_MINOR_SPACING_PX on screen (clutter, not signal). */
 const MINOR_SUBDIVISIONS = 5;
@@ -87,9 +80,10 @@ export function drawGrid(
   const yRange = viewport.yMax - viewport.yMin;
   const stepX = niceStep(xRange);
   const stepY = niceStep(yRange);
+  const palette = canvasPalette();
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = COLOR_BG;
+  ctx.fillStyle = palette.background;
   ctx.fillRect(0, 0, width, height);
 
   const startX = Math.ceil(viewport.xMin / stepX) * stepX;
@@ -101,22 +95,31 @@ export function drawGrid(
   const minorPxX = (minorStepX / xRange) * width;
   if (minorPxX >= MIN_MINOR_SPACING_PX) {
     const minorStartX = Math.ceil(viewport.xMin / minorStepX) * minorStepX;
-    drawVerticalLines(ctx, viewport, width, height, minorStartX, minorStepX, COLOR_MINOR_GRID, 1);
+    drawVerticalLines(ctx, viewport, width, height, minorStartX, minorStepX, palette.gridMinor, 1);
   }
   const minorStepY = stepY / MINOR_SUBDIVISIONS;
   const minorPxY = (minorStepY / yRange) * height;
   if (minorPxY >= MIN_MINOR_SPACING_PX) {
     const minorStartY = Math.ceil(viewport.yMin / minorStepY) * minorStepY;
-    drawHorizontalLines(ctx, viewport, width, height, minorStartY, minorStepY, COLOR_MINOR_GRID, 1);
+    drawHorizontalLines(
+      ctx,
+      viewport,
+      width,
+      height,
+      minorStartY,
+      minorStepY,
+      palette.gridMinor,
+      1,
+    );
   }
 
   // Major gridlines, each axis batched into a single path/stroke call.
-  drawVerticalLines(ctx, viewport, width, height, startX, stepX, COLOR_GRID, 1);
-  drawHorizontalLines(ctx, viewport, width, height, startY, stepY, COLOR_GRID, 1);
+  drawVerticalLines(ctx, viewport, width, height, startX, stepX, palette.grid, 1);
+  drawHorizontalLines(ctx, viewport, width, height, startY, stepY, palette.grid, 1);
 
   const [ox, oy] = viewport.worldToScreen(0, 0, width, height);
-  ctx.strokeStyle = COLOR_AXIS;
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = palette.axis;
+  ctx.lineWidth = palette.axisWidth;
 
   // An off-screen axis is drawn 1 px past the edge (invisible) instead of at a huge px coordinate.
   const axisX = Math.min(width + 1, Math.max(-1, ox));
@@ -160,8 +163,8 @@ export function drawGrid(
     yAlign = 'right';
   }
 
-  ctx.fillStyle = COLOR_LABEL;
-  ctx.font = LABEL_FONT;
+  ctx.fillStyle = palette.tickLabel;
+  ctx.font = palette.tickFont;
   ctx.textAlign = 'center';
   ctx.textBaseline = xBaseline;
 

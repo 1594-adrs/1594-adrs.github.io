@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { compileExpression } from '../engine/evaluator';
-import { solveConicForY } from '../engine/conic-solver';
+import { gatedConicBranches, intersectDomains } from '../engine/domain';
 import { parseLimitText, type ParsedLimit } from '../engine/parse-limit';
 import { computeSolid } from '../engine/solids';
 import { curveModeMatchesVariable, validateSolidSpec } from '../engine/solids/solid-validation';
@@ -93,6 +93,7 @@ export class SolidToolState implements OnDestroy {
   playing = signal(false);
 
   private rafId: number | null = null;
+  private boundsTyped = false;
 
   /** Wires the function list (and optional angle unit) this tool reads curves from. */
   connect(functions: Signal<MathExpression[]>, angleUnit?: Signal<'deg' | 'rad'>): void {
@@ -242,14 +243,35 @@ export class SolidToolState implements OnDestroy {
       if (cur.length >= MAX_CURVES) return cur;
       return [...cur, index].sort((x, y) => x - y);
     });
+    if (!this.boundsTyped) this.seedFromDomains();
   }
 
   setA(text: string): void {
+    this.boundsTyped = true;
     this.aText.set(text);
   }
 
   setB(text: string): void {
+    this.boundsTyped = true;
     this.bText.set(text);
+  }
+
+  seedBounds(a: string, b: string): void {
+    this.boundsTyped = false;
+    this.aText.set(a);
+    this.bText.set(b);
+    this.seedFromDomains();
+  }
+
+  private seedFromDomains(): void {
+    const fns = this.functionsSignal();
+    const d = intersectDomains(
+      this.curveIndices().map((i) => fns[i]?.domain),
+      this.variable(),
+    );
+    if (!d || d.lo === null || d.hi === null || d.lo >= d.hi) return;
+    this.aText.set(String(d.lo));
+    this.bText.set(String(d.hi));
   }
 
   setAxisValue(text: string): void {
@@ -348,18 +370,17 @@ export class SolidToolState implements OnDestroy {
  *  no explicit-y branch). */
 function buildCurve(fn: MathExpression, index: number, au: 'deg' | 'rad'): SolidCurve | null {
   const label = `f${index + 1}`;
+  // Numerics use the gated ast; the formula shows the ungated body.
   if (fn.mode === 'explicit' && fn.ast) {
-    const ast = fn.ast;
-    const compiled = compileExpression(ast, au);
-    return { fn: (x) => compiled(x, NaN), ast, label, color: fn.color };
+    const compiled = compileExpression(fn.ast, au);
+    return { fn: (x) => compiled(x, NaN), ast: fn.bodyAst ?? fn.ast, label, color: fn.color };
   }
   if (fn.mode === 'explicit-y' && fn.ast) {
-    const ast = fn.ast;
-    const compiled = compileExpression(ast, au);
-    return { fn: (y) => compiled(NaN, y), ast, label, color: fn.color };
+    const compiled = compileExpression(fn.ast, au);
+    return { fn: (y) => compiled(NaN, y), ast: fn.bodyAst ?? fn.ast, label, color: fn.color };
   }
   if (fn.mode === 'implicit' && fn.ast) {
-    const branches = solveConicForY(fn.ast);
+    const branches = gatedConicBranches(fn.bodyAst ?? fn.ast, fn.ast);
     if (!branches || branches.length === 0) return null;
     const branchFn = branches[0].fn;
     return { fn: (x) => branchFn(x) ?? NaN, ast: null, label, color: fn.color };

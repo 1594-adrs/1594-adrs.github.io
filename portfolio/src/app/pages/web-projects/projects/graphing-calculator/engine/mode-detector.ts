@@ -5,6 +5,8 @@
  * leaf engine module; `DetectedCurveMode` is structurally identical to the
  * app-level `CurveMode` and can be assigned to it directly.
  */
+import { splitDomain } from './domain';
+
 export type DetectedCurveMode =
   'explicit' | 'explicit-y' | 'implicit' | 'parametric' | 'polar' | 'slider';
 
@@ -33,7 +35,7 @@ function mentionsCurveVariable(text: string): boolean {
  * (`b = 2a` still reads as a slider row; its value is reported as invalid.)
  */
 export function sliderName(raw: string): string | null {
-  const m = /^\s*([A-Za-z])\s*=(.*)$/s.exec(raw);
+  const m = /^\s*([A-Za-z])\s*=(.*)$/s.exec(splitDomain(raw).body);
   if (!m || !isParamName(m[1])) return null;
   const rhs = m[2];
   if (!rhs.trim() || /[=<>,!]/.test(maskNested(rhs)) || mentionsCurveVariable(rhs)) return null;
@@ -102,6 +104,7 @@ function containsVariable(expr: string, name: string): boolean {
  */
 export function detectCurveMode(raw: string): DetectedCurveMode {
   if (sliderName(raw)) return 'slider';
+  raw = splitDomain(raw).body;
   const trimmed = unwrapParametricPair(raw).trim();
 
   if (/^r\s*=/i.test(trimmed)) return 'polar';

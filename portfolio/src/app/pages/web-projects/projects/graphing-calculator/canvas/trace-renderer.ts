@@ -1,8 +1,4 @@
-// Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
-const COLOR_LABEL_BG = '#0a0a0f';
-const COLOR_LABEL_BORDER = '#333355';
-const COLOR_POI = '#8888aa';
-const COLOR_POI_ACTIVE = '#ffffff';
+import { canvasPalette } from './palette';
 
 /** Draws a coordinate label near (screenX, screenY), flipping to the opposite side
  *  when it would otherwise overflow the canvas edges. */
@@ -28,8 +24,8 @@ function drawCoordinateLabel(
   const lx = overflowsRight ? screenX - offset - labelW : screenX + offset;
   const topY = overflowsTop ? screenY + offset : screenY - offset - labelH;
 
-  ctx.fillStyle = COLOR_LABEL_BG;
-  ctx.strokeStyle = COLOR_LABEL_BORDER;
+  ctx.fillStyle = canvasPalette().labelBg;
+  ctx.strokeStyle = canvasPalette().labelBorder;
   ctx.lineWidth = 1;
   ctx.fillRect(lx, topY, labelW, labelH);
   ctx.strokeRect(lx, topY, labelW, labelH);
@@ -75,15 +71,16 @@ export function drawPointOfInterest(
   width: number,
   height: number,
 ): void {
+  const palette = canvasPalette();
   ctx.save();
-  ctx.strokeStyle = active ? COLOR_POI_ACTIVE : COLOR_POI;
+  ctx.strokeStyle = active ? palette.poiActive : palette.poi;
   ctx.lineWidth = active ? 2 : 1.5;
   ctx.beginPath();
   ctx.arc(screenX, screenY, active ? 5 : 4, 0, Math.PI * 2);
   ctx.stroke();
 
   if (label) {
-    drawCoordinateLabel(ctx, screenX, screenY, label, COLOR_POI_ACTIVE, width, height);
+    drawCoordinateLabel(ctx, screenX, screenY, label, palette.poiActive, width, height);
   }
   ctx.restore();
 }

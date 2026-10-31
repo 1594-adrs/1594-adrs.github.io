@@ -18,6 +18,7 @@ import {
   evaluate,
   type CompiledExpr,
 } from '../../engine/evaluator';
+import { splitDomain } from '../../engine/domain';
 import { findIntersections } from '../../engine/intersection-finder';
 import {
   detectCurveMode,
@@ -102,7 +103,7 @@ interface Curve {
  * different ratio per sample so `b/a` moves too.
  */
 const PARAM_BASES = [0.6931, 1.2599, 1.7725];
-const PARAM_RATIOS = [1.4142, 1.6487, 1.2840];
+const PARAM_RATIOS = [1.4142, 1.6487, 1.284];
 
 /** Runs one exercise through the calculator engine. Never throws. */
 export function runExercise(ex: Exercise): ExerciseRun {
@@ -149,11 +150,7 @@ function expressionTexts(ex: Exercise, answersOnly = false): string[] {
 const OP_EXPRESSION_KEYS = ['a', 'b', 'x0', 'y0', 'center', 'f', 'xEnd', 'h'] as const;
 
 /** `ex` with `fn` applied to every expression string (metadata and enum fields untouched). */
-function mapExpressions(
-  ex: Exercise,
-  fn: (text: string) => string,
-  answersOnly = false,
-): Exercise {
+function mapExpressions(ex: Exercise, fn: (text: string) => string, answersOnly = false): Exercise {
   const expected = ex.expected && {
     ...ex.expected,
     ...(ex.expected.values ? { values: ex.expected.values.map(fn) } : {}),
@@ -310,10 +307,12 @@ function constant(raw: string): number {
 /** Mirrors the function-row parsing of graphing-calculator.component.ts `updateExpression`. */
 function prepareCurve(raw: string): Curve {
   checkPlannedSyntax(raw);
-  const trimmed = raw.trim();
+  const { body, cond, error } = splitDomain(raw);
+  if (error) throw new ParseFail(`'${raw}': ${error}`);
+  const trimmed = body.trim();
   const mode = detectCurveMode(raw);
   const one = (text: string, allowed: string[]): Curve => {
-    const ast = parseChecked(text, allowed);
+    const ast = parseChecked(cond === null ? text : `if(${cond},${text})`, allowed);
     return { raw, mode, fns: [compileExpression(ast)], ast };
   };
   switch (mode) {
@@ -327,8 +326,10 @@ function prepareCurve(raw: string): Curve {
     case 'explicit-y':
       return one(trimmed.replace(/^[xX]\s*=\s*/, ''), ['y']);
     case 'polar':
+      if (cond !== null) throw new Unsupported('syntax:domain');
       return one(trimmed.replace(/^r\s*=\s*/i, ''), ['x', 't']);
     case 'parametric': {
+      if (cond !== null) throw new Unsupported('syntax:domain');
       const pair = unwrapParametricPair(raw);
       const comma = [...maskNested(pair).matchAll(/,/g)].map((m) => m.index);
       const parts = comma.length === 1 ? [pair.slice(0, comma[0]), pair.slice(comma[0] + 1)] : [];
@@ -339,6 +340,7 @@ function prepareCurve(raw: string): Curve {
       return { raw, mode, fns, ast: null, parts: [xs, ys] };
     }
     case 'implicit': {
+      if (cond !== null) throw new Unsupported('syntax:domain');
       // Only a top-level relation splits the row: `if(x<0, …) = y` is an equation.
       const top = maskNested(raw);
       const ineq = /(>=|<=|>|<)/.exec(top);

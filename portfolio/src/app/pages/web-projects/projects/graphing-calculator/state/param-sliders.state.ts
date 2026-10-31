@@ -39,6 +39,8 @@ function sliderRow(fn: MathExpression, s: SliderRowValue): MathExpression {
     ...fn,
     mode: 'slider',
     ast: null,
+    bodyAst: null,
+    domain: null,
     paramX: null,
     paramY: null,
     inequalityOp: undefined,
@@ -52,7 +54,7 @@ function paramRow(fn: MathExpression, parseRow: RowParser, env: SliderEnv): Math
   const params = rowFreeParams(fn.raw);
   const row = { ...parseRow(fn, fn.raw, env.values), slider: undefined, missingParams: undefined };
   const missing = params.filter((p) => !env.claimed.has(p));
-  const cleared = { ast: null, paramX: null, paramY: null };
+  const cleared = { ast: null, bodyAst: null, domain: null, paramX: null, paramY: null };
   if (missing.length) {
     const error =
       missing.length === 1

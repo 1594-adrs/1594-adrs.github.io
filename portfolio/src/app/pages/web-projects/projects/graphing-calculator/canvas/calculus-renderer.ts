@@ -1,17 +1,11 @@
 import type { SeriesView, TaylorView } from '../state/calculus-f8-view';
 import { tryEval } from './utils';
 import { Viewport } from './viewport';
+import { DARK_PALETTE, canvasPalette } from './palette';
 
-// Canvas 2D context does not support CSS variables; colors mirror the design tokens
-// (--color-bg-dark, --color-text, --color-text-muted) and the trace label border.
-const COLOR_LABEL_BG = '#0a0a0f';
-const COLOR_LABEL_BORDER = '#333355';
-const COLOR_INK = '#e0e0e0';
-const COLOR_GUIDE = '#80809a';
-/** Sequence terms aₙ (filled), partial sums Sₙ (rings) and the series sum line. */
-export const COLOR_SEQ_TERM = '#00e5ff';
-export const COLOR_SEQ_PARTIAL = '#ffb300';
-export const COLOR_SEQ_SUM = '#ff6bd6';
+export const COLOR_SEQ_TERM = DARK_PALETTE.seqTerm;
+export const COLOR_SEQ_PARTIAL = DARK_PALETTE.seqPartial;
+export const COLOR_SEQ_SUM = DARK_PALETTE.seqSum;
 /** Most sequence points drawn per series. */
 const SEQ_MAX_POINTS = 500;
 /** Screen px between samples of the Taylor polynomial. */
@@ -94,15 +88,15 @@ export function drawLabelBlock(
   );
   const above = sy - OFFSET - labelH;
   const ty = above < 0 ? Math.min(sy + OFFSET, Math.max(0, height - labelH)) : above;
-  ctx.fillStyle = COLOR_LABEL_BG;
-  ctx.strokeStyle = COLOR_LABEL_BORDER;
+  ctx.fillStyle = canvasPalette().labelBg;
+  ctx.strokeStyle = canvasPalette().labelBorder;
   ctx.lineWidth = 1;
   ctx.fillRect(lx, ty, labelW, labelH);
   ctx.strokeRect(lx, ty, labelW, labelH);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   lines.forEach((line, i) => {
-    ctx.fillStyle = i === 0 ? color : COLOR_INK;
+    ctx.fillStyle = i === 0 ? color : canvasPalette().ink;
     ctx.fillText(line, lx + PAD, ty + PAD / 2 + LINE_H * (i + 0.5));
   });
   ctx.restore();
@@ -137,7 +131,7 @@ export function drawTangentOverlay(
       const ns =
         overlay.slope === 0 ? Infinity : Number.isFinite(overlay.slope) ? -1 / overlay.slope : 0;
       const normal = lineScreenSegment(viewport, overlay.x, overlay.y, ns, width, height);
-      if (normal) strokeSegment(ctx, normal, COLOR_GUIDE, 1.25, [2, 4]);
+      if (normal) strokeSegment(ctx, normal, canvasPalette().guide, 1.25, [2, 4]);
     }
   }
   const [sx, sy] = drawable
@@ -178,7 +172,7 @@ export function drawLimitMarker(
     const edgeX = m.x0 > 0 ? width - CONTROLS_CLEARANCE : 4;
     if (Number.isFinite(m.value)) {
       const [, sy] = viewport.worldToScreen(0, m.value, width, height);
-      strokeSegment(ctx, [0, sy, width, sy], COLOR_GUIDE, 1, [6, 4]);
+      strokeSegment(ctx, [0, sy, width, sy], canvasPalette().guide, 1, [6, 4]);
       ctx.restore();
       drawLabelBlock(
         ctx,
@@ -204,11 +198,11 @@ export function drawLimitMarker(
     return;
   }
   const [sx] = viewport.worldToScreen(m.x0, 0, width, height);
-  strokeSegment(ctx, [sx, 0, sx, height], COLOR_GUIDE, 1, [6, 4]);
+  strokeSegment(ctx, [sx, 0, sx, height], canvasPalette().guide, 1, [6, 4]);
   if (Number.isFinite(m.value)) {
     const [, sy] = viewport.worldToScreen(m.x0, m.value, width, height);
     ctx.setLineDash([]);
-    ctx.fillStyle = COLOR_LABEL_BG;
+    ctx.fillStyle = canvasPalette().labelBg;
     ctx.strokeStyle = m.color;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -254,16 +248,16 @@ export function drawNewtonSteps(
     if (![a.x, a.fx, b.x].every(Number.isFinite)) break;
     const [ax, ay] = viewport.worldToScreen(a.x, a.fx, width, height);
     const [bx, by] = viewport.worldToScreen(b.x, 0, width, height);
-    strokeSegment(ctx, [ax, ay, bx, by], COLOR_INK, 1.25, []);
+    strokeSegment(ctx, [ax, ay, bx, by], canvasPalette().ink, 1.25, []);
     if (Number.isFinite(b.fx)) {
       const [, cy] = viewport.worldToScreen(b.x, b.fx, width, height);
-      strokeSegment(ctx, [bx, by, bx, cy], COLOR_GUIDE, 1, [2, 3]);
+      strokeSegment(ctx, [bx, by, bx, cy], canvasPalette().guide, 1, [2, 3]);
     }
   }
   if (shown.length > 0 && Number.isFinite(shown[0].x) && Number.isFinite(shown[0].fx)) {
     const [x0s, y0s] = viewport.worldToScreen(shown[0].x, 0, width, height);
     const [, f0s] = viewport.worldToScreen(shown[0].x, shown[0].fx, width, height);
-    strokeSegment(ctx, [x0s, y0s, x0s, f0s], COLOR_GUIDE, 1, [2, 3]);
+    strokeSegment(ctx, [x0s, y0s, x0s, f0s], canvasPalette().guide, 1, [2, 3]);
   }
   ctx.setLineDash([]);
   ctx.font = FONT;
@@ -279,7 +273,7 @@ export function drawNewtonSteps(
     ctx.fill();
     if (Math.abs(sx - lastLabelX) >= NEWTON_LABEL_GAP_PX) {
       const ly = Math.min(Math.max(sy + 6, 2), height - LINE_H);
-      ctx.fillStyle = COLOR_INK;
+      ctx.fillStyle = canvasPalette().ink;
       ctx.fillText(subscriptX(r.n), sx, ly);
       lastLabelX = sx;
     }
@@ -317,7 +311,7 @@ export function drawTaylorPolynomial(
   ctx.stroke();
   ctx.setLineDash([]);
   const [px, py] = viewport.worldToScreen(view.center, view.coefficients[0], width, height);
-  ctx.fillStyle = COLOR_LABEL_BG;
+  ctx.fillStyle = canvasPalette().labelBg;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(px, py, 5, 0, Math.PI * 2);
@@ -338,7 +332,7 @@ export function drawSequence(
   ctx.save();
   if (view.sum.status === 'finite') {
     const [, sy] = viewport.worldToScreen(0, view.sum.value, width, height);
-    strokeSegment(ctx, [0, sy, width, sy], COLOR_SEQ_SUM, 1.5, [6, 4]);
+    strokeSegment(ctx, [0, sy, width, sy], canvasPalette().seqSum, 1.5, [6, 4]);
   }
   ctx.setLineDash([]);
   const lo = Math.max(view.n0, Math.ceil(viewport.xMin));
@@ -355,14 +349,14 @@ export function drawSequence(
     if (!Number.isFinite(s)) showSums = false;
     if (!Number.isNaN(a)) {
       const [sx, sy] = viewport.worldToScreen(n, a, width, height);
-      ctx.fillStyle = COLOR_SEQ_TERM;
+      ctx.fillStyle = canvasPalette().seqTerm;
       ctx.beginPath();
       ctx.arc(sx, sy, 3, 0, Math.PI * 2);
       ctx.fill();
     }
     if (showSums) {
       const [sx, sy] = viewport.worldToScreen(n, s, width, height);
-      ctx.strokeStyle = COLOR_SEQ_PARTIAL;
+      ctx.strokeStyle = canvasPalette().seqPartial;
       ctx.lineWidth = 1.75;
       ctx.beginPath();
       ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);

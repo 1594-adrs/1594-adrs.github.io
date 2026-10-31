@@ -120,6 +120,13 @@ import {
             1) means 0 &lt;= x and x &lt; 1. A cases block ends with "otherwise" for the else value.
           </p>
           <p class="help-note">
+            Domain: end a row with one condition in braces and the curve only exists there, for
+            every tool: y = 3+2x-x^2 &#123;-1 &lt;= x &lt;= 3&#125;, x = 1+sqrt(4-y) &#123;0 &lt;= y
+            &lt;= 4&#125;, y = sqrt(x) &#123;x &gt;= 0&#125;. Bounds may use pi, sqrt(2) or a
+            slider. Polar and parametric rows read it as the θ or t range. Integral, area and solid
+            tools start on that interval.
+          </p>
+          <p class="help-note">
             Parameters: type a = 1 to make a slider; letters other than x, y, t, r, e, θ in a
             function become parameters.
           </p>

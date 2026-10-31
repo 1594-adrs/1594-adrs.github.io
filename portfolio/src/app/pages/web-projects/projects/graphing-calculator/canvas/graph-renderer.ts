@@ -1,11 +1,10 @@
 import { Viewport } from './viewport';
 import { tryEval, findAxisCrossings } from './utils';
 import { drawLabelBlock } from './calculus-renderer';
+import { canvasPalette } from './palette';
 import { detectAsymptotes } from '../engine/asymptote-detector';
 import type { Asymptote } from '../engine/asymptote-detector';
 import type { ExpressionNode } from '../engine/parser';
-
-// Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
 
 /** A sample interval is halved at most this many times while refining (~ the double mantissa). */
 const MAX_REFINE_DEPTH = 64;
@@ -651,8 +650,9 @@ export function drawAsymptote(
   width: number,
   height: number,
 ): void {
+  const muted = canvasPalette().muted;
   ctx.save();
-  ctx.strokeStyle = '#666680';
+  ctx.strokeStyle = muted;
   ctx.lineWidth = 1;
   ctx.setLineDash([6, 4]);
 
@@ -662,7 +662,7 @@ export function drawAsymptote(
     ctx.moveTo(sx, 0);
     ctx.lineTo(sx, height);
     ctx.stroke();
-    ctx.fillStyle = '#666680';
+    ctx.fillStyle = muted;
     ctx.font = '11px JetBrains Mono, monospace';
     ctx.fillText(asymptote.equation, sx + 4, 14);
   } else if (asymptote.type === 'horizontal') {
@@ -671,7 +671,7 @@ export function drawAsymptote(
     ctx.moveTo(0, sy);
     ctx.lineTo(width, sy);
     ctx.stroke();
-    ctx.fillStyle = '#666680';
+    ctx.fillStyle = muted;
     ctx.font = '11px JetBrains Mono, monospace';
     ctx.fillText(asymptote.equation, 4, sy - 4);
   } else if (asymptote.type === 'oblique') {

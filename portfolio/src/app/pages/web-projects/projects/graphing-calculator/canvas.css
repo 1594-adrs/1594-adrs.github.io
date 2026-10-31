@@ -11,6 +11,16 @@
   font-size: 0.85rem;
   color: var(--color-text-subtle);
 }
+/* Mirrors LIGHT_PALETTE.background so the frame matches the print canvas before it paints. */
+.canvas-container.canvas-light {
+  --color-canvas-bg: #ffffff;
+}
+.canvas-light .canvas-ctrl-btn.active {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-dark));
+}
+.canvas-light .canvas-ctrl-btn:focus-visible {
+  outline-color: var(--color-bg-dark);
+}
 .canvas-container canvas {
   /* The app handles pan/pinch itself; stop the browser from scrolling/zooming the page. */
   touch-action: none;
@@ -45,6 +55,9 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.canvas-ctrl-output:not(:first-child) {
+  margin-top: 6px;
 }
 .canvas-ctrl-shortcuts-anchor {
   position: relative;

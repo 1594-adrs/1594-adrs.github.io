@@ -1,13 +1,13 @@
 import { solveIvp } from '../engine/ode';
 import type { OdeView } from '../state/calculus-f8-view';
 import { Viewport } from './viewport';
+import { DARK_PALETTE, canvasPalette } from './palette';
 
 // Canvas 2D cannot read CSS variables. The solution is ink (--color-text), not a palette colour,
 // so it never reads as a y = f(x) row (f1 defaults to #00ff88); the target is a ring on the canvas
 // background (--color-canvas-bg), the start a filled dot.
-export const COLOR_SLOPE_FIELD = '#5a5a78';
-export const COLOR_ODE_SOLUTION = '#e0e0e0';
-const COLOR_ODE_MARKER = '#0d0d15';
+export const COLOR_SLOPE_FIELD = DARK_PALETTE.slopeField;
+export const COLOR_ODE_SOLUTION = DARK_PALETTE.ink;
 /** Screen px between slope-field nodes, and the half length of each segment. */
 const GRID_PX = 24;
 const SEG_HALF_PX = 8;
@@ -91,8 +91,8 @@ export function drawSlopeField(
   drawField(ctx, viewport, view, width, height);
   if (view.error || !Number.isFinite(view.x0) || !Number.isFinite(view.y0)) return;
   ctx.save();
-  ctx.strokeStyle = COLOR_ODE_SOLUTION;
-  ctx.fillStyle = COLOR_ODE_SOLUTION;
+  ctx.strokeStyle = canvasPalette().ink;
+  ctx.fillStyle = canvasPalette().ink;
   ctx.lineWidth = 2;
   ctx.setLineDash([]);
   const { xMin, xMax } = viewport;
@@ -113,8 +113,8 @@ export function drawSlopeField(
   const start: Pt = [view.x0, view.y0];
   stroke(ctx, viewport, [...left.reverse(), start, ...right], width, height);
   marker(ctx, viewport, view.x0, view.y0, width, height);
-  ctx.fillStyle = COLOR_ODE_MARKER;
-  ctx.strokeStyle = COLOR_ODE_SOLUTION;
+  ctx.fillStyle = canvasPalette().background;
+  ctx.strokeStyle = canvasPalette().ink;
   if (view.end?.status === 'ok' && view.xEnd !== null) {
     marker(ctx, viewport, view.xEnd, view.end.value, width, height);
   }
@@ -129,7 +129,7 @@ function drawField(
   height: number,
 ): void {
   ctx.save();
-  ctx.strokeStyle = COLOR_SLOPE_FIELD;
+  ctx.strokeStyle = canvasPalette().slopeField;
   ctx.lineWidth = 1;
   ctx.setLineDash([]);
   ctx.beginPath();

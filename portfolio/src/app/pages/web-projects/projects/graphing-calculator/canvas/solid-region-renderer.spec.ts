@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Viewport } from './viewport';
-import { drawSolidRegion } from './solid-region-renderer';
+import { drawSolidRegion, washerRadii, washerRadiusLayout } from './solid-region-renderer';
 import type { SolidSpec, SolidPiece, AxisLine } from '../engine/solids/solid.types';
 
 // Helper functions extracted from solid-region-renderer.ts
@@ -343,5 +343,148 @@ describe('drawSolidRegion mirror outline', () => {
     const ctx = createMockContext();
     drawSolidRegion(ctx, new Viewport(), spec('cross-section'), [piece], null, 200, 140);
     expect(ctx.calls).not.toContainEqual({ method: 'setLineDash', args: [[6, 4]] });
+  });
+});
+
+describe('disk-washer radius labels', () => {
+  const line = { fn: (x: number) => x, ast: null, label: 'f₁', color: '#00ff88' };
+  const parabola = { fn: (x: number) => x * x, ast: null, label: 'f₂', color: '#ff6b35' };
+  const about = (k: number, curves = [line, parabola]): SolidSpec => ({
+    method: 'disk-washer',
+    variable: 'x',
+    curves,
+    a: 0,
+    b: 1,
+    axis: { orientation: 'horizontal', value: k },
+  });
+  const between: SolidPiece = { a: 0, b: 1, upperIndex: 0, lowerIndex: 1 };
+  const toAxis: SolidPiece = { a: 0, b: 1, upperIndex: 0, lowerIndex: null };
+  const viewport = new Viewport(-1, 1, -1, 1);
+
+  it('disk: R runs from the axis to the curve, no r', () => {
+    expect(washerRadii(about(0, [parabola]), toAxis, 0.8)).toEqual({
+      axis: 0,
+      outer: 0.8 * 0.8,
+      inner: null,
+    });
+  });
+
+  it('washer about y = 0: R to the upper curve, r to the lower one', () => {
+    expect(washerRadii(about(0), between, 0.5)).toEqual({ axis: 0, outer: 0.5, inner: 0.25 });
+  });
+
+  it('washer about an axis above the region: R reaches the lower curve', () => {
+    expect(washerRadii(about(1), between, 0.5)).toEqual({ axis: 1, outer: 0.25, inner: 0.5 });
+  });
+
+  it('axis inside the region is a disk (r = 0)', () => {
+    expect(washerRadii(about(0.4), between, 0.5)?.inner).toBeNull();
+  });
+
+  it('is null for shells', () => {
+    expect(washerRadii({ ...about(0), method: 'shell' }, between, 0.5)).toBeNull();
+  });
+
+  it('lays R beside the strip on the +x side and r on the -x side', () => {
+    const layout = washerRadiusLayout(viewport, about(0), between, 0.5, 0.01, 200, 200);
+    expect(layout).toHaveLength(2);
+    const [R, r] = layout!;
+    expect(R.label).toBe('R');
+    expect(R.from[0]).toBeCloseTo(158);
+    expect(R.from[1]).toBeCloseTo(100);
+    expect(R.to[1]).toBeCloseTo(50);
+    expect(R.anchor[0]).toBeCloseTo(167);
+    expect(R.anchor[1]).toBeCloseTo(75);
+    expect(r.label).toBe('r');
+    expect(r.from[0]).toBeCloseTo(142);
+    expect(r.to[1]).toBeCloseTo(75);
+    expect(r.anchor[0]).toBeCloseTo(133);
+  });
+
+  it('points R downwards when the axis is above the region', () => {
+    const [R, r] = washerRadiusLayout(viewport, about(1), between, 0.5, 0.01, 200, 200)!;
+    expect(R.from[1]).toBeCloseTo(0);
+    expect(R.to[1]).toBeCloseTo(75);
+    expect(R.along[1]).toBeCloseTo(1);
+    expect(r.to[1]).toBeCloseTo(50);
+  });
+
+  it('only lays out R for a disk', () => {
+    const layout = washerRadiusLayout(viewport, about(0, [parabola]), toAxis, 0.8, 0.01, 200, 200);
+    expect(layout?.map((s) => s.label)).toEqual(['R']);
+  });
+
+  it('offsets along screen y when integrating in y (x = g(y) about x = k)', () => {
+    const spec: SolidSpec = {
+      ...about(0),
+      variable: 'y',
+      axis: { orientation: 'vertical', value: 0 },
+    };
+    const [R, r] = washerRadiusLayout(viewport, spec, between, 0.5, 0.01, 200, 200)!;
+    expect(R.from[0]).toBeCloseTo(100);
+    expect(R.to[0]).toBeCloseTo(150);
+    expect(R.from[1]).toBeCloseTo(42);
+    expect(r.from[1]).toBeCloseTo(58);
+  });
+
+  it('draws the mirrored strip and italic R / r text when sweeping', () => {
+    const texts: string[] = [];
+    const moves: Array<[number, number]> = [];
+    const state: Record<string | symbol, unknown> = {};
+    const ctx = new Proxy(state, {
+      get(target, key) {
+        if (key in target) return target[key];
+        return (...args: unknown[]) => {
+          if (key === 'fillText') texts.push(args[0] as string);
+          if (key === 'moveTo') moves.push(args as [number, number]);
+        };
+      },
+      set(target, key, value) {
+        target[key] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    drawSolidRegion(ctx, viewport, about(0), [between], 0.5, 200, 200);
+    expect(texts).toContain('R');
+    expect(texts).toContain('r');
+    expect(String(state['font'])).toContain('italic');
+    const [, mirroredTop] = viewport.worldToScreen(0, -0.5, 200, 200);
+    expect(moves.some(([, y]) => Math.abs(y - mirroredTop) < 1.5)).toBe(true);
+  });
+
+  function drawnLabels(s: SolidSpec, t: number): string[] {
+    const texts: string[] = [];
+    const ctx = new Proxy({} as Record<string | symbol, unknown>, {
+      get(target, key) {
+        if (key in target) return target[key];
+        if (key === 'measureText') return () => ({ width: 10 });
+        return (...args: unknown[]) => {
+          if (key === 'fillText') texts.push(args[0] as string);
+        };
+      },
+      set(target, key, value) {
+        target[key] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    drawSolidRegion(ctx, viewport, s, [between], t, 200, 200);
+    return texts.filter((x) => x === 'R' || x === 'r');
+  }
+
+  it('drops the r label when its segment is under the minimum length', () => {
+    expect(drawnLabels(about(0), 0.1)).toEqual(['R']);
+  });
+
+  it.each(['shell', 'cross-section'] as const)('draws no R / r for %s', (method) => {
+    expect(drawnLabels({ ...about(0), method }, 0.5)).toEqual([]);
+  });
+
+  it('labels R and r when integrating in y about a vertical axis', () => {
+    const s: SolidSpec = {
+      ...about(0),
+      variable: 'y',
+      axis: { orientation: 'vertical', value: 0 },
+    };
+    expect(drawnLabels(s, 0.5).sort()).toEqual(['R', 'r']);
   });
 });

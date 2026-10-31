@@ -1,5 +1,3 @@
-/** Triggers a browser download of `canvas` as a PNG, via an object URL and a temporary
- *  anchor. No-ops silently if the canvas can't produce a blob (e.g. tainted canvas). */
 export function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string): void {
   canvas.toBlob((blob) => {
     if (!blob) return;
@@ -10,6 +8,7 @@ export function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string)
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Revoking in the same task can cancel the download in Firefox.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }, 'image/png');
 }

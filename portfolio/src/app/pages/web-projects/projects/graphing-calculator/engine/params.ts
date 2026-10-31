@@ -3,6 +3,7 @@
  * substitution of their current values into the AST so every tool sees plain numbers.
  * Pure: no DOM / Angular, no `models/` import.
  */
+import { splitDomain } from './domain';
 import { evalConstantExpression } from './evaluator';
 import { isParamName, maskNested, sliderName, unwrapParametricPair } from './mode-detector';
 import { parse, type ExpressionNode } from './parser';
@@ -95,6 +96,8 @@ export function substituteParams(
  * parsed separately (a piece that does not parse contributes nothing; its error shows anyway).
  */
 export function rowFreeParams(raw: string): string[] {
+  const { body, cond } = splitDomain(raw);
+  if (cond !== null) return [...new Set([...rowFreeParams(body), ...rowFreeParams(cond)])].sort();
   const text = unwrapParametricPair(raw);
   const mask = maskNested(text);
   const out = new Set<string>();
@@ -137,6 +140,9 @@ export function sliderEnv(raws: readonly string[]): SliderEnv {
     if (!name) return null;
     if (claimed.has(name)) return { name, value: null, error: `${name} is already defined` };
     claimed.add(name);
+    if (splitDomain(raw).cond !== null) {
+      return { name, value: null, error: "Sliders can't have a domain" };
+    }
     const rhs = raw.slice(raw.indexOf('=') + 1);
     try {
       const value = evalConstantExpression(rhs);
