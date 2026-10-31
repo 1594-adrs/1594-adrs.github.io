@@ -238,25 +238,20 @@ function drawRadiusLabels(ctx: CanvasRenderingContext2D, segments: RadiusSegment
   ctx.save();
   ctx.setLineDash([]);
   ctx.lineCap = 'round';
-  for (const [color, lineWidth] of [
-    [palette.halo, 4],
-    [palette.ink, 1.5],
-  ] as const) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    ctx.beginPath();
-    for (const s of segments) {
-      const nx = -s.along[1] * RADIUS_TICK_PX;
-      const ny = s.along[0] * RADIUS_TICK_PX;
-      ctx.moveTo(s.from[0], s.from[1]);
-      ctx.lineTo(s.to[0], s.to[1]);
-      for (const [ex, ey] of [s.from, s.to]) {
-        ctx.moveTo(ex - nx, ey - ny);
-        ctx.lineTo(ex + nx, ey + ny);
-      }
+  ctx.strokeStyle = palette.ink;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (const s of segments) {
+    const nx = -s.along[1] * RADIUS_TICK_PX;
+    const ny = s.along[0] * RADIUS_TICK_PX;
+    ctx.moveTo(s.from[0], s.from[1]);
+    ctx.lineTo(s.to[0], s.to[1]);
+    for (const [ex, ey] of [s.from, s.to]) {
+      ctx.moveTo(ex - nx, ey - ny);
+      ctx.lineTo(ex + nx, ey + ny);
     }
-    ctx.stroke();
   }
+  ctx.stroke();
   ctx.font = RADIUS_FONT;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

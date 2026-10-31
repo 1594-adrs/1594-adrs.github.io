@@ -278,8 +278,6 @@ export class SolidScene {
     if (!geometry) return;
     const material = new MeshPhongMaterial({
       color: new Color(color),
-      transparent: true,
-      opacity: 0.9,
       side: DoubleSide,
     });
     this.sliceMesh = new Mesh(geometry, material);
