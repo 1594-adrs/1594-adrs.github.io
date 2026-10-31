@@ -45,5 +45,8 @@ Keep the layers separate:
 - `components/` — `solid-panel`, `integral-formula`, `math-renderer`, `conic-assistant`, `value-table`, `color-picker`. Calculator CSS is split across `graphing-calculator.component.css`, `function-list.css`, `canvas.css`, `results.css` to stay under the per-stylesheet budget. `graphing-calculator.component.ts` is large — put new logic in `engine/`/`state/`/`canvas/`, not in the component.
 - Row indices (integral, multi-area, value table, solid curves) are remapped on remove/reorder through `engine/row-index.ts` `remapIndex` — use it for any new state that stores a row index.
 - `poiComputeKey` (points of interest) includes the angle unit; any new input that changes what `critical-points` sees must go in that key. Asymptote cache is keyed by AST + angle unit.
+- Curve domains: trailing braces `y = f(x) {a <= x <= b}`. `engine/domain.ts` holds `splitDomain` (strips them once in `parseRow`) and `gateAst` (builds `if(cond, body)` as an AST; never re-parse the text). Rows carry `bodyAst` (ungated, for conics/formulas/f′) and `domain` (bounds for integral/area/solid defaults, polar θ / parametric t ranges). Any new consumer of a row reads those, not `raw`.
+- Canvas colours come from `canvas/palette.ts` (dark/light print theme, `state/canvas-theme.state.ts`), never hardcoded in a renderer. User colours go through `palette.curve()` at the call site. The 3D scene takes `palette.scene` as an input.
+- `latex-to-raw`: never put `\b` after a LaTeX command, because MathLive emits `\lbrace0` with no space.
 - UI text is English.
 - Keyboard: `+`/`-` zoom, arrows pan, `R` reset.
