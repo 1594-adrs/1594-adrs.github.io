@@ -94,6 +94,9 @@ function containsVariable(expr: string, name: string): boolean {
   return false;
 }
 
+/** `r^2 = f(θ)` (lemniscates): drawn as r = ±√f. */
+export const POLAR_SQUARED = /^r\s*(?:\^\s*\(?\s*2\s*\)?|²)\s*=\s*/i;
+
 /**
  * Detects the curve mode from raw input text.
  *
@@ -102,9 +105,6 @@ function containsVariable(expr: string, name: string): boolean {
  * to implicit (self-referential), and a bare `x = 3` keeps today's behavior
  * of being treated as an implicit vertical line.
  */
-/** `r^2 = f(θ)` (lemniscates): drawn as r = ±√f. */
-export const POLAR_SQUARED = /^r\s*(?:\^\s*\(?\s*2\s*\)?|²)\s*=\s*/i;
-
 export function detectCurveMode(raw: string): DetectedCurveMode {
   if (sliderName(raw)) return 'slider';
   raw = splitDomain(raw).body;

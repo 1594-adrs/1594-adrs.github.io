@@ -279,7 +279,6 @@ export function drawPolarGrid(
     ctx.fillText(gridLabel(k * step, step), ox + k * step * pxX, oy + 4);
   }
 
-  // Each angle label sits on its ray, just inside the canvas edge.
   if (ox < 0 || ox > width || oy < 0 || oy > height) return;
   ctx.textBaseline = 'middle';
   for (const k of rays) {
