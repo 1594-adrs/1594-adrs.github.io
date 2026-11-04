@@ -27,6 +27,8 @@ export interface MathExpression {
   tMax?: string;
   thetaMin?: string;
   thetaMax?: string;
+  /** Polar row written as `r^2 = f`: `ast` is √f and the renderer also draws −√f. */
+  polarSquared?: boolean;
   inequalityOp?: '>' | '<' | '>=' | '<=';
   /** f′ toggle: also plot the derivative (explicit rows only). */
   showDerivative?: boolean;

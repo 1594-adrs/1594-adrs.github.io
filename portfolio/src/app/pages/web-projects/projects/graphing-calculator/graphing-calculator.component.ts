@@ -18,7 +18,7 @@ import {
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Viewport } from './canvas/viewport';
-import { drawGrid } from './canvas/grid-renderer';
+import { drawGrid, drawPolarGrid } from './canvas/grid-renderer';
 import { Solid3DComponent } from './canvas/solid-3d/solid-3d.component';
 import { HelpModalComponent } from './help-modal/help-modal.component';
 import {
@@ -68,7 +68,7 @@ import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode, maskNested, unwrapParametricPair } from './engine/mode-detector';
-import { isParamName } from './engine/mode-detector';
+import { isParamName, POLAR_SQUARED } from './engine/mode-detector';
 import { substituteParams } from './engine/params';
 import {
   domainBounds,
@@ -298,7 +298,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   show3DSolid = signal(false);
   showHelp = signal(false);
   showConicAssistant = signal(false);
-  showGrid = signal(true);
+  gridMode = signal<'cartesian' | 'polar' | 'none'>('cartesian');
   focusedInputIndex = signal<number | null>(null);
   evalPoint = signal<string>('0');
   dragIndex = signal<number | null>(null);
@@ -1305,7 +1305,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       };
     }
     if (mode === 'polar') {
-      const expr = raw.replace(/^r\s*=\s*/i, '');
+      const squared = POLAR_SQUARED.test(raw);
+      const rhs = raw.replace(squared ? POLAR_SQUARED : /^r\s*=\s*/i, '');
+      const expr = squared ? `sqrt(${rhs})` : rhs;
       // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
       const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 }, values);
       return {
@@ -1317,6 +1319,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         paramY: null,
         inequalityOp: undefined,
         error,
+        polarSquared: squared,
       };
     }
     const { ast, bodyAst, error } = this.parseAndValidate(effectiveRaw, { x: 1 }, values, cond);
@@ -1934,7 +1937,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   toggleGrid(): void {
-    this.showGrid.update((v) => !v);
+    this.gridMode.update((m) =>
+      m === 'cartesian' ? 'polar' : m === 'polar' ? 'none' : 'cartesian',
+    );
     this.requestRender();
   }
 
@@ -2577,8 +2582,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     setCanvasPalette(palette);
     const ink = palette.curve;
 
-    if (this.showGrid()) {
+    if (this.gridMode() === 'cartesian') {
       drawGrid(ctx, this.viewport, w, h);
+    } else if (this.gridMode() === 'polar') {
+      drawPolarGrid(ctx, this.viewport, w, h);
     } else {
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = palette.background;
@@ -2648,6 +2655,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const thetaMin = this.evalRange(fn.thetaMin, 0);
         const thetaMax = this.evalRange(fn.thetaMax, 2 * Math.PI);
         drawPolar(ctx, this.viewport, evalR, thetaMin, thetaMax, ink(fn.color), w, h);
+        if (fn.polarSquared) {
+          const neg = (theta: number) => -evalR(theta);
+          drawPolar(ctx, this.viewport, neg, thetaMin, thetaMax, ink(fn.color), w, h);
+        }
       } else if (fn.mode === 'explicit-y') {
         if (!fn.ast) continue;
         const compiled = compileExpression(fn.ast, au);

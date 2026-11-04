@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Viewport } from './viewport';
-import { drawGrid } from './grid-renderer';
+import { drawGrid, piFractionLabel } from './grid-renderer';
 
 // Test helpers
 function niceStep(range: number): number {
@@ -176,5 +176,22 @@ describe('drawGrid hardening', () => {
     const vp = new Viewport(-1e300, 1e300, -1e300, 1e300);
     drawGrid(ctx, vp, 800, 600);
     expect(ctx.calls.length).toBeLessThan(10000);
+  });
+});
+
+describe('piFractionLabel', () => {
+  it.each<[number, string]>([
+    [0, '0'],
+    [2, 'π/6'],
+    [3, 'π/4'],
+    [4, 'π/3'],
+    [6, 'π/2'],
+    [8, '2π/3'],
+    [10, '5π/6'],
+    [12, 'π'],
+    [21, '7π/4'],
+    [22, '11π/6'],
+  ])('k=%i → %s', (k, label) => {
+    expect(piFractionLabel(k)).toBe(label);
   });
 });

@@ -800,6 +800,16 @@ describe('GraphingCalculatorComponent', () => {
       expect(evaluate(fn.ast!, { x: 1, t: 1 })).toBe(2);
     });
 
+    it('reads r^2 = f(θ) as polar with r = √f and flags the ± branch', () => {
+      const fn = row('r^2 = 4cos(2t) {0 <= t <= pi}');
+      expect(fn.mode).toBe('polar');
+      expect(fn.error).toBeNull();
+      expect(fn.polarSquared).toBe(true);
+      expect(evaluate(fn.ast!, { x: 0, t: 0 })).toBeCloseTo(2, 12);
+      expect(fn.thetaMax).toBe(String(Math.PI));
+      expect(row('r = 2').polarSquared).toBe(false);
+    });
+
     it('reads a parametric pair into paramX / paramY', () => {
       const fn = row('(cos(t), sin(t))');
       expect(fn.mode).toBe('parametric');

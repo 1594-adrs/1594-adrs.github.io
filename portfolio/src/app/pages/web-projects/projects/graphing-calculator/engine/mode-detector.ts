@@ -102,12 +102,18 @@ function containsVariable(expr: string, name: string): boolean {
  * to implicit (self-referential), and a bare `x = 3` keeps today's behavior
  * of being treated as an implicit vertical line.
  */
+/** `r^2 = f(θ)` (lemniscates): drawn as r = ±√f. */
+export const POLAR_SQUARED = /^r\s*(?:\^\s*\(?\s*2\s*\)?|²)\s*=\s*/i;
+
 export function detectCurveMode(raw: string): DetectedCurveMode {
   if (sliderName(raw)) return 'slider';
   raw = splitDomain(raw).body;
   const trimmed = unwrapParametricPair(raw).trim();
 
   if (/^r\s*=/i.test(trimmed)) return 'polar';
+  const squared = POLAR_SQUARED.exec(trimmed);
+  if (squared && !/(?<![A-Za-z])r(?![A-Za-z])/i.test(trimmed.slice(squared[0].length)))
+    return 'polar';
   const top = maskNested(trimmed);
   if (/[<>]/.test(top)) return 'implicit';
   if (hasTopLevelComma(trimmed)) return 'parametric';

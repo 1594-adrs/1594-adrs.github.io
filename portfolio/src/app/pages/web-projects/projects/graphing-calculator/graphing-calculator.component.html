@@ -60,11 +60,10 @@
         </button>
         <button
           class="canvas-ctrl-btn"
-          [class.active]="showGrid()"
+          [class.active]="gridMode() !== 'none'"
           (click)="toggleGrid()"
-          [attr.aria-pressed]="showGrid()"
-          aria-label="Toggle grid"
-          title="Toggle grid"
+          [attr.aria-label]="'Grid: ' + gridMode()"
+          [title]="'Grid: ' + gridMode() + ' (click to cycle cartesian, polar, none)'"
         >
           <app-icon name="grid" />
         </button>
