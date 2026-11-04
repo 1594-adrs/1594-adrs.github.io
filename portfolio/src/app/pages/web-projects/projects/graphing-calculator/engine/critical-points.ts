@@ -1,6 +1,7 @@
 import { findAxisCrossings, goldenSectionMinimize, safeEval } from './numeric-utils';
 import { derivative } from './calculus';
 import { findIntersections } from './intersection-finder';
+import { atExcludedEdge, type CurveDomain } from './domain';
 
 export type CriticalPointKind = 'root' | 'max' | 'min';
 
@@ -13,6 +14,7 @@ export interface CriticalPoint {
 export interface NamedCurve {
   label: string;
   fn: (x: number) => number;
+  domain?: CurveDomain | null;
 }
 
 export interface PointOfInterest {
@@ -117,7 +119,8 @@ export function findExtrema(fn: (x: number) => number, a: number, b: number): Cr
   // f' divided by max(1, 1e-4|f|) (positive: same zeros and signs) so its rounding noise, ~1e-12|f|,
   // stays under the root residual tolerance on large-valued curves.
   // The difference step shrinks with the view: a fixed 1e-4 blurs every extremum of a zoomed-in curve.
-  const df = (x: number) => derivative(fn, x, Math.min(1e-4, h)) / Math.max(1, 1e-4 * Math.abs(fn(x)));
+  const df = (x: number) =>
+    derivative(fn, x, Math.min(1e-4, h)) / Math.max(1, 1e-4 * Math.abs(fn(x)));
   const candidates = findAxisCrossings(df, xMin, xMax, 0, STEPS);
   const points: CriticalPoint[] = [];
   candidates.forEach((c, i) => {
@@ -163,9 +166,12 @@ export function computePointsOfInterest(
   b: number,
 ): PointOfInterest[] {
   const points: PointOfInterest[] = [];
+  const tol = (b - a) * 1e-9;
+  const excluded = (c: NamedCurve, x: number) => atExcludedEdge(x, c.domain, tol);
 
   for (const curve of curves) {
     for (const cp of findCriticalPoints(curve.fn, a, b)) {
+      if (excluded(curve, cp.x)) continue;
       points.push({ x: cp.x, y: cp.y, label: `${cp.kind} of ${curve.label}` });
     }
   }
@@ -173,6 +179,7 @@ export function computePointsOfInterest(
   if (curves.length >= 2) {
     const evalFns = curves.map((c) => c.fn);
     for (const pt of findIntersections(evalFns, a, b)) {
+      if (pt.functionIndices.some((i) => excluded(curves[i], pt.x))) continue;
       const names = pt.functionIndices.map((i) => curves[i].label).join(' & ');
       points.push({ x: pt.x, y: pt.y, label: `${names} intersection` });
     }

@@ -655,3 +655,51 @@ describe('computeSolid stale piece order (3+ curves)', () => {
     expect(r.issues.filter((i) => i.code === 'inaccurate')).toEqual([]);
   });
 });
+
+describe('computeSolid washers of y = 3+2x-x², y = 0', () => {
+  const f = () => curveFromExpr('3+2x-x^2', 'f1');
+  const zero = () => curveFromExpr('0', 'f2');
+
+  it.each<[string, Omit<SolidSpec, 'method'>, number, string]>([
+    [
+      'about x = -4 (variable y)',
+      {
+        variable: 'y',
+        curves: [curveFromExpr('1+sqrt(4-y)', 'g1'), curveFromExpr('1-sqrt(4-y)', 'g2')],
+        a: 0,
+        b: 4,
+        axis: { orientation: 'vertical', value: -4 },
+      },
+      (320 * Math.PI) / 3,
+      '320π/3',
+    ],
+    [
+      'about y = 5',
+      {
+        variable: 'x',
+        curves: [f(), zero()],
+        a: -1,
+        b: 3,
+        axis: { orientation: 'horizontal', value: 5 },
+      },
+      (1088 * Math.PI) / 15,
+      '1088π/15',
+    ],
+    [
+      'about y = -1',
+      {
+        variable: 'x',
+        curves: [f(), zero()],
+        a: -1,
+        b: 3,
+        axis: { orientation: 'horizontal', value: -1 },
+      },
+      (832 * Math.PI) / 15,
+      '832π/15',
+    ],
+  ])('%s', (_, partial, volume, exact) => {
+    const r = computeSolid({ method: 'disk-washer', ...partial });
+    expect(relErr(r.volume!, volume)).toBeLessThanOrEqual(1e-9);
+    expect(r.exact).toBe(exact);
+  });
+});

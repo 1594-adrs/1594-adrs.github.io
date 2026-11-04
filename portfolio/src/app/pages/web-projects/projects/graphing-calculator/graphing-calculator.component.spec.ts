@@ -6,6 +6,7 @@ import { evalExpression, evaluate } from './engine/evaluator';
 import { buildShareHash, extractShareFragment, parseShareState } from './state/share-state';
 import { MAX_CURVE_ROWS, MAX_SLIDER_ROWS } from './models/calculator.models';
 import { FUNCTION_COLORS } from './utils/color';
+import { LIGHT_PALETTE } from './canvas/palette';
 
 describe('GraphingCalculatorComponent', () => {
   beforeEach(async () => {
@@ -799,6 +800,16 @@ describe('GraphingCalculatorComponent', () => {
       expect(evaluate(fn.ast!, { x: 1, t: 1 })).toBe(2);
     });
 
+    it('reads r^2 = f(θ) as polar with r = √f and flags the ± branch', () => {
+      const fn = row('r^2 = 4cos(2t) {0 <= t <= pi}');
+      expect(fn.mode).toBe('polar');
+      expect(fn.error).toBeNull();
+      expect(fn.polarSquared).toBe(true);
+      expect(evaluate(fn.ast!, { x: 0, t: 0 })).toBeCloseTo(2, 12);
+      expect(fn.thetaMax).toBe(String(Math.PI));
+      expect(row('r = 2').polarSquared).toBe(false);
+    });
+
     it('reads a parametric pair into paramX / paramY', () => {
       const fn = row('(cos(t), sin(t))');
       expect(fn.mode).toBe('parametric');
@@ -849,6 +860,211 @@ describe('GraphingCalculatorComponent', () => {
         const fn = row(raw);
         expect(fn.error ?? (fn.ast === null && fn.paramX === null ? 'empty' : null)).not.toBeNull();
       }
+    });
+  });
+
+  describe('rows with a {cond} domain', () => {
+    function setup(...rows: string[]) {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      fixture.detectChanges();
+      const comp = fixture.componentInstance;
+      rows.forEach((raw, i) => {
+        if (i > 0) comp.addFunction();
+        comp.updateExpression(i, raw);
+      });
+      return comp;
+    }
+    const poi = (comp: GraphingCalculatorComponent) => {
+      (comp as unknown as { recomputePointsOfInterest(): void }).recomputePointsOfInterest();
+      return comp.interactionState.pointsOfInterest();
+    };
+
+    it('an edit that breaks the domain drops the old body, so f′ is not offered', () => {
+      const comp = setup('y = x^2');
+      expect(comp.derivatives()[0].ast).not.toBeNull();
+      for (const raw of ['y = x^2 {', 'y = x^2 {}']) {
+        comp.updateExpression(0, raw);
+        expect(comp.functions()[0].error).not.toBeNull();
+        expect(comp.functions()[0].bodyAst).toBeNull();
+        expect(comp.derivatives()[0].ast).toBeNull();
+      }
+    });
+
+    it('f′ of a gated row differentiates the body', () => {
+      const comp = setup('y = x^2 {0 <= x <= 1}');
+      expect(evalExpression(comp.derivatives()[0].ast!, 3)).toBe(6);
+    });
+
+    it.each([
+      ['r = 1', 'thetaMin', 'thetaMax'],
+      ['(cos(t), sin(t))', 'tMin', 'tMax'],
+    ] as const)('%s: removing the domain restores the default range', (body, minKey, maxKey) => {
+      const comp = setup(`${body} {0 <= t <= pi}`);
+      const fn = () => comp.functions()[0];
+      expect(fn()[maxKey]).toBe(String(Math.PI));
+      comp.updateExpression(0, body);
+      expect(fn()[minKey]).toBeUndefined();
+      expect(fn()[maxKey]).toBeUndefined();
+
+      comp.updateExpression(0, `${body} {0 <= t <= pi}`);
+      comp.updateExpression(0, `${body} {t >= 1}`);
+      expect(fn()[minKey]).toBe('1');
+      expect(fn()[maxKey]).toBeUndefined();
+
+      comp.updateExpression(0, `${body} {0 <= t <= pi}`);
+      comp.updateExpression(0, `${body} {0 <= t <= pi`);
+      comp.updateExpression(0, body);
+      expect(fn()[maxKey]).toBeUndefined();
+    });
+
+    it('keeps a range typed in the range inputs', () => {
+      const comp = setup('r = 1');
+      comp.updateParamRange(0, 'thetaMax', '3');
+      comp.updateExpression(0, 'r = 2');
+      expect(comp.functions()[0].thetaMax).toBe('3');
+    });
+
+    it('skips points at excluded (strict) domain endpoints, keeps closed ones', () => {
+      const near0 = (pts: { x: number; label: string }[]) =>
+        pts.filter((p) => Math.abs(p.x) < 1e-6).map((p) => p.label);
+      expect(near0(poi(setup('y = x {x > 0}')))).toEqual([]);
+      expect(near0(poi(setup('y = x {x > 0}', 'y = -x {x < 0}')))).toEqual([]);
+      expect(near0(poi(setup('y = x^2-1 {-1 < x < 1}')))).toEqual(['min of f1']);
+      expect(poi(setup('y = x^2-1 {-1 < x < 1}')).some((p) => p.label === 'root of f1')).toBe(
+        false,
+      );
+      expect(near0(poi(setup('y = x {x >= 0}')))).toEqual(['root of f1']);
+    });
+
+    it('evaluates bounds in the current angle unit and re-reads them on toggle', () => {
+      const comp = setup('y = x {0 <= x <= sin(30)}');
+      expect(comp.functions()[0].error).toBe('The domain is empty');
+      comp.toggleAngleUnit();
+      expect(comp.functions()[0].error).toBeNull();
+      expect(comp.functions()[0].domain?.hi).toBeCloseTo(0.5, 12);
+    });
+
+    it('parses a 499-character row with a domain', () => {
+      const raw = `${' '.repeat(492)}x {x>0}`;
+      expect(raw.length).toBe(499);
+      expect(setup(raw).functions()[0].error).toBeNull();
+    });
+
+    it('names an unknown identifier and flags an empty domain', () => {
+      const comp = setup('y = x {x < 1 or x > 3}', 'y = x^2 {3 <= x <= 1}');
+      expect(comp.functions()[0].error).toBe("Unknown name 'or': the domain can only use x");
+      expect(comp.functions()[1].error).toBe('The domain is empty');
+      expect(comp.functions()[1].ast).toBeNull();
+    });
+
+    it('blames the domain only when the integral leaves it', () => {
+      const note = (comp: GraphingCalculatorComponent) =>
+        comp.results().some((r) => r.notes?.some((n) => n.includes('only exists')));
+      const inside = setup('y = sqrt(x) {-5 <= x <= 5}');
+      inside.activateIntegral();
+      expect(inside.activeIntegral()).toMatchObject({ a: -5, b: 5 });
+      expect(note(inside)).toBe(false);
+      const outside = setup('y = ln(x) {1 <= x <= 2}');
+      outside.activateIntegral();
+      outside.updateIntegralA('-1');
+      expect(note(outside)).toBe(true);
+    });
+
+    it('follows a slider in a bound, and a slider row cannot have a domain', () => {
+      const comp = setup('y = x {0 <= x <= a}', 'a = 2');
+      expect(comp.functions()[0].domain?.hi).toBe(2);
+      comp.paramSliders.setSliderValue(1, 5);
+      comp.paramSliders.flush();
+      expect(comp.functions()[0].domain?.hi).toBe(5);
+      expect(setup('y = x {0 <= x <= a}').functions()[0].error).toBe('Add a slider for a');
+      expect(setup('a = 2 {x > 0}').functions()[0].error).toBe("Sliders can't have a domain");
+    });
+
+    it('a braced row survives a share link', () => {
+      const comp = setup('y = x^2 {0 <= x <= 1}');
+      const shared = (comp as unknown as { buildShareState(): unknown }).buildShareState();
+      const parsed = parseShareState(extractShareFragment(buildShareHash(shared as never))!);
+      expect(parsed?.functions[0].raw).toBe('y = x^2 {0 <= x <= 1}');
+    });
+
+    describe('washers through the solid tool', () => {
+      it('a line and a parabola seed a, b from the domain and give 2π/15', () => {
+        const comp = setup('y = x {0 <= x <= 1}', 'y = x^2');
+        comp.toggleSolidTool();
+        const st = comp.solidToolState;
+        expect(st.curveIndices()).toEqual([0, 1]);
+        expect([st.aText(), st.bText()]).toEqual(['0', '1']);
+        expect(st.result()!.volume).toBeCloseTo((2 * Math.PI) / 15, 6);
+        st.setA('0.5');
+        st.toggleCurve(1);
+        st.toggleCurve(1);
+        expect(st.aText()).toBe('0.5');
+      });
+
+      it('a gated lower semicircle uses its live branch', () => {
+        const comp = setup('x^2+y^2=4 {y <= 0}');
+        expect(comp.canUseWithTools(comp.functions()[0])).toBe(true);
+        comp.toggleSolidTool();
+        const st = comp.solidToolState;
+        st.toggleCurve(0);
+        st.setA('-2');
+        st.setB('2');
+        expect(st.spec()!.curves[0].fn(0)).toBeCloseTo(-2, 9);
+        expect(st.result()!.volume).toBeCloseTo((32 * Math.PI) / 3, 4);
+      });
+
+      it('an x = g(y) row seeds a, b from its y-domain', () => {
+        const comp = setup('x = sqrt(y) {0 <= y <= 4}');
+        comp.toggleSolidTool();
+        const st = comp.solidToolState;
+        st.toggleCurve(0);
+        expect(st.variable()).toBe('y');
+        expect([st.aText(), st.bText()]).toEqual(['0', '4']);
+        expect(st.result()!.volume).toBeCloseTo(8 * Math.PI, 4);
+        st.setB('1');
+        st.toggleCurve(0);
+        st.toggleCurve(0);
+        expect(st.bText()).toBe('1');
+      });
+    });
+  });
+
+  describe('canvas theme and export', () => {
+    it('the print toggle sets the class, aria-pressed, the 3D colour and redraws', async () => {
+      const fixture = TestBed.createComponent(GraphingCalculatorComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const comp = fixture.componentInstance;
+      const el = fixture.nativeElement as HTMLElement;
+      const button = el.querySelector('button[aria-label="Print colors"]') as HTMLButtonElement;
+      const dark3d = comp.solid3dColor();
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+      (comp as unknown as { renderRequested: boolean }).renderRequested = false;
+      rafSpy.mockClear();
+
+      button.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(el.querySelector('.canvas-container')!.classList).toContain('canvas-light');
+      expect(button.getAttribute('aria-pressed')).toBe('true');
+      expect(comp.canvasTheme.palette()).toBe(LIGHT_PALETTE);
+      expect(comp.solid3dColor()).toBe(LIGHT_PALETTE.curve(comp.solidColor()));
+      expect(comp.solid3dColor()).not.toBe(dark3d);
+      expect(rafSpy).toHaveBeenCalled();
+    });
+
+    it('says why Download PNG did nothing while the 3D view is not ready', () => {
+      const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+      comp.addFunction();
+      comp.updateExpression(1, 'x^2+y^2-4=0');
+      comp.toggleSolidTool();
+      comp.solidToolState.toggleCurve(1);
+      comp.solidToolState.setA('-2');
+      comp.solidToolState.setB('2');
+      comp.show3DSolid.set(true);
+      comp.exportPng();
+      expect(comp.shareNotice()).toBe('The 3D view is not ready to export.');
     });
   });
 });

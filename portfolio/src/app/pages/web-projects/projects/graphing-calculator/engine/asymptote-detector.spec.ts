@@ -5,7 +5,8 @@ import {
   canHaveObliqueAsymptote,
 } from './asymptote-detector';
 import { parse } from './parser';
-import { evaluate } from './evaluator';
+import { compileExpression, evaluate } from './evaluator';
+import { domainBounds } from './domain';
 
 describe('asymptote-detector', () => {
   it('should detect vertical asymptote for 1/(x-2)', () => {
@@ -220,5 +221,50 @@ describe('asymptote-detector: piecewise if()', () => {
     expect(v[0].value).toBeCloseTo(2, 6);
     const w = run('if(x < 1, 1/x, x + 5)');
     expect(w.map((s) => Math.abs(Math.round(s.value * 1e6) / 1e6))).toEqual([0]);
+  });
+
+  describe('with a {cond} domain', () => {
+    const gated = (body: string, cond: string) => {
+      const ast = parse(`if(${cond},${body})`);
+      const compiled = compileExpression(ast);
+      return {
+        fn: (x: number) => compiled(x, 0),
+        ast,
+        domain: domainBounds(parse(cond), 'x'),
+      };
+    };
+    const verticals = (body: string, cond: string, withDomain = true) => {
+      const g = gated(body, cond);
+      return detectAsymptotes(g.fn, -10, 10, g.ast, '', withDomain ? g.domain : null)
+        .filter((a) => a.type === 'vertical')
+        .map((a) => a.value);
+    };
+
+    it.each([
+      ['1/x', 'x >= 0.001'],
+      ['1/x', '0.001 < x < 5'],
+    ])('drops the finite steep edge of %s {%s}', (body, cond) => {
+      expect(verticals(body, cond, false).length).toBeGreaterThan(0);
+      expect(verticals(body, cond)).toEqual([]);
+    });
+
+    it.each([
+      ['tan(x)', '-pi/2 < x < pi/2', [-Math.PI / 2, Math.PI / 2]],
+      ['ln(x)', 'x > 0', [0]],
+      ['1/x', 'x > 0', [0]],
+      ['1/(x-1)', 'x > 1', [1]],
+    ])('keeps the pole the curve approaches at the open edge of %s {%s}', (body, cond, want) => {
+      expect(verticals(body, cond, false)).toHaveLength(want.length);
+      const got = verticals(body, cond);
+      expect(got).toHaveLength(want.length);
+      got.forEach((v, i) => expect(v).toBeCloseTo(want[i], 4));
+    });
+
+    it('keeps a pole strictly inside the domain and drops one outside it', () => {
+      const inside = verticals('1/(x-2)', '0 <= x <= 5');
+      expect(inside).toHaveLength(1);
+      expect(inside[0]).toBeCloseTo(2, 6);
+      expect(verticals('1/(x-2)', '-5 <= x <= 1')).toEqual([]);
+    });
   });
 });

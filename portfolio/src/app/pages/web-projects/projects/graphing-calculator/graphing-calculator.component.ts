@@ -18,7 +18,7 @@ import {
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Viewport } from './canvas/viewport';
-import { drawGrid } from './canvas/grid-renderer';
+import { drawGrid, drawPolarGrid } from './canvas/grid-renderer';
 import { Solid3DComponent } from './canvas/solid-3d/solid-3d.component';
 import { HelpModalComponent } from './help-modal/help-modal.component';
 import {
@@ -35,7 +35,7 @@ import {
 } from './canvas/graph-renderer';
 import { drawImplicitCurve } from './canvas/implicit-renderer';
 import { drawConicCurve } from './canvas/conic-renderer';
-import { solveConicForY } from './engine/conic-solver';
+import { dependsOn } from './engine/symbolic-diff';
 import { detectConic, detectConicDomain } from './engine/conic-detector';
 import type { ConicInfo } from './engine/conic-detector';
 import { detectAsymptotes } from './engine/asymptote-detector';
@@ -68,7 +68,17 @@ import type { NamedCurve, PointOfInterest } from './engine/critical-points';
 import { parseLimitText } from './engine/parse-limit';
 import { computeAreaRegions } from './engine/area-splitter';
 import { detectCurveMode, maskNested, unwrapParametricPair } from './engine/mode-detector';
+import { isParamName, POLAR_SQUARED } from './engine/mode-detector';
 import { substituteParams } from './engine/params';
+import {
+  domainBounds,
+  gateAst,
+  gatedConicBranches,
+  intersectDomains,
+  isEmptyDomain,
+  splitDomain,
+  type CurveDomain,
+} from './engine/domain';
 import { remapIndex, type RowOp } from './engine/row-index';
 import { FUNCTION_COLORS } from './utils/color';
 import { MathInput } from './components/math-input/math-input';
@@ -93,6 +103,8 @@ import { UiLayoutState } from './state/ui-layout.state';
 import { CalculusToolState, parseLimitPoint } from './state/calculus-tool.state';
 import { ParamSlidersState } from './state/param-sliders.state';
 import { IntegralExtrasState, centroidFor } from './state/integral-extras.state';
+import { CanvasThemeState } from './state/canvas-theme.state';
+import { setCanvasPalette } from './canvas/palette';
 import { IntegralExtras } from './components/integral-extras/integral-extras';
 import { drawCentroid, drawRiemannPanels } from './canvas/integral-extras-renderer';
 import { derivativeOf, differentialCurveOf, tangentAt } from './state/derivative-view';
@@ -157,6 +169,29 @@ function formatExpressionError(message: string, exprText: string): string {
   return followedByParen ? `Unknown function or variable '${name}'` : `Unknown variable '${name}'`;
 }
 
+function domainSeed(
+  rows: readonly (MathExpression | undefined)[],
+  variable: CurveDomain['variable'],
+): [number, number] | null {
+  const d = intersectDomains(
+    rows.map((r) => r?.domain),
+    variable,
+  );
+  return d && d.lo !== null && d.hi !== null && d.lo < d.hi ? [d.lo, d.hi] : null;
+}
+
+/** Clears the parameter range a previous `{cond}` wrote, keeping one typed in the range inputs. */
+function dropDomainRange(fn: MathExpression): MathExpression {
+  const d = fn.domain;
+  if (!d || (d.variable !== 'theta' && d.variable !== 't')) return fn;
+  const [minKey, maxKey] =
+    d.variable === 'theta' ? (['thetaMin', 'thetaMax'] as const) : (['tMin', 'tMax'] as const);
+  const out = { ...fn };
+  if (d.lo !== null && out[minKey] === String(d.lo)) out[minKey] = undefined;
+  if (d.hi !== null && out[maxKey] === String(d.hi)) out[maxKey] = undefined;
+  return out;
+}
+
 /** Rounds an auto-detected solid bound to a friendly display precision. */
 function roundLimit(v: number): number {
   return Math.round(v * 10000) / 10000;
@@ -192,6 +227,7 @@ const INTEGRAL_KEYS: ReadonlySet<string> = new Set(['integralA', 'integralB']);
     CalculusToolState,
     IntegralExtrasState,
     ParamSlidersState,
+    CanvasThemeState,
   ],
   templateUrl: './graphing-calculator.component.html',
   styleUrls: [
@@ -220,6 +256,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   protected readonly MAX_CURVE_ROWS = MAX_CURVE_ROWS;
   protected readonly MAX_SLIDER_ROWS = MAX_SLIDER_ROWS;
   integralExtras = inject(IntegralExtrasState);
+  canvasTheme = inject(CanvasThemeState);
 
   canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('graphCanvas');
   helpBtn = viewChild<ElementRef<HTMLButtonElement>>('helpBtn');
@@ -261,7 +298,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   show3DSolid = signal(false);
   showHelp = signal(false);
   showConicAssistant = signal(false);
-  showGrid = signal(true);
+  gridMode = signal<'cartesian' | 'polar' | 'none'>('cartesian');
   focusedInputIndex = signal<number | null>(null);
   evalPoint = signal<string>('0');
   dragIndex = signal<number | null>(null);
@@ -347,6 +384,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   /** Color of the solid's first curve, for the 3D view; falls back to the default palette. */
   solidColor = computed(() => this.solidToolState.spec()?.curves[0]?.color ?? FUNCTION_COLORS[0]);
+  solid3dColor = computed(() => this.canvasTheme.palette().curve(this.solidColor()));
 
   hasSolidResult = computed(() => {
     const result = this.solidToolState.result();
@@ -598,7 +636,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const compiled = compileExpression(f.ast, au);
       return (x) => compiled(x, 0);
     }
-    const branches = solveConicForY(f.ast);
+    const branches = gatedConicBranches(f.bodyAst ?? f.ast, f.ast);
     if (branches && branches.length > 0) {
       const branchFn = branches[0].fn;
       return (x) => branchFn(x) ?? NaN;
@@ -667,7 +705,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           (result.status === 'ok' || result.status === 'inaccurate')
             ? areaSingle(fn, Math.min(intg.a, intg.b), Math.max(intg.a, intg.b))
             : undefined;
-        res.push(...describeIntegral(expr.raw, intg.a, intg.b, result, abs));
+        const { body, cond } = splitDomain(expr.raw);
+        const rows = describeIntegral(body, intg.a, intg.b, result, abs);
+        const d = expr.domain;
+        const leavesDomain =
+          !d ||
+          (d.lo !== null && Math.min(intg.a, intg.b) < d.lo) ||
+          (d.hi !== null && Math.max(intg.a, intg.b) > d.hi);
+        if (cond !== null && result.status === 'undefined' && leavesDomain) {
+          rows[0].notes = [...(rows[0].notes ?? []), `The curve only exists where ${cond}.`];
+        }
+        res.push(...rows);
       }
     }
     // Solid-of-revolution / cross-section results are shown inline by <app-solid-panel>
@@ -747,7 +795,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   conicCards = computed(() =>
     this.functions().flatMap((fn, i) => {
       if (fn.mode !== 'implicit' || !fn.visible || !fn.ast) return [];
-      const info = this.getConicInfo(fn.ast);
+      const info = this.getConicInfo(fn.bodyAst ?? fn.ast);
       return info ? [{ index: i, color: fn.color, lines: conicInfoLines(info) }] : [];
     }),
   );
@@ -820,6 +868,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.calculusState.series();
       this.integralExtras.riemann();
       this.centroid();
+      this.canvasTheme.theme();
       if (!this.isBrowser) return;
       this.requestRender();
     });
@@ -966,7 +1015,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     exprText: string,
     sampleVars: Record<string, number>,
     values: ReadonlyMap<string, number>,
-  ): { ast: ExpressionNode | null; error: string | null } {
+    cond: string | null = null,
+  ): { ast: ExpressionNode | null; bodyAst?: ExpressionNode | null; error: string | null } {
     if (!exprText.trim()) return { ast: null, error: null };
     let ast: ExpressionNode;
     try {
@@ -981,7 +1031,33 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const message = err instanceof Error ? err.message : String(err);
       return { ast: null, error: formatExpressionError(message, exprText) };
     }
-    return { ast, error: null };
+    if (cond === null) return { ast, error: null };
+    const { condAst, error } = this.parseDomain(cond, sampleVars, values);
+    if (!condAst) return { ast: null, error };
+    return { ast: gateAst(condAst, ast), bodyAst: ast, error: null };
+  }
+
+  private parseDomain(
+    cond: string,
+    sampleVars: Record<string, number>,
+    values: ReadonlyMap<string, number>,
+  ): { condAst: ExpressionNode | null; error: string | null } {
+    try {
+      const condAst = substituteParams(parse(cond), values);
+      evaluate(condAst, sampleVars, this.angleUnit());
+      return { condAst, error: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const unknown = /^Unknown variable: '([^']+)'$/.exec(message)?.[1];
+      const vars = Object.keys(sampleVars).join(' and ');
+      return {
+        condAst: null,
+        error:
+          unknown && !isParamName(unknown)
+            ? `Unknown name '${unknown}': the domain can only use ${vars}`
+            : `Domain: ${formatExpressionError(message, cond)}`,
+      };
+    }
   }
 
   updateExpression(index: number, raw: string): void {
@@ -996,15 +1072,64 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     raw: string,
     values: ReadonlyMap<string, number>,
   ): MathExpression {
+    const { body, cond, error } = splitDomain(raw);
+    const clean = { ...dropDomainRange(fn), bodyAst: null };
+    const row: MathExpression = error
+      ? {
+          ...clean,
+          ast: null,
+          mode: this.detectMode(raw),
+          paramX: null,
+          paramY: null,
+          inequalityOp: undefined,
+          error,
+        }
+      : this.parseBody(clean, body, values, cond);
+    const out: MathExpression = { ...row, raw, bodyAst: row.bodyAst ?? row.ast, domain: null };
+    if (cond === null || row.error) return out;
+    const au = this.angleUnit();
+    const empty = { ...out, ast: null, bodyAst: null, paramX: null, paramY: null };
+    if (row.mode !== 'polar' && row.mode !== 'parametric') {
+      if (!row.ast) return out;
+      const condAst = substituteParams(parse(cond), values);
+      const bounds = (v: 'x' | 'y') => domainBounds(condAst, v, {}, au);
+      const domain =
+        row.mode === 'explicit-y'
+          ? bounds('y')
+          : row.mode === 'explicit'
+            ? bounds('x')
+            : (bounds('x') ?? bounds('y'));
+      if (domain && isEmptyDomain(domain)) return { ...empty, error: 'The domain is empty' };
+      return { ...out, domain };
+    }
+    // Polar / parametric: the domain is the parameter range, not a gate.
+    const polar = row.mode === 'polar';
+    const parsed = this.parseDomain(cond, polar ? { x: 1, t: 1 } : { t: 1 }, values);
+    const domain = parsed.condAst && domainBounds(parsed.condAst, polar ? 'theta' : 't', {}, au);
+    if (parsed.error) return { ...empty, error: parsed.error };
+    if (!domain) return { ...empty, error: 'The domain must be an interval like {0 <= t <= pi}' };
+    if (isEmptyDomain(domain)) return { ...empty, error: 'The domain is empty' };
+    const lo = domain.lo === null ? {} : { [polar ? 'thetaMin' : 'tMin']: String(domain.lo) };
+    const hi = domain.hi === null ? {} : { [polar ? 'thetaMax' : 'tMax']: String(domain.hi) };
+    return { ...out, ...lo, ...hi, domain };
+  }
+
+  private parseBody(
+    fn: MathExpression,
+    raw: string,
+    values: ReadonlyMap<string, number>,
+    cond: string | null,
+  ): MathExpression {
     const mode = this.detectMode(raw);
     const effectiveRaw = mode === 'explicit' ? this.stripYEquals(raw) : raw;
     if (mode === 'explicit-y') {
       const rhs = raw.trim().replace(/^[xX]\s*=\s*/, '');
-      const { ast, error } = this.parseAndValidate(rhs, { y: 1 }, values);
+      const { ast, bodyAst, error } = this.parseAndValidate(rhs, { y: 1 }, values, cond);
       return {
         ...fn,
         raw,
         ast,
+        bodyAst,
         mode,
         paramX: null,
         paramY: null,
@@ -1022,19 +1147,32 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         raw.length <= MAX_INEQUALITY_RAW &&
         top.match(/[<>]=?/g)!.length === 2
       ) {
-        const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values);
-        return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: '>', error };
+        const { ast, bodyAst, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values, cond);
+        return {
+          ...fn,
+          raw,
+          ast,
+          bodyAst,
+          mode,
+          paramX: null,
+          paramY: null,
+          inequalityOp: '>',
+          error,
+        };
       }
       if (inequalityMatch) {
         const lhs = raw.slice(0, inequalityMatch.index).trim();
         const op = inequalityMatch[1] as '>' | '<' | '>=' | '<=';
         const rhs = raw.slice(inequalityMatch.index + op.length).trim();
-        if (/^y$/i.test(lhs)) {
-          const { ast, error } = this.parseAndValidate(rhs, { x: 1 }, values);
+        // A condition on y needs the 2D test below: this form is evaluated at y = 0.
+        const condUsesY = cond !== null && !!this.parseDomain(cond, { x: 1 }, values).error;
+        if (/^y$/i.test(lhs) && !condUsesY) {
+          const { ast, bodyAst, error } = this.parseAndValidate(rhs, { x: 1 }, values, cond);
           return {
             ...fn,
             raw,
             ast,
+            bodyAst,
             mode,
             paramX: null,
             paramY: null,
@@ -1042,8 +1180,23 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             error,
           };
         }
-        const { ast, error } = this.parseAndValidate(`(${lhs})-(${rhs})`, { x: 1, y: 1 }, values);
-        return { ...fn, raw, ast, mode, paramX: null, paramY: null, inequalityOp: op, error };
+        const { ast, bodyAst, error } = this.parseAndValidate(
+          `(${lhs})-(${rhs})`,
+          { x: 1, y: 1 },
+          values,
+          cond,
+        );
+        return {
+          ...fn,
+          raw,
+          ast,
+          bodyAst,
+          mode,
+          paramX: null,
+          paramY: null,
+          inequalityOp: op,
+          error,
+        };
       }
       if (top.includes('=')) {
         const eqIdx = top.indexOf('=');
@@ -1054,16 +1207,24 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           const rhs = substituteParams(parse(rhsText), values);
           evaluate(lhs, { x: 1, y: 1 }, this.angleUnit());
           evaluate(rhs, { x: 1, y: 1 }, this.angleUnit());
-          const ast: ExpressionNode = {
+          const equation = (left: ExpressionNode, right: ExpressionNode): ExpressionNode => ({
             type: 'BinaryOp',
             operator: '=',
-            left: lhs,
-            right: rhs,
-          };
+            left,
+            right,
+          });
+          const bodyAst = equation(lhs, rhs);
+          let ast = bodyAst;
+          if (cond !== null) {
+            const { condAst, error } = this.parseDomain(cond, { x: 1, y: 1 }, values);
+            if (!condAst) throw new Error(error ?? '');
+            ast = equation(gateAst(condAst, lhs), gateAst(condAst, rhs));
+          }
           return {
             ...fn,
             raw,
             ast,
+            bodyAst,
             mode,
             paramX: null,
             paramY: null,
@@ -1084,11 +1245,12 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           };
         }
       }
-      const { ast, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values);
+      const { ast, bodyAst, error } = this.parseAndValidate(raw, { x: 1, y: 1 }, values, cond);
       return {
         ...fn,
         raw,
         ast,
+        bodyAst,
         mode,
         paramX: null,
         paramY: null,
@@ -1143,7 +1305,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       };
     }
     if (mode === 'polar') {
-      const expr = raw.replace(/^r\s*=\s*/i, '');
+      const squared = POLAR_SQUARED.test(raw);
+      const rhs = raw.replace(squared ? POLAR_SQUARED : /^r\s*=\s*/i, '');
+      const expr = squared ? `sqrt(${rhs})` : rhs;
       // `t` (what the θ key emits) is an alias of `x`: both bind the polar angle.
       const { ast, error } = this.parseAndValidate(expr, { x: 1, t: 1 }, values);
       return {
@@ -1155,13 +1319,15 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         paramY: null,
         inequalityOp: undefined,
         error,
+        polarSquared: squared,
       };
     }
-    const { ast, error } = this.parseAndValidate(effectiveRaw, { x: 1 }, values);
+    const { ast, bodyAst, error } = this.parseAndValidate(effectiveRaw, { x: 1 }, values, cond);
     return {
       ...fn,
       raw,
       ast,
+      bodyAst,
       mode: 'explicit',
       paramX: null,
       paramY: null,
@@ -1252,7 +1418,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.closeSolidTool();
       this.activeMultiArea.set(null);
       const first = this.functions().findIndex((f) => f.mode !== 'slider');
-      this.activeIntegral.set({ fnIndex: Math.max(0, first), a: -2, b: 2 });
+      const [a, b] = domainSeed([this.functions()[first]], 'x') ?? [-2, 2];
+      this.activeIntegral.set({ fnIndex: Math.max(0, first), a, b });
     }
     this.requestRender();
   }
@@ -1303,8 +1470,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         }
       }
 
-      this.solidToolState.setA(String(roundLimit(a)));
-      this.solidToolState.setB(String(roundLimit(b)));
+      this.solidToolState.seedBounds(String(roundLimit(a)), String(roundLimit(b)));
     }
     this.requestRender();
   }
@@ -1329,10 +1495,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       let a = -2;
       let b = 2;
 
-      if (indices.length === 1) {
+      const seed = domainSeed(
+        indices.map((i) => this.functions()[i]),
+        'x',
+      );
+      if (seed) {
+        [a, b] = seed;
+      } else if (indices.length === 1) {
         const expr = this.functions()[indices[0]];
         if (expr?.mode === 'implicit' && expr.ast) {
-          const domain = detectConicDomain(expr.ast);
+          const domain = detectConicDomain(expr.bodyAst ?? expr.ast);
           if (domain) {
             a = domain[0].a;
             b = domain[0].b;
@@ -1351,7 +1523,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             if (f.mode === 'explicit') {
               return (x: number) => evalExpression(f.ast, x, undefined, au);
             }
-            const branches = solveConicForY(f.ast);
+            const branches = gatedConicBranches(f.bodyAst ?? f.ast, f.ast);
             if (branches && branches.length > 0) {
               const branchFn = branches[0].fn;
               return (x: number) => branchFn(x) ?? NaN;
@@ -1765,7 +1937,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
   }
 
   toggleGrid(): void {
-    this.showGrid.update((v) => !v);
+    this.gridMode.update((m) =>
+      m === 'cartesian' ? 'polar' : m === 'polar' ? 'none' : 'cartesian',
+    );
     this.requestRender();
   }
 
@@ -1776,6 +1950,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
   toggleAngleUnit(): void {
     this.angleUnit.update((u) => (u === 'deg' ? 'rad' : 'deg'));
+    this.paramSliders.resolveAll();
   }
 
   /** Opens/closes the table-of-values panel for a function row (toggles closed if already open). */
@@ -1987,6 +2162,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (this.show3DSolid() && this.hasSolidResult()) {
       const canvas = this.solid3dRef()?.exportCanvas();
       if (canvas) downloadCanvasAsPng(canvas, 'graph.png');
+      else this.announceShare('The 3D view is not ready to export.');
       return;
     }
     const canvas = this.canvasRef()?.nativeElement;
@@ -1997,7 +2173,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     if (!fn.visible) return false;
     if (fn.mode === 'explicit') return !!fn.ast;
     if (fn.mode === 'implicit') {
-      return !!fn.ast && solveConicForY(fn.ast) !== null;
+      return !!fn.ast && gatedConicBranches(fn.bodyAst ?? fn.ast, fn.ast) !== null;
     }
     if (fn.mode === 'parametric') return !!(fn.paramX && fn.paramY);
     if (fn.mode === 'polar') return !!fn.ast;
@@ -2301,6 +2477,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       curves.push({
         label: `f${index + 1}`,
         fn: (x: number) => compiled(x, 0),
+        domain: fn.domain,
       });
     });
     return curves;
@@ -2401,12 +2578,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const h = this.cssHeight;
     const au = this.angleUnit();
     const coarse = this.gestureActive;
+    const palette = this.canvasTheme.palette();
+    setCanvasPalette(palette);
+    const ink = palette.curve;
 
-    if (this.showGrid()) {
+    if (this.gridMode() === 'cartesian') {
       drawGrid(ctx, this.viewport, w, h);
+    } else if (this.gridMode() === 'polar') {
+      drawPolarGrid(ctx, this.viewport, w, h);
     } else {
       ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = '#0d0d15';
+      ctx.fillStyle = palette.background;
       ctx.fillRect(0, 0, w, h);
     }
 
@@ -2415,17 +2597,27 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (fn.mode === 'implicit') {
         if (fn.inequalityOp && fn.ast) {
           const compiled = compileExpression(fn.ast, au);
-          const isExplicit = /^\s*y\s*(>=|<=|>|<)/i.test(fn.raw);
+          const isExplicit = /^\s*y\s*(>=|<=|>|<)/i.test(fn.raw) && !dependsOn(fn.ast, 'y');
           if (isExplicit) {
             const evalFn = (x: number) => compiled(x, 0);
-            drawInequality(ctx, this.viewport, evalFn, fn.inequalityOp, fn.color, w, h, fn.ast, au);
+            drawInequality(
+              ctx,
+              this.viewport,
+              evalFn,
+              fn.inequalityOp,
+              ink(fn.color),
+              w,
+              h,
+              fn.ast,
+              au,
+            );
           } else {
             drawImplicitInequality(
               ctx,
               this.viewport,
               compiled,
               fn.inequalityOp,
-              fn.color,
+              ink(fn.color),
               w,
               h,
               coarse,
@@ -2436,14 +2628,16 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           // A recognized conic (circle/ellipse/parabola/hyperbola) is drawn
           // parametrically — ~300 points — instead of the marching-squares grid;
           // `fn.ast` is already the raw `lhs = rhs` equation detectConic expects.
-          const conic = fn.ast ? this.getConicInfo(fn.ast) : null;
-          if (conic && drawConicCurve(ctx, this.viewport, conic, fn.color, w, h)) {
+          // A gated conic falls through to marching squares, which honours the gate.
+          const gated = fn.bodyAst && fn.bodyAst !== fn.ast;
+          const conic = fn.ast && !gated ? this.getConicInfo(fn.ast) : null;
+          if (conic && drawConicCurve(ctx, this.viewport, conic, ink(fn.color), w, h)) {
             continue;
           }
           const diffAst = this.getImplicitDiffAst(fn);
           if (!diffAst) continue;
           const compiled = compileExpression(diffAst, au);
-          drawImplicitCurve(ctx, this.viewport, compiled, fn.color, w, h, coarse);
+          drawImplicitCurve(ctx, this.viewport, compiled, ink(fn.color), w, h, coarse);
         }
       } else if (fn.mode === 'parametric') {
         if (!fn.paramX || !fn.paramY) continue;
@@ -2453,30 +2647,35 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         const evalY = (tVal: number) => compiledY(tVal, 0);
         const tMin = this.evalRange(fn.tMin, 0);
         const tMax = this.evalRange(fn.tMax, 2 * Math.PI);
-        drawParametric(ctx, this.viewport, evalX, evalY, tMin, tMax, fn.color, w, h);
+        drawParametric(ctx, this.viewport, evalX, evalY, tMin, tMax, ink(fn.color), w, h);
       } else if (fn.mode === 'polar') {
         if (!fn.ast) continue;
         const compiled = compileExpression(fn.ast, au);
         const evalR = (theta: number) => compiled(theta, 0);
         const thetaMin = this.evalRange(fn.thetaMin, 0);
         const thetaMax = this.evalRange(fn.thetaMax, 2 * Math.PI);
-        drawPolar(ctx, this.viewport, evalR, thetaMin, thetaMax, fn.color, w, h);
+        drawPolar(ctx, this.viewport, evalR, thetaMin, thetaMax, ink(fn.color), w, h);
+        if (fn.polarSquared) {
+          const neg = (theta: number) => -evalR(theta);
+          drawPolar(ctx, this.viewport, neg, thetaMin, thetaMax, ink(fn.color), w, h);
+        }
       } else if (fn.mode === 'explicit-y') {
         if (!fn.ast) continue;
         const compiled = compileExpression(fn.ast, au);
         const evalG = (y: number) => compiled(0, y);
-        drawExplicitY(ctx, this.viewport, evalG, fn.color, w, h);
+        drawExplicitY(ctx, this.viewport, evalG, ink(fn.color), w, h);
       } else {
         if (!fn.ast) continue;
         const compiled = compileExpression(fn.ast, au);
         const evalFn = (x: number) => compiled(x, 0);
-        drawFunction(ctx, this.viewport, evalFn, fn.color, w, h, fn.ast, au);
+        drawFunction(ctx, this.viewport, evalFn, ink(fn.color), w, h, fn.ast, au);
         const asymptotes = detectAsymptotes(
           evalFn,
           this.viewport.xMin,
           this.viewport.xMax,
           fn.ast,
           au,
+          fn.domain,
         );
         for (const a of asymptotes) {
           drawAsymptote(ctx, this.viewport, a, w, h);
@@ -2494,7 +2693,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       const evalD = (x: number) => (base && Number.isNaN(base(x, 0)) ? NaN : compiled(x, 0));
       ctx.save();
       ctx.setLineDash([6, 4]);
-      drawFunction(ctx, this.viewport, evalD, fn.color, w, h, d, au);
+      drawFunction(ctx, this.viewport, evalD, ink(fn.color), w, h, d, au);
       ctx.restore();
     });
 
@@ -2504,7 +2703,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
         const compiled = compileExpression(expr.ast, au);
         const fn = (x: number) => compiled(x, 0);
-        drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, expr.color, w, h);
+        drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, ink(expr.color), w, h);
         const riemann = this.integralExtras.riemann();
         if (riemann?.panels.length) {
           drawRiemannPanels(ctx, this.viewport, riemann.panels, riemann.rule, w, h);
@@ -2524,17 +2723,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       for (const region of regions) {
         const topFn = evalFns[region.topFunctionIndex];
         const bottomFn = evalFns[region.bottomFunctionIndex];
-        const topColor = fns[region.topFunctionIndex].color;
+        const topColor = ink(fns[region.topFunctionIndex].color);
         drawAreaBetween(ctx, this.viewport, topFn, bottomFn, region.a, region.b, topColor, w, h);
       }
 
       for (const pt of intersections) {
         const [sx, sy] = this.viewport.worldToScreen(pt.x, pt.y, w, h);
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = palette.intersection;
         ctx.beginPath();
         ctx.arc(sx, sy, 3, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#ffffff40';
+        ctx.strokeStyle = palette.intersectionGuide;
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
@@ -2544,7 +2743,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         ctx.setLineDash([]);
       }
     } else if (geom?.mode === 'single') {
-      drawIntegralArea(ctx, this.viewport, geom.fn, geom.a, geom.b, geom.expr.color, w, h);
+      drawIntegralArea(ctx, this.viewport, geom.fn, geom.a, geom.b, ink(geom.expr.color), w, h);
     }
     const centroid = this.centroid();
     if (centroid) drawCentroid(ctx, this.viewport, centroid.x, centroid.y, w, h);
@@ -2556,7 +2755,9 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
         drawSolidRegion(
           ctx,
           this.viewport,
-          spec,
+          palette.theme === 'dark'
+            ? spec
+            : { ...spec, curves: spec.curves.map((c) => ({ ...c, color: ink(c.color) })) },
           result.pieces,
           this.solidToolState.sweepT(),
           w,
@@ -2570,15 +2771,17 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       drawLimitMarker(
         ctx,
         this.viewport,
-        { x0: limit.x0, value: limit.result.value, text: limit.text, color: limit.color },
+        { x0: limit.x0, value: limit.result.value, text: limit.text, color: ink(limit.color) },
         w,
         h,
       );
     }
     const newtonRun = this.calculusState.newton();
-    if (newtonRun) drawNewtonSteps(ctx, this.viewport, newtonRun.rows, newtonRun.color, w, h);
+    if (newtonRun) drawNewtonSteps(ctx, this.viewport, newtonRun.rows, ink(newtonRun.color), w, h);
     const taylorRun = this.calculusState.taylor();
-    if (taylorRun) drawTaylorPolynomial(ctx, this.viewport, taylorRun, w, h);
+    if (taylorRun) {
+      drawTaylorPolynomial(ctx, this.viewport, { ...taylorRun, color: ink(taylorRun.color) }, w, h);
+    }
     const odeRun = this.calculusState.ode();
     if (odeRun) drawSlopeField(ctx, this.viewport, odeRun, w, h);
     const seriesRun = this.calculusState.series();
@@ -2629,7 +2832,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           this.viewport,
           tangent,
           [trace.screenX, trace.screenY],
-          trace.color,
+          ink(trace.color),
           this.interactionState.showNormal(),
           w,
           h,
@@ -2642,7 +2845,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
           trace.screenY,
           trace.worldX,
           trace.worldY,
-          trace.color,
+          ink(trace.color),
           w,
           h,
         );
@@ -2656,7 +2859,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
             activeFn = (x: number) => compiled(x, 0);
           }
         }
-        drawCrosshair(ctx, this.viewport, mouse.x, mouse.y, activeFn, '#666680', w, h);
+        drawCrosshair(ctx, this.viewport, mouse.x, mouse.y, activeFn, palette.muted, w, h);
       }
     }
   }

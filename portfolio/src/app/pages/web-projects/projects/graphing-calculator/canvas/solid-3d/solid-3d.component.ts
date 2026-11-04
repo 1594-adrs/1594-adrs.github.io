@@ -17,8 +17,7 @@ import { SolidScene } from './solid-scene';
 import { buildSolidGeometry } from './solid-mesh-builder';
 import { buildSliceGeometry } from './slice-geometry';
 import type { SolidPiece, SolidSpec } from '../../engine/solids/solid.types';
-
-const SLICE_HIGHLIGHT_COLOR = '#ffcc00';
+import { DARK_PALETTE, type ScenePalette } from '../palette';
 
 @Component({
   selector: 'app-solid-3d',
@@ -73,6 +72,7 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
   visible = input(false);
   /** Fraction (0..1) of the canvas height covered at the bottom by the mobile sheet. */
   bottomInset = input(0);
+  palette = input<ScenePalette>(DARK_PALETTE.scene);
 
   /** Spec-driven "solids by integration" inputs. */
   spec = input<SolidSpec | null>(null);
@@ -172,6 +172,12 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
         this.scene?.render();
       });
 
+      effect(() => {
+        const palette = this.palette();
+        this.scene?.setPalette(palette);
+        this.scene?.render();
+      });
+
       // Color updates, independent of geometry rebuilds.
       effect(() => {
         const spec = this.spec();
@@ -230,6 +236,7 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       this.scene?.setBottomInset(this.bottomInset());
+      this.scene?.setPalette(this.palette());
       const spec = this.spec();
       if (spec) this.rebuildSolidMesh(spec, this.pieces());
       this.updateSweep(spec, this.pieces(), this.sweepT());
@@ -256,14 +263,14 @@ export class Solid3DComponent implements AfterViewInit, OnDestroy {
     if (!this.scene) return;
     if (!spec || t === null || !Number.isFinite(t)) {
       this.scene.setSweepClip(null);
-      this.scene.updateSliceMesh(null, SLICE_HIGHLIGHT_COLOR);
+      this.scene.updateSliceMesh(null, this.palette().slice);
       this.scene.render();
       return;
     }
     const normal: [number, number, number] = spec.variable === 'x' ? [-1, 0, 0] : [0, -1, 0];
     this.scene.setSweepClip({ normal, constant: t });
     const sliceGeometry = buildSliceGeometry(spec, pieces, t);
-    this.scene.updateSliceMesh(sliceGeometry, SLICE_HIGHLIGHT_COLOR);
+    this.scene.updateSliceMesh(sliceGeometry, this.palette().slice);
     this.scene.render();
   }
 

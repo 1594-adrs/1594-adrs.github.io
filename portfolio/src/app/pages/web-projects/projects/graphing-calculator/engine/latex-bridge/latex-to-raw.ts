@@ -765,7 +765,7 @@ class LatexParser {
       case 'vert':
         return this.group('abs', true);
       case 'lbrace':
-        return this.group('paren', false);
+        return this.braceGroup();
       case 'begin':
         return this.environment();
       case 'placeholder': {
@@ -902,7 +902,15 @@ class LatexParser {
     if (d.k === 'c' && d.n === 'lfloor') return this.group('floor', false);
     if (d.k === 'c' && d.n === 'lceil') return this.group('ceil', false);
     if (d.k === 'c' && d.n === 'langle') this.issue('Unsupported: \\langle');
+    if (d.k === 'c' && d.n === 'lbrace') return this.braceGroup();
     return this.group('paren', false);
+  }
+
+  /** A condition group that is not the one trailing domain keeps its braces, so the row errors. */
+  private braceGroup(): N {
+    const g = this.group('paren', false);
+    const inner = g.s.slice(1, -1);
+    return hasTopLevelComparison(inner) ? atom(`{${inner}}`) : g;
   }
 
   /** Parses items up to the closer; the opener was already consumed. */
@@ -1003,10 +1011,39 @@ class LatexParser {
   }
 }
 
+const LATEX_DOMAIN =
+  /^(.*?)(?:\\left\s*)?(?:\\\{|\\lbrace(?![a-zA-Z]))(.*?)(?:\\right\s*)?(?:\\\}|\\rbrace(?![a-zA-Z]))\s*$/s;
+const LATEX_BRACE = /\\(?:\{|\}|lbrace(?![a-zA-Z])|rbrace(?![a-zA-Z]))/;
+
+function hasTopLevelComparison(s: string): boolean {
+  let depth = 0;
+  for (const c of s) {
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (depth === 0 && (c === '<' || c === '>')) return true;
+  }
+  return false;
+}
+
+/** `body\{cond\}` -> [body, cond] for a trailing domain group without nested braces, else null. */
+function splitLatexDomain(latex: string): [string, string] | null {
+  const m = LATEX_DOMAIN.exec(latex);
+  if (!m || !m[1].trim() || LATEX_BRACE.test(m[2])) return null;
+  return [m[1], m[2]];
+}
+
 /** LaTeX (MathLive output) -> parser syntax. Never throws. */
 export function latexToRaw(latex: string): LatexToRawResult {
   const issues = new Set<string>();
   if (typeof latex !== 'string') return { raw: '', issues: [] };
+  const domain = splitLatexDomain(latex);
+  if (domain) {
+    const [body, cond] = domain.map(latexToRaw);
+    return {
+      raw: `${body.raw} {${cond.raw}}`,
+      issues: [...new Set([...body.issues, ...cond.issues])],
+    };
+  }
   try {
     const raw = new LatexParser(tokenize(latex), issues).parseTop();
     return { raw, issues: [...issues] };

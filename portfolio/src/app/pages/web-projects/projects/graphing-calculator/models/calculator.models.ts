@@ -1,3 +1,4 @@
+import type { CurveDomain } from '../engine/domain';
 import type { ExpressionNode } from '../engine/parser';
 
 export type { ConicType } from '../engine/types';
@@ -15,6 +16,8 @@ export type OverlapMode = 'pairwise' | 'all';
 export interface MathExpression {
   raw: string;
   ast: ExpressionNode | null;
+  bodyAst?: ExpressionNode | null;
+  domain?: CurveDomain | null;
   color: string;
   visible: boolean;
   mode: CurveMode;
@@ -24,6 +27,8 @@ export interface MathExpression {
   tMax?: string;
   thetaMin?: string;
   thetaMax?: string;
+  /** Polar row written as `r^2 = f`: `ast` is √f and the renderer also draws −√f. */
+  polarSquared?: boolean;
   inequalityOp?: '>' | '<' | '>=' | '<=';
   /** f′ toggle: also plot the derivative (explicit rows only). */
   showDerivative?: boolean;

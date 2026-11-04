@@ -1,13 +1,6 @@
 import { Viewport } from './viewport';
+import { canvasPalette } from './palette';
 
-// Canvas 2D context does not support CSS variables; colors are hardcoded intentionally.
-const COLOR_BG = '#0d0d15';
-const COLOR_GRID = '#1a1a2e';
-const COLOR_MINOR_GRID = '#131320';
-const COLOR_AXIS = '#333355';
-const COLOR_LABEL = '#666680';
-
-const LABEL_FONT = '11px "JetBrains Mono", monospace';
 /** Minor gridlines subdivide each major step this many times; skipped once that would
  *  pack them closer than MIN_MINOR_SPACING_PX on screen (clutter, not signal). */
 const MINOR_SUBDIVISIONS = 5;
@@ -87,9 +80,10 @@ export function drawGrid(
   const yRange = viewport.yMax - viewport.yMin;
   const stepX = niceStep(xRange);
   const stepY = niceStep(yRange);
+  const palette = canvasPalette();
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = COLOR_BG;
+  ctx.fillStyle = palette.background;
   ctx.fillRect(0, 0, width, height);
 
   const startX = Math.ceil(viewport.xMin / stepX) * stepX;
@@ -101,22 +95,31 @@ export function drawGrid(
   const minorPxX = (minorStepX / xRange) * width;
   if (minorPxX >= MIN_MINOR_SPACING_PX) {
     const minorStartX = Math.ceil(viewport.xMin / minorStepX) * minorStepX;
-    drawVerticalLines(ctx, viewport, width, height, minorStartX, minorStepX, COLOR_MINOR_GRID, 1);
+    drawVerticalLines(ctx, viewport, width, height, minorStartX, minorStepX, palette.gridMinor, 1);
   }
   const minorStepY = stepY / MINOR_SUBDIVISIONS;
   const minorPxY = (minorStepY / yRange) * height;
   if (minorPxY >= MIN_MINOR_SPACING_PX) {
     const minorStartY = Math.ceil(viewport.yMin / minorStepY) * minorStepY;
-    drawHorizontalLines(ctx, viewport, width, height, minorStartY, minorStepY, COLOR_MINOR_GRID, 1);
+    drawHorizontalLines(
+      ctx,
+      viewport,
+      width,
+      height,
+      minorStartY,
+      minorStepY,
+      palette.gridMinor,
+      1,
+    );
   }
 
   // Major gridlines, each axis batched into a single path/stroke call.
-  drawVerticalLines(ctx, viewport, width, height, startX, stepX, COLOR_GRID, 1);
-  drawHorizontalLines(ctx, viewport, width, height, startY, stepY, COLOR_GRID, 1);
+  drawVerticalLines(ctx, viewport, width, height, startX, stepX, palette.grid, 1);
+  drawHorizontalLines(ctx, viewport, width, height, startY, stepY, palette.grid, 1);
 
   const [ox, oy] = viewport.worldToScreen(0, 0, width, height);
-  ctx.strokeStyle = COLOR_AXIS;
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = palette.axis;
+  ctx.lineWidth = palette.axisWidth;
 
   // An off-screen axis is drawn 1 px past the edge (invisible) instead of at a huge px coordinate.
   const axisX = Math.min(width + 1, Math.max(-1, ox));
@@ -160,8 +163,8 @@ export function drawGrid(
     yAlign = 'right';
   }
 
-  ctx.fillStyle = COLOR_LABEL;
-  ctx.font = LABEL_FONT;
+  ctx.fillStyle = palette.tickLabel;
+  ctx.font = palette.tickFont;
   ctx.textAlign = 'center';
   ctx.textBaseline = xBaseline;
 
@@ -186,5 +189,113 @@ export function drawGrid(
     const [, sy] = viewport.worldToScreen(0, y, width, height);
     const label = gridLabel(y, stepY);
     ctx.fillText(label, labelX, sy);
+  }
+}
+
+/** Angle k·π/12 as a reduced multiple of π: 0, π/6, π/4, 2π/3, π, 7π/4... */
+export function piFractionLabel(k: number): string {
+  if (k === 0) return '0';
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const g = gcd(k, 12);
+  const num = k / g;
+  const den = 12 / g;
+  const top = num === 1 ? 'π' : `${num}π`;
+  return den === 1 ? top : `${top}/${den}`;
+}
+
+/** Polar mesh: circles around the pole and rays every π/6 and π/4, labelled in multiples of π. */
+export function drawPolarGrid(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  width: number,
+  height: number,
+): void {
+  const xRange = viewport.xMax - viewport.xMin;
+  const yRange = viewport.yMax - viewport.yMin;
+  const step = niceStep(Math.max(xRange, yRange));
+  const palette = canvasPalette();
+  const pxX = width / xRange;
+  const pxY = height / yRange;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = palette.background;
+  ctx.fillRect(0, 0, width, height);
+
+  const [ox, oy] = viewport.worldToScreen(0, 0, width, height);
+  const corners = [
+    [viewport.xMin, viewport.yMin],
+    [viewport.xMin, viewport.yMax],
+    [viewport.xMax, viewport.yMin],
+    [viewport.xMax, viewport.yMax],
+  ];
+  const rMax = Math.max(...corners.map(([x, y]) => Math.hypot(x, y)));
+  const xIn = viewport.xMin <= 0 && viewport.xMax >= 0;
+  const yIn = viewport.yMin <= 0 && viewport.yMax >= 0;
+  const rMin = Math.hypot(
+    xIn ? 0 : Math.min(Math.abs(viewport.xMin), Math.abs(viewport.xMax)),
+    yIn ? 0 : Math.min(Math.abs(viewport.yMin), Math.abs(viewport.yMax)),
+  );
+
+  const circles = (s: number, color: string) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const first = Math.max(1, Math.floor(rMin / s));
+    for (let k = first, n = 0; k * s <= rMax && n < MAX_GRID_LINES; k++, n++) {
+      const r = k * s;
+      ctx.moveTo(ox + r * pxX, oy);
+      ctx.ellipse(ox, oy, r * pxX, r * pxY, 0, 0, 2 * Math.PI);
+    }
+    ctx.stroke();
+  };
+  if ((step / 2) * Math.min(pxX, pxY) >= MIN_MINOR_SPACING_PX) circles(step / 2, palette.gridMinor);
+  circles(step, palette.grid);
+
+  const rays = [...Array(24).keys()].filter((k) => k % 2 === 0 || k % 3 === 0);
+  ctx.strokeStyle = palette.grid;
+  ctx.beginPath();
+  for (const k of rays) {
+    if (k % 6 === 0) continue;
+    const a = (k * Math.PI) / 12;
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox + rMax * Math.cos(a) * pxX, oy - rMax * Math.sin(a) * pxY);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = palette.axis;
+  ctx.lineWidth = palette.axisWidth;
+  ctx.beginPath();
+  ctx.moveTo(0, oy);
+  ctx.lineTo(width, oy);
+  ctx.moveTo(ox, 0);
+  ctx.lineTo(ox, height);
+  ctx.stroke();
+
+  ctx.fillStyle = palette.tickLabel;
+  ctx.font = palette.tickFont;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (let k = 1, n = 0; k * step <= viewport.xMax && n < MAX_GRID_LINES; k++, n++) {
+    ctx.fillText(gridLabel(k * step, step), ox + k * step * pxX, oy + 4);
+  }
+
+  if (ox < 0 || ox > width || oy < 0 || oy > height) return;
+  ctx.textBaseline = 'middle';
+  for (const k of rays) {
+    const a = (k * Math.PI) / 12;
+    const dx = Math.cos(a);
+    const dy = -Math.sin(a);
+    const exit = (o: number, d: number, size: number) =>
+      d > 1e-9 ? (size - o) / d : d < -1e-9 ? -o / d : Infinity;
+    const dist = Math.min(exit(ox, dx, width), exit(oy, dy, height)) - 24;
+    if (dist < 40) continue;
+    const label = piFractionLabel(k);
+    const tx = ox + dist * dx;
+    const ty = oy + dist * dy;
+    const w = ctx.measureText(label).width + 6;
+    ctx.fillStyle = palette.background;
+    ctx.fillRect(tx - w / 2, ty - 8, w, 16);
+    ctx.fillStyle = palette.tickLabel;
+    ctx.fillText(label, tx, ty);
   }
 }

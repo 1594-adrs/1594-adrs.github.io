@@ -19,7 +19,7 @@ import { SAFE_INLINE_SHORTCUTS } from '../../keyboard/math-keyboard-layout';
 import { loadMathlive, setMathKeyboardKind, type MathFieldKind } from './mathlive-loader';
 
 /** Keys that end a typed exponent (`x^10+1`): with smartSuperscript off, MathLive keeps them inside. */
-const EXPONENT_TERMINATORS = new Set(['+', '-', '*', '/', '=', '<', '>', ',']);
+const EXPONENT_TERMINATORS = new Set(['+', '-', '*', '/', '=', '<', '>', ',', '{']);
 
 /** Caret sits directly in a non-empty superscript. Uses MathLive's model (no public API for it). */
 function inNonEmptySuperscript(mf: MathfieldElement): boolean {

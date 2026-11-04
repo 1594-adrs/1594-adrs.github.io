@@ -12,9 +12,10 @@ const REL_TOL = 1e-9;
 // A candidate p/q (times the form's constant) is only trusted when its numerator is small. The
 // number of fractions p/q with q <= 60 near a value v grows with v, so with a relative tolerance a
 // large value matches *some* form by chance (measured: 3.7% of random values in [1e3, 1e4] and
-// 94% in [1e5, 1e6], e.g. 123456.789 -> '4134113√3/58'). Capping |p| at 1000 keeps the expected
-// false-positive rate under ~4e-4 at every magnitude; values above MAX_MAGNITUDE are never matched.
-const MAX_NUMERATOR = 1000;
+// 94% in [1e5, 1e6], e.g. 123456.789 -> '4134113√3/58'). Capping |p| at 2000 (room for e.g.
+// 1088π/15) keeps the measured false-positive rate under ~2e-4 at every magnitude; values above
+// MAX_MAGNITUDE are never matched.
+const MAX_NUMERATOR = 2000;
 const MAX_MAGNITUDE = 1e5;
 
 interface Form {

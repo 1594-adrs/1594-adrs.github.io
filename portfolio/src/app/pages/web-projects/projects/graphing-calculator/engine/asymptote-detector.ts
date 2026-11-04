@@ -1,3 +1,4 @@
+import { insideDomain, type CurveDomain } from './domain';
 import type { ExpressionNode } from './parser';
 
 export interface Asymptote {
@@ -71,6 +72,36 @@ export function detectAsymptotes(
   ast?: ExpressionNode,
   // Anything that changes fn for the same ast (e.g. the angle unit): part of the cache key.
   variant = '',
+  domain?: CurveDomain | null,
+): Asymptote[] {
+  const range = xMax - xMin;
+  const all = detectCached(fn, xMin, xMax, ast, variant);
+  if (!domain || domain.variable !== 'x') return all;
+  const tol = range * 1e-6;
+  const edgePole = (v: number, edge: number | null, inward: number) =>
+    edge !== null && Math.abs(v - edge) <= tol && divergesAt(fn, edge, inward * range);
+  return all.filter(
+    (a) =>
+      a.type !== 'vertical' ||
+      insideDomain(a.value, domain, tol) ||
+      edgePole(a.value, domain.lo, 1) ||
+      edgePole(a.value, domain.hi, -1),
+  );
+}
+
+/** |f| keeps growing toward `edge` (a pole or a log) instead of settling to a finite steep value. */
+function divergesAt(fn: (x: number) => number, edge: number, span: number): boolean {
+  const [a, b, c] = [1e-3, 1e-6, 1e-9].map((k) => Math.abs(fn(edge + span * k)));
+  if (![a, b, c].every(Number.isFinite)) return false;
+  return c > b && b > a && c - b >= 0.9 * (b - a);
+}
+
+function detectCached(
+  fn: (x: number) => number,
+  xMin: number,
+  xMax: number,
+  ast: ExpressionNode | undefined,
+  variant: string,
 ): Asymptote[] {
   const id = `${identityKey(ast ?? fn)}|${variant}`;
   const range = xMax - xMin;

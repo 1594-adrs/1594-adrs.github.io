@@ -126,16 +126,18 @@ export function derivativeOf(fn: MathExpression, angleUnit: AngleUnit): Derivati
     note: null,
   });
   if (fn.mode !== 'explicit') return none(false, 'f′ is available for y = f(x) rows only.');
-  if (!fn.ast) return none(true, 'Enter a valid f(x) first.');
+  // The domain gate is left out: f′ is drawn only where f (the gated ast) is defined.
+  const ast = fn.ast && (fn.bodyAst ?? fn.ast);
+  if (!ast) return none(true, 'Enter a valid f(x) first.');
   // A constant with no value (1/0, sqrt(-1), ln(0)) would otherwise differentiate to a fake 0.
-  if (!dependsOn(fn.ast, 'x') && !Number.isFinite(evalConstant(fn.ast, angleUnit))) {
+  if (!dependsOn(ast, 'x') && !Number.isFinite(evalConstant(ast, angleUnit))) {
     return none(true, UNDEFINED_EVERYWHERE_REASON);
   }
-  if (angleUnit === 'deg' && usesAngleUnit(fn.ast)) return none(true, RADIANS_REASON);
-  const d = cachedDerivative(fn.ast);
+  if (angleUnit === 'deg' && usesAngleUnit(ast)) return none(true, RADIANS_REASON);
+  const d = cachedDerivative(ast);
   return typeof d === 'string'
     ? none(true, d)
-    : { applicable: true, ast: d, reason: null, note: derivativeNote(fn.ast) };
+    : { applicable: true, ast: d, reason: null, note: derivativeNote(ast) };
 }
 
 function evalConstant(ast: ExpressionNode, angleUnit: AngleUnit): number {

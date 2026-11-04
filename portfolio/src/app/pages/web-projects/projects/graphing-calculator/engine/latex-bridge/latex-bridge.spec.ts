@@ -1,5 +1,6 @@
 import { evaluate } from '../evaluator';
 import { parse } from '../parser';
+import { splitDomain } from '../domain';
 import { latexToRaw, rawToLatex } from './latex-bridge';
 
 // ---------------------------------------------------------------------------
@@ -743,5 +744,53 @@ describe('piecewise: cases <-> if()', () => {
       if (Number.isNaN(want)) expect(got).toBeNaN();
       else expect(got).toBeCloseTo(want, 12);
     }
+  });
+});
+
+describe('trailing {cond} domain', () => {
+  it.each([
+    ['\\{-1\\le x\\le 3\\}', '{-1<=x<=3}'],
+    ['\\left\\{0\\le y\\le 4\\right\\}', '{0<=y<=4}'],
+    ['\\lbrace x\\ge 0\\rbrace', '{x>=0}'],
+  ])('latexToRaw reads %s after the curve as %s', (group, cond) => {
+    expect(latexToRaw(`y=x^{2}${group}`)).toEqual({ raw: `y=x^2 ${cond}`, issues: [] });
+  });
+
+  it('rawToLatex renders the domain as \\{…\\} with \\le / \\ge', () => {
+    expect(rawToLatex('y = x^2 {-1 <= x <= 3}')).toBe('y=x^{2}\\{-1\\le x\\le 3\\}');
+    expect(rawToLatex('x = 1+sqrt(4-y) {y >= 0}')).toBe('x=1+\\sqrt{4-y}\\{y\\ge 0\\}');
+  });
+
+  it.each([
+    ['y = 3+2x-x^2 {-1 <= x <= 3}', 'y=3+2*x-x^2 {-1<=x<=3}'],
+    ['x = 1+sqrt(4-y) {0 <= y <= 4}', 'x=1+sqrt(4-y) {0<=y<=4}'],
+    ['r = 2cos(t) {0 <= t <= pi/2}', 'r=2*cos(t) {0<=t<=((pi)/(2))}'],
+    ['x^2+y^2=4 {y > 0}', 'x^2+y^2=4 {y>0}'],
+    ['y = x {0 < x < 1}', 'y=x {0<x<1}'],
+    ['y = x^2 {0 <= x <= a}', 'y=x^2 {0<=x<=a}'],
+  ])('round trips %s exactly', (raw, canonical) => {
+    expect(latexToRaw(rawToLatex(raw))).toEqual({ raw: canonical, issues: [] });
+  });
+
+  it.each([
+    ['y=x^{2}\\left\\lbrace0\\le x\\le2\\right\\rbrace', 'y=x^2 {0<=x<=2}'],
+    ['y=\\frac{1}{x}\\left\\lbrace0<x\\right\\rbrace', 'y=((1)/(x)) {0<x}'],
+    ['y=x\\lbrace1\\le x\\rbrace', 'y=x {1<=x}'],
+  ])('reads MathLive output with a digit right after \\lbrace: %s', (latex, raw) => {
+    expect(latexToRaw(latex)).toEqual({ raw, issues: [] });
+  });
+
+  it.each([
+    ['y=x\\{0\\le x\\le 1\\}\\{x>0\\}', 'Only one domain {…} is allowed'],
+    ['y=x\\{x>0\\}\\{x<3\\}', 'Only one domain {…} is allowed'],
+    ['y=x\\{x>0\\}+1', 'The domain {…} must come at the end'],
+    ['y=x^{2\\left\\lbrace0\\le x\\le2\\right\\rbrace}', 'The domain {…} must come at the end'],
+  ])('keeps a misplaced condition group as braces so %s errors', (latex, error) => {
+    expect(splitDomain(latexToRaw(latex).raw).error).toBe(error);
+  });
+
+  it('keeps a lone or non-trailing brace group as a parenthesis', () => {
+    expect(latexToRaw('\\{x\\}').raw).toBe('(x)');
+    expect(latexToRaw('\\{x\\}+1').raw).toBe('(x)+1');
   });
 });

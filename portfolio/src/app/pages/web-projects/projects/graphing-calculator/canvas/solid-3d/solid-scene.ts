@@ -22,6 +22,7 @@ import {
   Sphere,
 } from 'three';
 import type { AxisLine } from '../../engine/solids/solid.types';
+import { DARK_PALETTE, type ScenePalette } from '../palette';
 
 /** Normal + constant of a THREE.Plane, kept DOM/three-agnostic at the call site. */
 interface SweepClip {
@@ -41,8 +42,12 @@ export class SolidScene {
   private scene: Scene;
   private camera: PerspectiveCamera;
   private renderer: WebGLRenderer;
-  private readonly grid: GridHelper;
+  private grid: GridHelper;
   private readonly axes: AxesHelper;
+  private readonly ambient: AmbientLight;
+  private readonly key: DirectionalLight;
+  private readonly rim: PointLight;
+  private palette: ScenePalette = DARK_PALETTE.scene;
   private isDisposed = false;
 
   // "solids by integration" (spec-driven) pipeline.
@@ -71,7 +76,7 @@ export class SolidScene {
       new WebGLRenderer({ canvas: c, antialias: true }),
   ) {
     this.scene = new Scene();
-    this.scene.background = new Color(0x0d0d15);
+    this.scene.background = new Color(this.palette.background);
 
     this.canvasSize = { w: canvas.width || 1, h: canvas.height || 1 };
     this.camera = new PerspectiveCamera(50, canvas.width / canvas.height, 0.1, 1000);
@@ -83,28 +88,57 @@ export class SolidScene {
     this.renderer.setSize(canvas.width, canvas.height);
     this.renderer.localClippingEnabled = true;
 
-    const ambient = new AmbientLight(0x404040, 0.6);
-    this.scene.add(ambient);
+    this.ambient = new AmbientLight(this.palette.ambient.color, this.palette.ambient.intensity);
+    this.scene.add(this.ambient);
 
-    const directional = new DirectionalLight(0xffffff, 1);
-    directional.position.set(5, 10, 7);
-    this.scene.add(directional);
+    this.key = new DirectionalLight(this.palette.key.color, this.palette.key.intensity);
+    this.key.position.set(5, 10, 7);
+    this.scene.add(this.key);
 
-    const point = new PointLight(0x00ff88, 0.4);
-    point.position.set(-5, 5, -5);
-    this.scene.add(point);
+    this.rim = new PointLight(this.palette.rim.color, this.palette.rim.intensity);
+    this.rim.position.set(-5, 5, -5);
+    this.scene.add(this.rim);
 
-    this.grid = new GridHelper(20, 20, 0x333355, 0x1a1a2e);
+    this.grid = this.createGrid();
     this.scene.add(this.grid);
 
     this.axes = new AxesHelper(10);
     this.scene.add(this.axes);
   }
 
+  private createGrid(): GridHelper {
+    return new GridHelper(20, 20, this.palette.gridCenter, this.palette.grid);
+  }
+
+  setPalette(palette: ScenePalette): void {
+    if (palette === this.palette || this.isDisposed) return;
+    this.palette = palette;
+    this.scene.background = new Color(palette.background);
+    this.ambient.color.setHex(palette.ambient.color);
+    this.ambient.intensity = palette.ambient.intensity;
+    this.key.color.setHex(palette.key.color);
+    this.key.intensity = palette.key.intensity;
+    this.rim.color.setHex(palette.rim.color);
+    this.rim.intensity = palette.rim.intensity;
+    this.scene.remove(this.grid);
+    this.grid.geometry.dispose();
+    disposeMaterial(this.grid.material);
+    this.grid = this.createGrid();
+    this.scene.add(this.grid);
+    this.axes.setColors(...palette.axes);
+    if (this.axisLine) {
+      (this.axisLine.material as LineDashedMaterial).color.setHex(palette.revolutionAxis);
+    }
+    if (this.sliceMesh) {
+      (this.sliceMesh.material as MeshPhongMaterial).color.set(palette.slice);
+    }
+    this.applyExtent();
+  }
+
   /** Clears the spec-driven meshes (solid pieces, slice, axis line), e.g. when spec becomes null. */
   clearSpecMesh(): void {
     this.disposeSolidPieces();
-    this.updateSliceMesh(null, '#ffcc00');
+    this.updateSliceMesh(null, this.palette.slice);
     this.updateAxisLine(null);
     this.frameSolid();
   }
@@ -244,8 +278,6 @@ export class SolidScene {
     if (!geometry) return;
     const material = new MeshPhongMaterial({
       color: new Color(color),
-      transparent: true,
-      opacity: 0.9,
       side: DoubleSide,
     });
     this.sliceMesh = new Mesh(geometry, material);
@@ -270,7 +302,11 @@ export class SolidScene {
         : [new Vector3(axis.value, -length / 2, 0), new Vector3(axis.value, length / 2, 0)];
 
     const geometry = new BufferGeometry().setFromPoints(points);
-    const material = new LineDashedMaterial({ color: 0xffffff, dashSize: 0.3, gapSize: 0.2 });
+    const material = new LineDashedMaterial({
+      color: this.palette.revolutionAxis,
+      dashSize: 0.3,
+      gapSize: 0.2,
+    });
     const line = new Line(geometry, material);
     line.computeLineDistances();
     this.scene.add(line);

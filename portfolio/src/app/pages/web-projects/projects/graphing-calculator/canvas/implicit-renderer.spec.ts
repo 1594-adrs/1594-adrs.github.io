@@ -1,20 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Viewport } from './viewport';
-import { drawImplicitCurve } from './implicit-renderer';
-
-// Extracted from implicit-renderer.ts for testing
-function evalImplicit(fn: (x: number, y: number) => number, x: number, y: number): number {
-  const CLAMP = 1e8;
-  try {
-    const v = fn(x, y);
-    if (!isFinite(v)) return CLAMP;
-    if (v > CLAMP) return CLAMP;
-    if (v < -CLAMP) return -CLAMP;
-    return v;
-  } catch {
-    return CLAMP;
-  }
-}
+import { drawImplicitCurve, evalImplicit } from './implicit-renderer';
 
 function lerp(
   v1: number,
@@ -82,11 +68,11 @@ describe('evalImplicit', () => {
     expect(evalImplicit((x, y) => Infinity, 0, 0)).toBe(1e8);
   });
 
-  it('should return CLAMP for NaN', () => {
-    expect(evalImplicit((x, y) => NaN, 0, 0)).toBe(1e8);
+  it('should keep NaN (no curve there)', () => {
+    expect(evalImplicit((x, y) => NaN, 0, 0)).toBeNaN();
   });
 
-  it('should return CLAMP when function throws', () => {
+  it('should return NaN when function throws', () => {
     expect(
       evalImplicit(
         (x, y) => {
@@ -95,7 +81,7 @@ describe('evalImplicit', () => {
         0,
         0,
       ),
-    ).toBe(1e8);
+    ).toBeNaN();
   });
 
   it('should pass through zero values', () => {
@@ -288,6 +274,19 @@ describe('drawImplicitCurve (real renderer)', () => {
     const coarseEvals = coarseFn.mock.calls.length;
     draw(ctx, vp, coarseFn, false);
     expect(coarseFn.mock.calls.length).toBeGreaterThan(coarseEvals * 2);
+  });
+
+  it('draws nothing where the function is NaN (a {cond} domain gate)', () => {
+    vi.stubGlobal('Path2D', undefined);
+    const vp = new Viewport();
+    const ctx = makeCtx();
+    draw(ctx, vp, (x, y) => (y >= 0 ? x * x + y * y - 4 : NaN));
+    const ys = [...ctx.moveTo.mock.calls, ...ctx.lineTo.mock.calls].map(
+      ([sx, sy]) => vp.screenToWorld(sx, sy, 400, 300)[1],
+    );
+    expect(ys.length).toBeGreaterThan(0);
+    expect(Math.min(...ys)).toBeGreaterThan(-0.05);
+    expect(Math.max(...ys)).toBeCloseTo(2, 1);
   });
 
   it('falls back to immediate moveTo/lineTo when Path2D is unavailable', () => {

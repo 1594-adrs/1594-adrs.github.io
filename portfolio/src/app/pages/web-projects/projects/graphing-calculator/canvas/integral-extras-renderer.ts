@@ -1,14 +1,7 @@
 import type { RiemannPanel, RiemannRule } from '../engine/riemann';
 import { Viewport } from './viewport';
+import { canvasPalette } from './palette';
 
-/** Ink for markers that are not a function (same rule as the ODE solution). */
-const COLOR_INK = '#e0e0e0';
-const COLOR_HALO = '#0a0a0f';
-/** The panels are an approximation, not a curve: neutral ink over the function's own shading. */
-const PANEL_FILL = 'rgba(224, 224, 224, 0.12)';
-const PANEL_STROKE = 'rgba(224, 224, 224, 0.85)';
-/** Without dividers the profile hugs the curve; a fainter ink keeps the curve's own colour. */
-const PANEL_STROKE_DENSE = 'rgba(224, 224, 224, 0.4)';
 /** Below this on-screen panel width the dividers are dropped (n = 200 would smear into a slab);
  *  the outer profile is still drawn, so the staircase / polyline stays visible. */
 const MIN_DIVIDER_PX = 5;
@@ -87,10 +80,10 @@ export function drawRiemannPanels(
   ctx.save();
   ctx.setLineDash([]);
   outline(false);
-  ctx.fillStyle = PANEL_FILL;
+  ctx.fillStyle = canvasPalette().panelFill;
   ctx.fill();
   outline(dividers);
-  ctx.strokeStyle = dividers ? PANEL_STROKE : PANEL_STROKE_DENSE;
+  ctx.strokeStyle = dividers ? canvasPalette().panelStroke : canvasPalette().panelStrokeDense;
   ctx.lineWidth = 1;
   ctx.lineJoin = 'miter';
   ctx.stroke();
@@ -121,10 +114,10 @@ export function drawCentroid(
   ctx.lineCap = 'round';
   shape();
   ctx.lineWidth = 4;
-  ctx.strokeStyle = COLOR_HALO;
+  ctx.strokeStyle = canvasPalette().halo;
   ctx.stroke();
   ctx.lineWidth = 1.5;
-  ctx.strokeStyle = COLOR_INK;
+  ctx.strokeStyle = canvasPalette().ink;
   ctx.stroke();
   ctx.restore();
 }
