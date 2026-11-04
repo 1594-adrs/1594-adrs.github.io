@@ -598,7 +598,9 @@
             <p id="int-b-error" class="fn-error" role="alert">{{ msg }}</p>
           }
         </div>
-        <app-integral-extras />
+        @if (functions()[activeIntegral()!.fnIndex]?.mode !== 'polar') {
+          <app-integral-extras />
+        }
       }
 
       @if (showSolidTool()) {
@@ -634,9 +636,14 @@
       @if (activeMultiArea()) {
         <div class="range-section">
           <span class="range-label">Area between curves</span>
+          @if (hasPolarRow()) {
+            <p class="tool-note" role="status">
+              Polar curves are not supported here. Use the Integral tab for ½∫ r² dθ.
+            </p>
+          }
           <div class="bounded-fn-selects" role="group" aria-label="Curves for the area">
             @for (fn of functions(); track $index) {
-              @if (fn.mode !== 'slider') {
+              @if (fn.mode !== 'slider' && fn.mode !== 'polar') {
                 <label class="range-field multi-fn-toggle">
                   <input
                     type="checkbox"

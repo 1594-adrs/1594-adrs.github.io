@@ -6,6 +6,7 @@ import {
   drawInequality,
   drawFunction,
   drawExplicitY,
+  drawPolarSector,
 } from './graph-renderer';
 
 interface MockContext {
@@ -421,5 +422,25 @@ describe('traceCurve at finite jumps', () => {
     ['sin(x)', Math.sin],
   ])('a continuous %s stays one stroke', (_, f) => {
     expect(segments((ctx) => drawFunction(ctx, vp, f, '#fff', W, H)).moves).toBe(1);
+  });
+});
+
+describe('drawPolarSector', () => {
+  const count = (ctx: { calls: Array<{ method: string }> }, m: string) =>
+    ctx.calls.filter((c) => c.method === m).length;
+
+  it('fans from the pole and splits at undefined stretches', () => {
+    const ctx = createMockContext();
+    const vp = new Viewport();
+    drawPolarSector(ctx, vp, (t) => (t < 1 || t > 2 ? 1 : NaN), 0, 3, '#ff0000', 800, 600);
+    expect(count(ctx, 'fill')).toBe(2);
+    const [ox, oy] = vp.worldToScreen(0, 0, 800, 600);
+    expect(ctx.calls.find((c) => c.method === 'moveTo')!.args).toEqual([ox, oy]);
+  });
+
+  it('draws nothing for infinite limits', () => {
+    const ctx = createMockContext();
+    drawPolarSector(ctx, new Viewport(), () => 1, 0, Infinity, '#ff0000', 800, 600);
+    expect(count(ctx, 'fill')).toBe(0);
   });
 });

@@ -180,6 +180,29 @@ describe('GraphingCalculatorComponent', () => {
     expect(comp.tableOpenIndex()).toBeNull();
   });
 
+  it('integrates a polar row as the area ½∫r² dθ, not as ∫r dθ', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    const area = (raw: string, b: number) => {
+      comp.updateExpression(0, raw);
+      comp.activeIntegral.set({ fnIndex: 0, a: 0, b });
+      const row = comp.results().find((r) => r.label.includes('r² dθ'))!;
+      return parseFloat(row.value);
+    };
+    expect(area('r = 2', 2 * Math.PI)).toBeCloseTo(4 * Math.PI, 3);
+    expect(area('r = 4sin(t)', Math.PI)).toBeCloseTo(4 * Math.PI, 3);
+    expect(area('r^2 = 4cos(2t)', 2 * Math.PI)).toBeCloseTo(4, 3);
+  });
+
+  it('keeps polar rows out of the area tool and seeds the integral with the θ range', () => {
+    const comp = TestBed.createComponent(GraphingCalculatorComponent).componentInstance;
+    comp.updateExpression(0, 'r = 1 + 2cos(t)');
+    expect(comp.canUseWithTools(comp.functions()[0])).toBe(false);
+    comp.activateMultiArea();
+    expect(comp.activeMultiArea()!.functionIndices).toEqual([]);
+    comp.activateIntegral();
+    expect(comp.activeIntegral()).toMatchObject({ a: 0, b: 2 * Math.PI });
+  });
+
   it('should toggle visibility', () => {
     const fixture = TestBed.createComponent(GraphingCalculatorComponent);
     const comp = fixture.componentInstance;

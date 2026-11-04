@@ -94,7 +94,7 @@ export class IntegralExtrasState {
   private row = computed(() => {
     const intg = this.integral();
     const expr = intg ? this.functions()[intg.fnIndex] : undefined;
-    return intg && expr?.ast && expr.visible && expr.mode !== 'explicit-y'
+    return intg && expr?.ast && expr.visible && expr.mode !== 'explicit-y' && expr.mode !== 'polar'
       ? { intg, expr, ast: expr.ast }
       : null;
   });
