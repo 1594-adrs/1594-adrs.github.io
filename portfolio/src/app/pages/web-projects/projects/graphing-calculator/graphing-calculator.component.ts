@@ -24,6 +24,7 @@ import { HelpModalComponent } from './help-modal/help-modal.component';
 import {
   drawFunction,
   drawIntegralArea,
+  drawPolarSector,
   drawCrosshair,
   drawAreaBetween,
   drawParametric,
@@ -122,6 +123,7 @@ import { formatValue } from './utils/format-value';
 import {
   conicInfoLines,
   describeIntegral,
+  describePolarArea,
   areaLabel,
   areaLimitNotes,
   limitErrorMessage,
@@ -645,6 +647,19 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     return (x) => compiled(x, 0);
   }
 
+  private polarRadius(
+    f: MathExpression & { ast: ExpressionNode },
+    au: 'rad' | 'deg',
+  ): (theta: number) => number {
+    const compiled = compileExpression(f.ast, au);
+    if (!f.polarSquared) return (t) => compiled(t, 0);
+    // r² = f: where f < 0 (√f is NaN) there is no curve, so that stretch sweeps no area.
+    return (t) => {
+      const v = compiled(t, 0);
+      return Number.isNaN(v) ? 0 : v;
+    };
+  }
+
   /** The "area between curves" tool's geometry (evaluator closures, intersections,
    *  regions) — entirely viewport-independent, so it's memoized here rather than
    *  recomputed on every pan/zoom render frame; `render()` only maps it to screen
@@ -695,7 +710,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const intg = this.activeIntegral();
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
-      if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
+      if (expr?.ast && expr.visible && expr.mode === 'polar') {
+        const r = this.polarRadius(expr as MathExpression & { ast: ExpressionNode }, au);
+        const result = integrateAdaptive((t) => r(t) ** 2 / 2, intg.a, intg.b);
+        res.push(...describePolarArea(splitDomain(expr.raw).body, intg.a, intg.b, result));
+      } else if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
         const compiled = compileExpression(expr.ast, au);
         const fn = (x: number) => compiled(x, 0);
         const result = integrateAdaptive(fn, intg.a, intg.b);
@@ -762,6 +781,8 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
 
     return res;
   });
+
+  hasPolarRow = computed(() => this.functions().some((f) => f.mode === 'polar'));
 
   /** Empty-state hint for the area tool until it has two usable curves. */
   areaHint = computed(() => {
@@ -1418,7 +1439,11 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.closeSolidTool();
       this.activeMultiArea.set(null);
       const first = this.functions().findIndex((f) => f.mode !== 'slider');
-      const [a, b] = domainSeed([this.functions()[first]], 'x') ?? [-2, 2];
+      const row = this.functions()[first];
+      const [a, b] =
+        row?.mode === 'polar'
+          ? [this.evalRange(row.thetaMin, 0), this.evalRange(row.thetaMax, 2 * Math.PI)]
+          : (domainSeed([row], 'x') ?? [-2, 2]);
       this.activeIntegral.set({ fnIndex: Math.max(0, first), a, b });
     }
     this.requestRender();
@@ -1489,7 +1514,7 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       this.activeIntegral.set(null);
       this.closeSolidTool();
       const indices = this.functions()
-        .flatMap((f, i) => (f.mode === 'slider' ? [] : [i]))
+        .flatMap((f, i) => (f.mode === 'slider' || f.mode === 'polar' ? [] : [i]))
         .slice(0, 2);
 
       let a = -2;
@@ -2176,7 +2201,6 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
       return !!fn.ast && gatedConicBranches(fn.bodyAst ?? fn.ast, fn.ast) !== null;
     }
     if (fn.mode === 'parametric') return !!(fn.paramX && fn.paramY);
-    if (fn.mode === 'polar') return !!fn.ast;
     return false;
   }
 
@@ -2700,7 +2724,10 @@ export class GraphingCalculatorComponent implements AfterViewInit, OnDestroy {
     const intg = this.activeIntegral();
     if (intg) {
       const expr = this.functions()[intg.fnIndex];
-      if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
+      if (expr?.ast && expr.visible && expr.mode === 'polar') {
+        const r = this.polarRadius(expr as MathExpression & { ast: ExpressionNode }, au);
+        drawPolarSector(ctx, this.viewport, r, intg.a, intg.b, ink(expr.color), w, h);
+      } else if (expr?.ast && expr.visible && expr.mode !== 'explicit-y') {
         const compiled = compileExpression(expr.ast, au);
         const fn = (x: number) => compiled(x, 0);
         drawIntegralArea(ctx, this.viewport, fn, intg.a, intg.b, ink(expr.color), w, h);

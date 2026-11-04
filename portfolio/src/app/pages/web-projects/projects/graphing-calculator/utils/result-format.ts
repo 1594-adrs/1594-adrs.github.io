@@ -73,6 +73,16 @@ export function describeIntegral(
   return rows;
 }
 
+export function describePolarArea(
+  expr: string,
+  a: number,
+  b: number,
+  r: QuadratureResult,
+): ResultRow[] {
+  const [row] = describeIntegral(expr, a, b, r);
+  return [{ ...row, label: `½∫ [${formatValue(a)}, ${formatValue(b)}] r² dθ, ${expr}` }];
+}
+
 /** Label for an area result: limits plus the curve names (`A [0, 1]: f1, f2`). */
 export function areaLabel(a: number, b: number, names: readonly string[]): string {
   return `A [${formatValue(a)}, ${formatValue(b)}]: ${names.join(', ')}`;

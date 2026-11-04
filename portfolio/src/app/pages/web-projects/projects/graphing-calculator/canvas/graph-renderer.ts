@@ -294,6 +294,48 @@ export function drawIntegralArea(
   ctx.restore();
 }
 
+/** Polar sector swept from the pole to r(θ) over [a, b]; non-finite samples split the fan. */
+export function drawPolarSector(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  fn: (theta: number) => number,
+  a: number,
+  b: number,
+  color: string,
+  width: number,
+  height: number,
+): void {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) return;
+  const [ox, oy] = viewport.worldToScreen(0, 0, width, height);
+  const steps = Math.min(MAX_FILL_STEPS, Math.max(200, Math.ceil(Math.abs(b - a) * 120)));
+  const h = (b - a) / steps;
+  ctx.fillStyle = color + '30';
+  let drawing = false;
+  for (let i = 0; i <= steps; i++) {
+    const t = a + i * h;
+    const r = evalOrNaN(fn, t);
+    if (!Number.isFinite(r)) {
+      if (drawing) {
+        ctx.closePath();
+        ctx.fill();
+        drawing = false;
+      }
+      continue;
+    }
+    const [sx, sy] = viewport.worldToScreen(r * Math.cos(t), r * Math.sin(t), width, height);
+    if (!drawing) {
+      ctx.beginPath();
+      ctx.moveTo(ox, oy);
+      drawing = true;
+    }
+    ctx.lineTo(sx, sy);
+  }
+  if (drawing) {
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
 export function drawAreaBetween(
   ctx: CanvasRenderingContext2D,
   viewport: Viewport,

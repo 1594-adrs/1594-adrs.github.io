@@ -3,6 +3,7 @@ import { formatValue } from './format-value';
 import {
   conicInfoLines,
   describeIntegral,
+  describePolarArea,
   areaLabel,
   areaLimitNotes,
   limitErrorMessage,
@@ -115,5 +116,13 @@ describe('area label and limit notes', () => {
     expect(areaLimitNotes(3, 0)[0]).toContain('reversed');
     expect(areaLimitNotes(1, 1)[0]).toContain('empty');
     expect(areaLimitNotes(0, 1)).toEqual([]);
+  });
+});
+
+describe('describePolarArea', () => {
+  it('labels the polar area formula and keeps the reversed-limits note', () => {
+    const [row] = describePolarArea('r = 2', 3, 0, { value: 1, error: 0, status: 'ok' });
+    expect(row.label).toContain('r² dθ');
+    expect(row.notes?.[0]).toContain('reversed');
   });
 });
