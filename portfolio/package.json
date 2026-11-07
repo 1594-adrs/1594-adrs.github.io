@@ -32,7 +32,7 @@
     "@angular/cli": "^21.2.21",
     "@angular/compiler-cli": "~21.2.25",
     "@angular/ssr": "^21.2.21",
-    "@types/node": "^20.17.19",
+    "@types/node": "^26.6.6",
     "@types/three": "^0.185.4",
     "esbuild": "^0.28.1",
     "jsdom": "^27.1.0",
