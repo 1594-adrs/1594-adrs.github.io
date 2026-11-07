@@ -35,7 +35,7 @@
     "@types/node": "^20.17.19",
     "@types/three": "^0.185.4",
     "esbuild": "^0.28.1",
-    "jsdom": "^27.1.0",
+    "jsdom": "^30.1.3",
     "prettier": "^3.9.9",
     "prettier-plugin-angular": "^0.3.2",
     "typescript": "~5.9.2",
